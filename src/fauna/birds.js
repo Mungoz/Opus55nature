@@ -95,16 +95,66 @@ export class Murmuration {
 
 	}
 
-	update( dt, visible ) {
+	// Murmurations are an event: every few minutes of late afternoon or dusk a
+	// flock sweeps in from down the valley, wheels over the lake, then leaves.
+	schedule( dt, allowed ) {
 
+		this.cycle = ( this.cycle ?? 40 ) - dt;
+		this.phase = this.phase ?? 'off';
+		if ( this.phase === 'off' ) {
+
+			if ( allowed && this.cycle <= 0 ) {
+
+				this.phase = 'on';
+				this.cycle = this.rng.range( 90, 140 );
+				// arrive from far down the valley
+				const ox = this.rng.range( - 300, 300 ), oz = 1500;
+				for ( let i = 0; i < this.n; i ++ ) {
+
+					this.pos[ i * 3 ] = ox + this.rng.range( - 30, 30 );
+					this.pos[ i * 3 + 1 ] = 160 + this.rng.range( - 15, 15 );
+					this.pos[ i * 3 + 2 ] = oz + this.rng.range( - 30, 30 );
+					this.vel[ i * 3 ] = 0;
+					this.vel[ i * 3 + 1 ] = 0;
+					this.vel[ i * 3 + 2 ] = - 14;
+
+				}
+
+			}
+
+		} else if ( this.phase === 'on' ) {
+
+			if ( this.cycle <= 0 || ! allowed ) {
+
+				this.phase = 'out';
+				this.cycle = 30;
+				this.exit = new THREE.Vector3( this.rng.range( - 1, 1 ) * 1500, 320, 2400 );
+
+			}
+
+		} else if ( this.cycle <= 0 ) {
+
+			this.phase = 'off';
+			this.cycle = this.rng.range( 220, 420 );
+
+		}
+
+		return this.phase !== 'off';
+
+	}
+
+	update( dt, allowed ) {
+
+		const visible = this.schedule( dt, allowed );
 		this.mesh.visible = visible;
 		if ( ! visible ) return;
 		dt = Math.min( dt, 0.05 );
 		this.time += dt;
 		const t = this.time;
 		const n = this.n, P = this.pos, Vv = this.vel;
-		// wandering attractor over the lake
-		this.attractor.set( Math.sin( t * 0.045 ) * 170 + Math.sin( t * 0.13 ) * 50, 125 + 35 * Math.sin( t * 0.09 ) + 15 * Math.sin( t * 0.31 ), 120 + Math.cos( t * 0.033 ) * 260 );
+		// wandering attractor over the lake (or away, when leaving)
+		if ( this.phase === 'out' ) this.attractor.copy( this.exit );
+		else this.attractor.set( Math.sin( t * 0.045 ) * 170 + Math.sin( t * 0.13 ) * 50, 125 + 35 * Math.sin( t * 0.09 ) + 15 * Math.sin( t * 0.31 ), 120 + Math.cos( t * 0.033 ) * 260 );
 		// occasional falcon strike splits the flock
 		if ( ! this.predator && this.rng.next() < dt * 0.02 ) {
 
@@ -266,7 +316,7 @@ export class GeeseFlight {
 		this.mesh.name = 'geese';
 		this.mesh.count = 0;
 		this.rng = new RNG( 17 );
-		this.timer = 12;
+		this.timer = 20;
 		this.flight = null;
 
 	}
@@ -274,14 +324,18 @@ export class GeeseFlight {
 	_launch( camera ) {
 
 		const rng = this.rng;
-		const count = rng.int( 7, 13 );
-		// cross the valley roughly past the viewer
-		const ang = rng.range( 0, Math.PI * 2 );
-		const dir = new THREE.Vector3( Math.cos( ang ), 0, Math.sin( ang ) );
+		const count = rng.int( 9, 15 );
+		// cross the sky in front of the viewer, a couple of hundred metres out
+		const fwd = new THREE.Vector3();
+		camera.getWorldDirection( fwd );
+		fwd.y = 0;
+		fwd.normalize();
+		const across = new THREE.Vector3( - fwd.z, 0, fwd.x ).multiplyScalar( rng.next() < 0.5 ? 1 : - 1 );
+		const dir = across.clone().applyAxisAngle( new THREE.Vector3( 0, 1, 0 ), rng.range( - 0.6, 0.6 ) );
 		const side = new THREE.Vector3( - dir.z, 0, dir.x );
-		const pass = camera.position.clone().addScaledVector( side, rng.range( - 150, 150 ) );
-		const start = pass.clone().addScaledVector( dir, - 1400 );
-		start.y = Math.max( camera.position.y, 0 ) + rng.range( 90, 170 );
+		const pass = camera.position.clone().addScaledVector( fwd, rng.range( 160, 320 ) );
+		const start = pass.clone().addScaledVector( dir, - 900 );
+		start.y = Math.max( camera.position.y, 0 ) + rng.range( 55, 100 );
 		this.flight = { count, dir, side, pos: start, speed: 17, dist: 0, honk: 0 };
 
 	}
@@ -292,7 +346,7 @@ export class GeeseFlight {
 		if ( ! this.flight && this.timer <= 0 && visible ) {
 
 			this._launch( camera );
-			this.timer = this.rng.range( 70, 150 );
+			this.timer = this.rng.range( 45, 90 );
 
 		}
 
@@ -307,7 +361,7 @@ export class GeeseFlight {
 		f.pos.addScaledVector( f.dir, f.speed * dt );
 		f.dist += f.speed * dt;
 		const ground = this.terrain.heightAt( f.pos.x, f.pos.z );
-		if ( f.pos.y < ground + 80 ) f.pos.y += ( ground + 80 - f.pos.y ) * dt * 0.5;
+		if ( f.pos.y < ground + 45 ) f.pos.y += ( ground + 45 - f.pos.y ) * dt * 0.5;
 		const vel = _f.copy( f.dir ).multiplyScalar( f.speed );
 		for ( let i = 0; i < f.count; i ++ ) {
 
@@ -330,7 +384,7 @@ export class GeeseFlight {
 
 		}
 
-		if ( f.dist > 2800 ) this.flight = null;
+		if ( f.dist > 1900 ) this.flight = null;
 
 	}
 

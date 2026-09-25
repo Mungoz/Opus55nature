@@ -57,8 +57,8 @@ export class Waterfowl {
 
 		};
 
-		const swanA = new Paddler( swanMesh( 1.0 ), - 40, 260, 0.45, rng );
-		const swanB = new Paddler( swanMesh( 0.93 ), - 44, 265, 0.45, rng, swanA, new THREE.Vector3( - 2.4, 0, - 2.2 ) );
+		const swanA = new Paddler( swanMesh( 1.0 ), - 30, 395, 0.45, rng );
+		const swanB = new Paddler( swanMesh( 0.93 ), - 34, 400, 0.45, rng, swanA, new THREE.Vector3( - 2.4, 0, - 2.2 ) );
 		this.birds.push( swanA, swanB );
 		const duck = ( g ) => {
 
@@ -68,12 +68,12 @@ export class Waterfowl {
 
 		};
 
-		const lead = new Paddler( duck( drakeGeo ), 90, 330, 0.55, rng );
+		const lead = new Paddler( duck( drakeGeo ), 40, 420, 0.55, rng );
 		this.birds.push( lead );
 		for ( let i = 0; i < 4; i ++ ) {
 
 			const off = new THREE.Vector3( rng.range( - 3, 3 ), 0, - 1.5 - i * 1.3 );
-			this.birds.push( new Paddler( duck( i % 2 ? drakeGeo : henGeo ), 90 + off.x, 330 + off.z, 0.55, rng, lead, off ) );
+			this.birds.push( new Paddler( duck( i % 2 ? drakeGeo : henGeo ), 40 + off.x, 420 + off.z, 0.55, rng, lead, off ) );
 
 		}
 
@@ -83,11 +83,11 @@ export class Waterfowl {
 
 		for ( let tries = 0; tries < 30; tries ++ ) {
 
-			const x = b.pos.x + this.rng.range( - 160, 160 );
-			const z = b.pos.z + this.rng.range( - 160, 160 );
-			// stay within the southern half of the lake where people will watch them
-			if ( z > 420 || z < - 700 ) continue;
-			if ( this.terrain.heightAt( x, z ) < - 1.8 ) {
+			const x = b.pos.x + this.rng.range( - 70, 70 );
+			const z = b.pos.z + this.rng.range( - 70, 70 );
+			// keep to the bay in front of the start, where people will see them
+			if ( z > 448 || z < 290 || Math.abs( x + 5 ) > 160 ) continue;
+			if ( this.terrain.heightAt( x, z ) < - 1.2 ) {
 
 				b.target.set( x, 0, z );
 				return;

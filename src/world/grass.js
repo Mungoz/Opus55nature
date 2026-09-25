@@ -25,6 +25,7 @@ uniform float uDensity;
 uniform vec2 uHeightRange;
 uniform float uWidth;
 uniform float uType;
+uniform vec4 uFocus;
 uniform vec4 uCrop[ 6 ]; // (x, z, radius, strength): turf grazed short, e.g. around marmot burrows
 attribute vec4 aOff;
 varying vec3 vWorldPos;
@@ -34,7 +35,7 @@ varying float vY;
 varying float vAO;
 
 void main() {
-	vec2 cam = cameraPosition.xz;
+	vec2 cam = uFocus.w > 0.5 ? uFocus.xy : cameraPosition.xz;
 	vec2 p = aOff.xy + uTile * floor( ( cam - aOff.xy ) / uTile + 0.5 );
 	float r1 = aOff.z, r2 = aOff.w;
 	float r3 = fract( r1 * 13.71 + r2 * 7.13 );
@@ -87,15 +88,16 @@ void main() {
 	float headFrac = 0.0;
 	vec3 c = grassColor( p, h );
 	if ( uType < 0.5 ) {
-		if ( r3 < 0.5 ) {
+		// late autumn: much of the sward has cured to straw
+		if ( r3 < 0.44 ) {
 			width *= 0.5 + 0.3 * r1;
-			c *= vec3( 0.85, 1.04, 0.8 );
-		} else if ( r3 < 0.7 ) {
+			c *= vec3( 0.92, 1.02, 0.86 );
+		} else if ( r3 < 0.6 ) {
 			width *= 1.0 + 0.35 * r1;
 			height *= 0.62;
 			kBase = 0.6 + r2 * 0.6;
-			c *= vec3( 0.7, 1.0, 0.62 );
-		} else if ( r3 < 0.85 ) {
+			c *= vec3( 0.78, 1.0, 0.7 );
+		} else if ( r3 < 0.76 ) {
 			width *= 0.3;
 			height *= 1.45 + r2 * 0.45;
 			kBase = 0.14 + r2 * 0.2;
@@ -123,7 +125,7 @@ void main() {
 	float y = position.y;
 	float horiz = height * ( 1.0 - cos( k * y ) ) / k;
 	float up = height * sin( k * y ) / k;
-	float w = width * ( 0.7 + 0.6 * r1 ) * ( 1.0 - y * 0.82 ) * ( 1.0 + dist * 0.03 );
+	float w = width * ( 0.7 + 0.6 * r1 ) * ( 1.0 - y * 0.82 ) * ( 1.0 + ( uFocus.w > 0.5 ? dist : length( p - cameraPosition.xz ) ) * 0.03 );
 	// seed heads: a loose, feathery panicle on flowering stems
 	float headT = headFrac > 0.0 ? smoothstep( 1.0 - headFrac, 1.0 - headFrac + 0.04, y ) : 0.0;
 	w = mix( w, uWidth * ( 0.28 + 0.22 * r4 ) * sin( clamp( ( y - ( 1.0 - headFrac ) ) / headFrac, 0.0, 1.0 ) * 3.1416 ) + 0.0015, headT );
@@ -146,7 +148,7 @@ void main() {
 	}
 	// individual blade variety; autumn yellowing creeps down from the tips
 	c *= 0.72 + 0.56 * r2;
-	c = mix( c, c * vec3( 1.35, 1.12, 0.62 ), smoothstep( 0.45, 1.0, y ) * ( 0.35 + 0.4 * r4 ) * ( 1.0 - headT ) );
+	c = mix( c, c * vec3( 1.4, 1.14, 0.6 ), smoothstep( 0.35, 1.0, y ) * ( 0.45 + 0.45 * r4 ) * ( 1.0 - headT ) );
 	c = mix( c, srgbToLinear( mix( vec3( 0.7, 0.62, 0.44 ), vec3( 0.56, 0.47, 0.36 ), r4 ) ), headT );
 	vColor = c;
 	vY = y;

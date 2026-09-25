@@ -1,6 +1,9 @@
+import { featuresGLSL } from '../core/features.js';
+
 // The analytic landscape: a U-shaped glacial trough holding a long lake, walled
 // by ridged ranges and closed to the north by a pyramidal horn. Requires noise.glsl.
 export const terrainShapeGLSL = /* glsl */ `
+${ featuresGLSL }
 const vec2 LAKE_C = vec2( 0.0, -330.0 );
 const vec2 LAKE_AX = vec2( 330.0, 780.0 );
 const vec2 HORN_C = vec2( -120.0, -3350.0 );
@@ -77,16 +80,18 @@ float terrainHeight( vec2 p, float detail ) {
 	float dv = valleyDist( p );
 
 	// Flat-bottomed glacial trough with steep walls.
-	// the trough opens into a broad valley toward the south-west (where the sun sets)
+	// below the lake the trough stays narrow, walled in close on both sides,
 	// and pinches into a hanging valley beneath the horn
-	float widen = smoothstep( 300.0, 3200.0, p.y ) * 1100.0 - smoothstep( -1200.0, -2000.0, p.y ) * 250.0;
+	float widen = smoothstep( 300.0, 2500.0, p.y ) * 240.0 - smoothstep( -1200.0, -2000.0, p.y ) * 250.0;
 	float wall = smoothstep( 430.0 + widen, 1850.0 + widen * 1.4, dv );
 	wall = wall * wall * ( 3.0 - 2.0 * wall );
 
 	// Valley floor: gently rolling, rising slowly down the outflow valley.
 	float floorH = 4.0 + 4.0 * fbm2( p * 0.004, 3 ) + max( 0.0, p.y - 600.0 ) * 0.012;
 	// low rolling hills and moraines across the outer valley floor
-	floorH += 38.0 * smoothstep( 500.0, 2500.0, p.y ) * ( 0.5 + 0.5 * fbm2( p * 0.0018 + 13.0, 4 ) );
+	floorH += 30.0 * smoothstep( 500.0, 2500.0, p.y ) * ( 0.5 + 0.5 * fbm2( p * 0.0018 + 13.0, 4 ) );
+	// a rock bar (riegel) across the valley closes the view downstream
+	floorH += 70.0 * exp( -pow( ( p.y - 1720.0 - 60.0 * gnoise( p * 0.003 ) ) / 170.0, 2.0 ) ) * ( 0.75 + 0.25 * gnoise( p * 0.01 ) );
 
 	// Ridged ranges on warped coordinates.
 	vec2 wq = p / 2300.0;
@@ -137,6 +142,8 @@ float terrainHeight( vec2 p, float detail ) {
 		h += fine * ( 1.0 - wall * 0.6 );
 	}
 
+	h = applyFallStep( p, h );
+
 	// --- Carve the lake ---
 	float s = lakeSDF( p );
 	// a low grassy bank rising from a narrow strand
@@ -158,6 +165,6 @@ float terrainHeight( vec2 p, float detail ) {
 	island += 1.5 * gnoise( p * 0.08 ) * ( 1.0 - smoothstep( 10.0, 45.0, ir ) );
 	h = max( h, island );
 
-	return h;
+	return applyWater( p, h );
 }
 `;

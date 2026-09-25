@@ -66,12 +66,23 @@ export class LeapingFish {
 
 	}
 
-	// director hook: a leap at a chosen spot
-	forceJump( x, z, dir, v0 = 4.2, speed = 1.8, s = 1.35 ) {
+	// A leap: the trout drives up from below, breaks the surface at ~50 degrees,
+	// flies a ballistic arc with its nose on the tangent, rolls and thrashes, and
+	// re-enters head first. peak = apex height of the body centre above water.
+	_launch( x, z, dir, peak, vh, s ) {
 
-		this.jump = { x, z, dir, v0, t: 0, T: 2 * v0 / 9.81, speed, s };
-		this.water.addRipple( x, z, 0.9 );
-		this.particles?.splash( new THREE.Vector3( x, 0, z ), 14, 1.4 );
+		const y0 = - 0.4;
+		const vy = Math.sqrt( 2 * 9.81 * ( peak - y0 ) );
+		this.jump = { x, z, dir, vy, vh, s, y0, t: 0, exited: false, entered: false, roll: this.rng.next() < 0.5 ? - 1 : 1 };
+		// until the body is back down at its starting depth, plus a moment to vanish
+		this.jump.T = 2 * vy / 9.81 + 0.1;
+
+	}
+
+	// director hook: a leap at a chosen spot
+	forceJump( x, z, dir, peak = 0.45, vh = 2.6, s = 1.25 ) {
+
+		this._launch( x, z, dir, peak, vh, s );
 		this.timer = 1e9;
 
 	}
@@ -81,16 +92,11 @@ export class LeapingFish {
 		camera.getWorldDirection( this._fwd );
 		for ( let tries = 0; tries < 40; tries ++ ) {
 
-			const d = this.rng.range( 18, 140 );
+			const d = this.rng.range( 14, 75 );
 			const a = Math.atan2( this._fwd.x, this._fwd.z ) + this.rng.range( - 0.7, 0.7 );
 			const x = camera.position.x + Math.sin( a ) * d, z = camera.position.z + Math.cos( a ) * d;
 			if ( this.terrain.heightAt( x, z ) > - 2.5 ) continue;
-			const dir = this.rng.next() * Math.PI * 2;
-			const v0 = this.rng.range( 3.2, 4.6 );
-			this.jump = { x, z, dir, v0, t: 0, T: 2 * v0 / 9.81, speed: this.rng.range( 1.2, 2.2 ), s: this.rng.range( 0.9, 1.5 ) };
-			this.water.addRipple( x, z, 0.9 );
-			this.particles?.splash( new THREE.Vector3( x, 0, z ), 14, 1.4 );
-			this.onSplash( new THREE.Vector3( x, 0, z ), 0.6 );
+			this._launch( x, z, this.rng.next() * Math.PI * 2, this.rng.range( 0.3, 0.6 ), this.rng.range( 2.1, 3.0 ), this.rng.range( 0.95, 1.35 ) );
 			return;
 
 		}
@@ -106,7 +112,7 @@ export class LeapingFish {
 			if ( this.timer <= 0 && active ) {
 
 				this._start( camera );
-				this.timer = this.rng.range( 6, 20 );
+				this.timer = this.rng.range( 4, 12 );
 
 			}
 
@@ -118,23 +124,59 @@ export class LeapingFish {
 		j.t += dt;
 		const t = j.t;
 		const dx = Math.sin( j.dir ), dz = Math.cos( j.dir );
-		const y = j.v0 * t - 4.905 * t * t;
-		const vy = j.v0 - 9.81 * t;
+		const y = j.y0 + j.vy * t - 4.905 * t * t;
+		const vy = j.vy - 9.81 * t;
+		const px = j.x + dx * j.vh * t, pz = j.z + dz * j.vh * t;
 		this.mesh.visible = true;
-		this.mesh.position.set( j.x + dx * j.speed * t, y - 0.05, j.z + dz * j.speed * t );
-		this.mesh.rotation.set( - Math.atan2( vy, j.speed ), j.dir, Math.sin( t * 30 ) * 0.25, 'YXZ' );
-		this.mesh.scale.setScalar( j.s * ( 1 + Math.sin( t * 25 ) * 0.03 ) );
+		this.mesh.position.set( px, y, pz );
+		const airborne = y > - 0.05;
+		// roll builds toward the apex and unwinds for a head-first entry
+		const air = j.exited && ! j.entered ? Math.min( 1, ( t - j.tExit ) / Math.max( j.airTime, 0.1 ) ) : 0;
+		const roll = j.roll * Math.sin( air * Math.PI ) * 0.7;
+		this.mesh.rotation.set( - Math.atan2( vy, j.vh ), j.dir, roll, 'YXZ' );
+		this.mesh.scale.setScalar( j.s );
+		// the body flexes hard in the air, a steady beat underwater
+		this.material.uniforms.uWag.value = airborne ? 0.07 : 0.035;
+		this.material.uniforms.uWagSpeed.value = airborne ? 34 : 24;
+		const at = new THREE.Vector3( px, 0, pz );
+		if ( ! j.exited && y > - 0.05 && vy > 0 ) {
+
+			j.exited = true;
+			j.tExit = t;
+			j.airTime = 2 * vy / 9.81;
+			this.water.addRipple( px, pz, 1.0 );
+			this.particles?.splash( at, 30, 1.6, 1.3 );
+			this.onSplash( at, 0.5 );
+
+		}
+
+		if ( airborne && air < 0.5 && this.particles ) {
+
+			// water streams off the tail
+			const tail = new THREE.Vector3( px - dx * 0.25 * j.s, y - 0.04, pz - dz * 0.25 * j.s );
+			this.particles.drip( tail, new THREE.Vector3( dx * j.vh * 0.4, vy * 0.3, dz * j.vh * 0.4 ), 2 );
+
+		}
+
+		if ( j.exited && ! j.entered && y < - 0.02 && vy < 0 ) {
+
+			j.entered = true;
+			this.water.addRipple( px, pz, 1.4 );
+			this.water.addRipple( px, pz, 0.7, 0.3 );
+			this.particles?.splash( at, 46, 2.3, 1.6 );
+			this.onSplash( at, 1 );
+
+		}
+
 		if ( t >= j.T ) {
 
-			const px = this.mesh.position.x, pz = this.mesh.position.z;
-			this.water.addRipple( px, pz, 1.3 );
-			this.water.addRipple( px, pz, 0.6, 0.35 );
-			this.particles?.splash( new THREE.Vector3( px, 0, pz ), 26, 2.4 );
-			this.onSplash( new THREE.Vector3( px, 0, pz ), 1 );
 			this.jump = null;
+			this.mesh.visible = false;
+			this.material.uniforms.uWag.value = 0.035;
 
 		}
 
 	}
 
 }
+

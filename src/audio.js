@@ -62,6 +62,10 @@ export class Soundscape {
 		// rain: a bright hiss of drops plus the low roar of a downpour
 		this.rainHiss = this._loop( 'bandpass', 3200, 0.35 );
 		this.rainRoar = this._loop( 'lowpass', 700, 0.6 );
+		// running water: a chattering brook and the deep roar of the fall
+		this.brook = this._loop( 'bandpass', 1500, 0.9 );
+		this.brookLo = this._loop( 'lowpass', 420, 0.8 );
+		this.fallLoop = this._loop( 'lowpass', 650, 0.5 );
 		this.enabled = true;
 
 	}
@@ -513,7 +517,7 @@ export class Soundscape {
 
 		}
 
-		const { gust, wind, forest, shore, altitude, night, dusk, rain = 0 } = env;
+		const { gust, wind, forest, shore, altitude, night, dusk, rain = 0, brook = 0, fall = 0 } = env;
 		const w = wind * ( 0.35 + 0.9 * gust ) * ( 1 + Math.min( altitude / 300, 1.5 ) );
 		this.wind.g.gain.setTargetAtTime( 0.16 * w, now, 0.3 );
 		this.wind.f.frequency.setTargetAtTime( 300 + 500 * gust, now, 0.4 );
@@ -524,6 +528,10 @@ export class Soundscape {
 		this.lapHi.g.gain.setTargetAtTime( 0.02 * shore * lapEnv * lapEnv * lapEnv, now, 0.1 );
 		this.rainHiss.g.gain.setTargetAtTime( 0.11 * rain * ( 0.8 + 0.2 * gust ), now, 0.5 );
 		this.rainRoar.g.gain.setTargetAtTime( 0.14 * rain * rain, now, 0.6 );
+		const burble = 0.75 + 0.25 * Math.sin( now * 7.3 ) * Math.sin( now * 3.1 + 1 );
+		this.brook.g.gain.setTargetAtTime( 0.05 * brook * burble, now, 0.08 );
+		this.brookLo.g.gain.setTargetAtTime( 0.08 * brook, now, 0.3 );
+		this.fallLoop.g.gain.setTargetAtTime( 0.22 * fall * fall, now, 0.3 );
 
 		// songbirds by day, loons at dusk, owls at night
 		this._birdTimer -= dt;

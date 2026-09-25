@@ -55,7 +55,7 @@ export function buildMarmot( material ) {
 	}
 
 	// grizzled grey-brown back over a sandy belly (from the reference photo)
-	const fur = ( x, y, z ) => coatMix( '#7d6c57', [ [ '#a99373', ss( 0.11, 0.07, y ) + ss( 0.08, 0.16, z ) * ss( 0.14, 0.1, y ) ], [ '#5d4f40', ss( 0.17, 0.23, y ) ] ], x, y, z, 0.18 );
+	const fur = ( x, y, z ) => coatMix( '#8a6c4c', [ [ '#b78f5f', ss( 0.11, 0.07, y ) + ss( 0.08, 0.16, z ) * ss( 0.14, 0.1, y ) ], [ '#5e4a37', ss( 0.17, 0.23, y ) ] ], x, y, z, 0.18 );
 
 	const F = ( bone, color, k, fuzz = 0.0015 ) => ( { bone, color, k, fuzz, fuzzFreq: 45 } );
 	// heavy pear-shaped rump, shorter chest, broad head carried up

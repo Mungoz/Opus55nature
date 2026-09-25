@@ -38,11 +38,15 @@ if ( mode === 'preview' ) {
 	for ( let i = 0; i < info.shots.length; i ++ ) {
 
 		if ( only && ! only.includes( i ) ) continue;
-		const at = parseFloat( process.env.AT || ( info.shots[ i ] * 0.5 ) );
-		await page.evaluate( ( i, at ) => window.film.seek( i, at ), i, Math.min( at, info.shots[ i ] - 0.1 ) );
-		const f = path.join( outDir, `shot-${String( i ).padStart( 2, '0' )}.jpg` );
-		await page.screenshot( { path: f, type: 'jpeg', quality: 90 } );
-		console.log( 'preview', f );
+		const times = ( process.env.AT || String( info.shots[ i ] * 0.5 ) ).split( ',' ).map( Number );
+		for ( const at of times ) {
+
+			await page.evaluate( ( i, at ) => window.film.seek( i, at ), i, Math.min( at, info.shots[ i ] - 0.1 ) );
+			const f = path.join( outDir, times.length > 1 ? `shot-${String( i ).padStart( 2, '0' )}-${at}.jpg` : `shot-${String( i ).padStart( 2, '0' )}.jpg` );
+			await page.screenshot( { path: f, type: 'jpeg', quality: 90 } );
+			console.log( 'preview', f );
+
+		}
 
 	}
 

@@ -3,7 +3,7 @@ import { commonParsGLSL } from '../shaders/common.glsl.js';
 import { noiseGLSL } from '../shaders/noise.glsl.js';
 import { sharedUniforms, U } from '../core/uniforms.js';
 import { RNG, hash2 } from '../core/rng.js';
-import { makeConifer, makeBirch, makeShrub } from './treeGen.js';
+import { makeConifer, makeBirch, makeShrub, makeBroadleaf, makeSnag, makeMushrooms, makeFern, makeHeath } from './treeGen.js';
 import { buildFoliageAtlas } from '../gen/foliageAtlas.js';
 import { WORLD } from '../core/world.js';
 
@@ -12,7 +12,7 @@ import { WORLD } from '../core/world.js';
 // ---------------------------------------------------------------------------
 
 const foliageShading = /* glsl */ `
-// Species tint for foliage (kind: 3 spruce, 4 larch, 5 birch, 6 shrub)
+// Species tint for foliage (kind: 3 spruce, 4 larch, 5 birch, 6 shrub, 7 stone pine, 8 aspen, 9 rowan, 10 bracken, 11 heath)
 vec3 foliageTint( float kind, float rnd, float branch ) {
 	float r2 = fract( rnd * 7.13 + branch * 0.37 );
 	if ( kind < 3.5 ) return mix( vec3( 0.85, 0.95, 0.9 ), vec3( 1.1, 1.05, 0.95 ), rnd ) * ( 0.85 + 0.25 * r2 );
@@ -23,7 +23,17 @@ vec3 foliageTint( float kind, float rnd, float branch ) {
 		return t * ( 0.85 + 0.3 * r2 );
 	}
 	if ( kind < 5.5 ) return mix( vec3( 1.0 ), vec3( 1.1, 0.85, 0.6 ), smoothstep( 0.6, 1.0, rnd ) ) * ( 0.85 + 0.3 * r2 );
-	return vec3( 0.9 + 0.3 * r2 );
+	if ( kind < 6.5 ) return vec3( 0.9 + 0.3 * r2 );
+	if ( kind < 7.5 ) return mix( vec3( 0.85, 0.95, 1.0 ), vec3( 1.0, 1.02, 0.95 ), rnd ) * ( 0.85 + 0.25 * r2 );
+	if ( kind < 8.5 ) {
+		// each aspen clone turns its own shade, lemon to orange, a few still green
+		vec3 t = mix( vec3( 1.05, 1.0, 0.8 ), vec3( 1.12, 0.72, 0.5 ), smoothstep( 0.45, 0.95, rnd ) );
+		t = mix( t, vec3( 0.75, 1.0, 0.55 ), step( rnd, 0.1 ) * 0.7 );
+		return t * ( 0.85 + 0.3 * r2 );
+	}
+	if ( kind < 9.5 ) return mix( vec3( 1.1, 0.9, 0.75 ), vec3( 0.95, 0.62, 0.62 ), rnd ) * ( 0.85 + 0.3 * r2 );
+	if ( kind < 10.5 ) return mix( vec3( 1.05, 0.95, 0.85 ), vec3( 0.95, 0.75, 0.6 ), rnd ) * ( 0.8 + 0.35 * r2 );
+	return vec3( 0.85 + 0.35 * r2 );
 }
 
 vec3 shadeFoliage( vec3 albedo, vec3 N, vec3 V, vec3 wp, float ao, float sh ) {
@@ -40,10 +50,145 @@ vec3 shadeFoliage( vec3 albedo, vec3 N, vec3 V, vec3 wp, float ao, float sh ) {
 	return ( direct + amb ) * underwaterLight( wp ) + uSunColor * spec;
 }
 
+
+// Sculpted deadwood (stumps, fallen trunks). axis: the trunk direction; origin: the instance.
+// bk.x: bark still on (1) or bare wood (0); bk.y: 0 side, 1 end grain, 2 soil of a root plate.
+vec3 sculptedWood( float kind, vec3 wp, vec3 N, vec3 axis, vec3 origin, vec2 bk, float ringR, float rnd, out float rough, out float bumpH, out float mossM ) {
+	vec3 rel = wp - origin;
+	float along = dot( rel, axis );
+	vec3 perp = rel - axis * along;
+	vec3 c = vec3( 0.0 );
+	rough = 0.88;
+	bumpH = 0.0;
+	mossM = 0.0;
+	if ( bk.y > 1.5 ) {
+		// the soil and stones held in an upturned root plate
+		float clod = gnoise3( wp * 5.0 ) * 0.5 + 0.5;
+		float grit = gnoise3( wp * 38.0 ) * 0.5 + 0.5;
+		c = mix( vec3( 0.06, 0.045, 0.032 ), vec3( 0.16, 0.13, 0.095 ), smoothstep( 0.35, 0.8, clod ) );
+		c = mix( c, vec3( 0.3, 0.28, 0.25 ), step( 0.82, grit ) * 0.65 );
+		c = mix( c, vec3( 0.13, 0.1, 0.075 ), smoothstep( 0.6, 0.9, abs( gnoise3( wp * vec3( 9.0, 2.5, 9.0 ) ) ) ) * 0.6 );
+		bumpH = clod * 0.9 + grit * 0.4;
+		mossM = 0.0;
+		return c;
+	}
+	if ( bk.y > 0.5 ) {
+		// end grain: growth rings, drying checks from the heart, greyed by weather, rotten at the heart
+		float r = ringR + 0.025 * gnoise3( wp * 7.0 );
+		float rings = 0.5 + 0.5 * sin( r * 6.283 * 26.0 );
+		c = mix( vec3( 0.27, 0.2, 0.13 ), vec3( 0.42, 0.33, 0.22 ), rings * 0.5 + 0.25 );
+		c = mix( c, vec3( 0.26, 0.245, 0.22 ), 0.6 * smoothstep( -0.3, 0.5, gnoise3( wp * 3.0 + rnd * 7.0 ) ) );
+		float check = smoothstep( 0.86, 0.97, 1.0 - abs( gnoise3( normalize( perp + 1e-4 ) * 6.0 + vec3( r * 0.8 ) ) ) ) * smoothstep( 0.12, 0.4, r );
+		c *= 1.0 - check * 0.8;
+		c = mix( c * vec3( 0.5, 0.4, 0.32 ), c, smoothstep( 0.1, 0.32, r ) );
+		c = mix( c, vec3( 0.05, 0.038, 0.03 ), smoothstep( 0.9, 0.98, r ) );
+		bumpH = rings * 0.15 - check * 0.9;
+	} else {
+		// bark: long plates split by dark fissures, following the grain
+		float plates = gnoise3( perp * 26.0 + axis * along * 3.5 + rnd * 11.0 ) + 0.5 * gnoise3( perp * 9.0 + axis * along * 1.2 );
+		float fiss = 1.0 - smoothstep( 0.0, 0.17, abs( plates ) );
+		float flake = gnoise3( perp * 40.0 + axis * along * 9.0 );
+		// stumps keep the warm, dark red-brown of old larch and spruce bark; fallen trunks weather greyer
+		bool isStump = kind > -8.5;
+		vec3 barkC = isStump ? mix( vec3( 0.06, 0.036, 0.024 ), vec3( 0.17, 0.1, 0.065 ), smoothstep( -0.6, 0.6, flake ) ) : mix( vec3( 0.075, 0.056, 0.042 ), vec3( 0.2, 0.155, 0.115 ), smoothstep( -0.6, 0.6, flake ) );
+		barkC = mix( barkC, vec3( 0.022, 0.017, 0.013 ), fiss * 0.85 );
+		barkC = mix( barkC, vec3( 0.3, 0.3, 0.26 ), smoothstep( 0.55, 0.8, gnoise3( wp * 5.0 + 3.0 ) ) * 0.3 * ( 1.0 - fiss ) );
+		// bare wood: silvered, finely grained, split by long checks, stained dark where damp
+		float grain = gnoise3( perp * 55.0 + axis * along * 1.8 );
+		float crack = 1.0 - smoothstep( 0.0, 0.045, abs( gnoise3( perp * 13.0 + axis * along * 0.7 + 5.0 ) ) );
+		vec3 woodC = mix( vec3( 0.16, 0.14, 0.115 ), vec3( 0.29, 0.26, 0.22 ), grain * 0.5 + 0.5 );
+		woodC = mix( woodC, vec3( 0.1, 0.085, 0.07 ), smoothstep( -0.2, 0.6, gnoise3( wp * 1.6 + rnd * 5.0 ) ) * 0.45 );
+		woodC *= 1.0 - crack * 0.7;
+		float b = smoothstep( 0.3, 0.7, bk.x );
+		c = mix( woodC, barkC, b );
+		bumpH = mix( grain * 0.12 - crack * 0.8, ( 1.0 - fiss ) * 0.9 + flake * 0.2, b );
+		rough = mix( 0.8, 0.92, b );
+	}
+	// moss cushions on what faces the sky; on stumps it creeps down the sides as well
+	float mn = gnoise3( wp * 1.3 + rnd * 9.0 ) + 0.4 * gnoise3( wp * 5.0 + 3.1 ) + 0.18 * gnoise3( wp * 17.0 );
+	float m = smoothstep( 0.25, 0.7, N.y + 0.5 * mn );
+	if ( kind > -8.5 ) m = max( m, smoothstep( 0.3, 0.65, mn + 0.3 * N.y ) );
+	m *= smoothstep( -0.65, -0.2, gnoise3( wp * 0.3 + rnd * 13.0 ) );
+	float lump = gnoise3( wp * 16.0 ) * 0.5 + 0.5, fuzz = gnoise3( wp * 65.0 ) * 0.5 + 0.5;
+	vec3 moss = mix( vec3( 0.035, 0.06, 0.008 ), vec3( 0.29, 0.35, 0.034 ), smoothstep( 0.1, 0.9, lump * 0.75 + fuzz * 0.35 ) );
+	moss = mix( moss, moss * vec3( 1.3, 1.05, 0.55 ), smoothstep( 0.2, 0.8, gnoise3( wp * 2.3 ) ) * 0.55 );
+	c = mix( c, moss, m );
+	bumpH = mix( bumpH, lump * 0.9 + fuzz * 0.35, m );
+	rough = mix( rough, 0.95, m );
+	mossM = m;
+	return c;
+}
+
+// Bump from a procedural height using screen-space derivatives (no tangents needed).
+vec3 bumpNormal( vec3 N, vec3 p, float h, float scale ) {
+	vec3 dpx = dFdx( p ), dpy = dFdy( p );
+	float dhx = dFdx( h ), dhy = dFdy( h );
+	vec3 r1 = cross( dpy, N ), r2 = cross( N, dpx );
+	float det = dot( dpx, r1 );
+	vec3 g = sign( det ) * ( dhx * r1 + dhy * r2 );
+	return normalize( abs( det ) * N - scale * g );
+}
+
 vec3 barkAlbedo( float kind, vec2 b, float rnd, vec3 wp, out float rough ) {
 	rough = 0.85;
 	float n = gnoise( vec2( b.x * 6.0, b.y * 1.2 ) + rnd * 13.0 );
 	float fine = gnoise( vec2( b.x * 24.0, b.y * 5.0 ) );
+	if ( kind < -0.5 ) {
+		if ( kind < -9.5 ) {
+			// end grain: pale weathered wood, growth rings and drying checks
+			rough = 0.9;
+			float r = b.y;
+			float rings = 0.5 + 0.5 * sin( r * 170.0 + gnoise( wp.xz * 9.0 + wp.y * 7.0 ) * 2.5 );
+			vec3 c = mix( vec3( 0.22, 0.17, 0.12 ), vec3( 0.32, 0.25, 0.17 ), rings * 0.6 + 0.2 );
+			c = mix( c, vec3( 0.17, 0.165, 0.155 ), smoothstep( 0.0, 0.8, gnoise( wp.xz * 3.0 + wp.y * 2.0 ) ) * 0.45 );
+			float check = smoothstep( 0.82, 0.95, abs( gnoise( ( wp.xz + wp.y ) * 11.0 ) ) );
+			c *= 1.0 - check * 0.6;
+			return c;
+		}
+		if ( kind < -6.5 ) {
+			// penny bun: glossy chestnut cap
+			rough = 0.42;
+			return mix( vec3( 0.2, 0.1, 0.05 ), vec3( 0.36, 0.2, 0.1 ), gnoise( b * vec2( 5.0, 40.0 ) + rnd * 5.0 ) * 0.5 + 0.5 );
+		}
+		if ( kind < -5.5 ) {
+			// fly agaric: scarlet, orange toward the crown, flecked with white warts
+			rough = 0.42;
+			vec3 c = mix( vec3( 0.5, 0.035, 0.015 ), vec3( 0.62, 0.17, 0.02 ), smoothstep( 0.02, 0.07, b.y ) );
+			float wart = smoothstep( 0.42, 0.62, gnoise( vec2( b.x * 17.0, b.y * 62.0 ) + rnd * 9.0 ) );
+			return mix( c, vec3( 0.78, 0.74, 0.62 ), wart * 0.9 );
+		}
+		// mushroom stems and gills
+		if ( kind < -4.5 ) return vec3( 0.66, 0.62, 0.52 ) * ( 0.9 + 0.1 * fine );
+		if ( kind < -3.5 ) {
+			// rowan: smooth grey-brown with pale lenticels
+			float len = smoothstep( 0.6, 0.8, gnoise( vec2( b.x * 3.0, b.y * 18.0 ) ) );
+			return mix( vec3( 0.2, 0.17, 0.15 ), vec3( 0.34, 0.3, 0.26 ), len ) * ( 0.9 + 0.15 * n );
+		}
+		if ( kind < -2.5 ) {
+			// deadwood: silver-grey weathered grain, blackened with lichen in patches
+			rough = 0.9;
+			float grain = gnoise( vec2( b.x * 30.0, b.y * 0.8 ) );
+			vec3 c = mix( vec3( 0.14, 0.125, 0.11 ), vec3( 0.26, 0.235, 0.2 ), smoothstep( -0.6, 0.6, grain ) );
+			c = mix( c, vec3( 0.1, 0.095, 0.085 ), smoothstep( 0.2, 0.7, n ) * 0.5 );
+			// flaky grey-brown bark still clinging over most of it
+			float plates = gnoise( vec2( b.x * 14.0, b.y * 8.0 ) + rnd * 3.0 );
+			vec3 barkC = mix( vec3( 0.055, 0.042, 0.032 ), vec3( 0.16, 0.125, 0.095 ), smoothstep( -0.5, 0.6, plates ) );
+			barkC *= 1.0 - smoothstep( 0.55, 0.8, abs( gnoise( vec2( b.x * 30.0, b.y * 15.0 ) ) ) ) * 0.5;
+			float bark = smoothstep( -0.25, 0.2, gnoise( vec2( b.x * 2.2, b.y * 0.35 ) + rnd * 4.0 ) );
+			c = mix( c, barkC, bark );
+			return c * ( 0.9 + 0.15 * fine );
+		}
+		if ( kind < -1.5 ) {
+			// aspen: pale green-grey with dark diamond scars, rough and dark at the foot
+			float scar = smoothstep( 0.55, 0.8, gnoise( vec2( b.x * 4.0, b.y * 3.0 ) + 5.0 ) );
+			vec3 c = vec3( 0.55, 0.56, 0.48 ) * ( 0.9 + 0.1 * fine );
+			c = mix( c, vec3( 0.12, 0.11, 0.1 ), scar * 0.85 );
+			return mix( c, vec3( 0.18, 0.16, 0.14 ), smoothstep( 2.0, 0.3, b.y ) * 0.8 );
+		}
+		// stone pine: grey and scaly
+		vec3 c = mix( vec3( 0.14, 0.12, 0.11 ), vec3( 0.3, 0.25, 0.22 ), n * 0.5 + 0.5 );
+		return c * ( 0.85 + 0.25 * fine );
+	}
 	if ( kind < 0.5 ) {
 		// spruce: grey-brown flaky scales
 		vec3 c = mix( vec3( 0.11, 0.08, 0.065 ), vec3( 0.22, 0.17, 0.14 ), n * 0.5 + 0.5 );
@@ -83,6 +228,8 @@ varying vec2 vBark;
 varying vec3 vInfo;
 varying float vRnd;
 varying float vFade;
+varying vec3 vAxis;
+varying vec3 vOrigin;
 
 void main() {
 	#ifdef USE_INSTANCING
@@ -104,7 +251,8 @@ void main() {
 		float flex = aWind.y;
 		float fl = sin( uTime * ( 2.1 + rnd ) + aInfo.z * 6.283 + dot( wp.xz, vec2( 0.31, 0.27 ) ) ) * flex * ( 0.03 + 0.07 * strength );
 		wp += n * fl;
-		if ( aInfo.x > 4.5 ) wp += n * sin( uTime * 7.0 + aInfo.z * 40.0 ) * 0.02 * strength;
+		bool aspen = abs( aInfo.x - 8.0 ) < 0.5;
+		if ( aInfo.x > 4.5 && abs( aInfo.x - 7.0 ) > 0.5 ) wp += n * sin( uTime * ( aspen ? 12.0 : 7.0 ) + aInfo.z * 40.0 ) * ( aspen ? 0.04 : 0.02 ) * ( aspen ? 0.4 + strength : strength );
 	#endif
 	vWorldPos = wp;
 	vNormal = n;
@@ -112,6 +260,8 @@ void main() {
 	vBark = aBark;
 	vInfo = aInfo;
 	vRnd = rnd;
+	vAxis = normalize( aInfo.x < -10.5 ? im[ 0 ].xyz : im[ 1 ].xyz );
+	vOrigin = origin;
 	float d = length( cameraPosition.xz - origin.xz );
 	vFade = 1.0 - smoothstep( uNearDist - uFadeBand, uNearDist, d );
 	gl_Position = projectionMatrix * viewMatrix * vec4( wp, 1.0 );
@@ -129,6 +279,8 @@ varying vec2 vBark;
 varying vec3 vInfo;
 varying float vRnd;
 varying float vFade;
+varying vec3 vAxis;
+varying vec3 vOrigin;
 
 void main() {
 	float kind = vInfo.x;
@@ -136,6 +288,8 @@ void main() {
 		if ( vFade < 0.999 && interleavedGradient( gl_FragCoord.xy ) > vFade ) discard;
 	#endif
 	bool leaf = kind > 2.5;
+	bool sculpted = kind < -10.5 || ( kind < -7.5 && kind > -8.5 );
+	float mossM = 0.0, mossH = 0.0, sBump = 0.0;
 	vec3 albedo;
 	float alpha = 1.0;
 	float rough = 0.8;
@@ -143,8 +297,27 @@ void main() {
 		vec4 t = texture2D( tAtlas, vUv );
 		alpha = t.a;
 		albedo = t.rgb * foliageTint( kind, vRnd, vInfo.z );
+	} else if ( sculpted ) {
+		albedo = sculptedWood( kind, vWorldPos, normalize( vNormal ), vAxis, vOrigin, vBark, vInfo.z, vRnd, rough, sBump, mossM );
 	} else {
+		bool grain = kind < -9.5;
 		albedo = barkAlbedo( kind, vBark, vRnd, vWorldPos, rough );
+		if ( ( kind < -2.5 && kind > -3.5 ) || grain ) {
+			// cushions of yellow-green moss on whatever faces the sky, creeping down the sides of stumps
+			vec3 Nw = normalize( vNormal );
+			vec3 q = vWorldPos;
+			// patchy along the wood, ragged at the edges
+			float mn = gnoise3( q * 1.4 ) + 0.35 * gnoise3( q * 6.0 + 3.1 ) + 0.15 * gnoise3( q * 20.0 );
+			float m = smoothstep( 0.35, 0.7, Nw.y + 0.45 * mn ) * smoothstep( -0.55, -0.1, gnoise3( q * 0.45 + 7.0 ) ) * ( grain ? 0.8 : 0.97 );
+			// lumpy cushions with a fuzzy, sparkling surface and dark hollows between them
+			float lump = gnoise3( q * 17.0 ) * 0.5 + 0.5;
+			float fuzz = gnoise3( q * 70.0 ) * 0.5 + 0.5;
+			vec3 moss = mix( vec3( 0.03, 0.055, 0.007 ), vec3( 0.26, 0.33, 0.032 ), smoothstep( 0.1, 0.9, lump * 0.75 + fuzz * 0.35 ) );
+			moss = mix( moss, moss * vec3( 1.25, 1.0, 0.6 ), smoothstep( 0.2, 0.8, gnoise3( q * 2.5 ) ) * 0.5 );
+			albedo = mix( albedo, moss, m );
+			mossM = m;
+			mossH = lump * 0.8 + fuzz * 0.35;
+		}
 	}
 	#ifdef A2C
 		alpha = leaf ? saturate( ( alpha - 0.42 ) / max( fwidth( alpha ), 1e-4 ) + 0.5 ) : 1.0;
@@ -170,6 +343,13 @@ void main() {
 		col = shadeFoliage( albedo, N, V, vWorldPos, ao, sh );
 	} else {
 		if ( !gl_FrontFacing ) N = -N;
+		#ifndef BAKE
+			// relief: fissured bark plates, moss cushions; fades out with distance
+			float bh = abs( gnoise( vec2( vBark.x * 10.0, vBark.y * 2.2 ) + vRnd * 7.0 ) ) + 0.45 * abs( gnoise( vec2( vBark.x * 30.0, vBark.y * 7.0 ) ) );
+			bh = sculpted ? sBump : mix( bh, mossH, mossM );
+			float bumpFade = 1.0 - smoothstep( 15.0, 45.0, length( cameraPosition - vWorldPos ) );
+			if ( bumpFade > 0.0 ) N = bumpNormal( N, vWorldPos, bh, ( sculpted ? mix( 0.009, 0.012, mossM ) : mix( 0.012, 0.006, mossM ) ) * bumpFade );
+		#endif
 		col = shadeSurface( albedo, N, V, vWorldPos, ao, sunShadow( vWorldPos, N ), rough, 0.03 );
 	}
 	col = waterColumn( col, vWorldPos, uSunColor );
@@ -178,7 +358,8 @@ void main() {
 }
 `;
 
-const MAX_VARIANTS = 8;
+const MAX_VARIANTS = 16;
+const IMP_COLS = 8;
 
 const bbVert = /* glsl */ `
 ${noiseGLSL}
@@ -284,7 +465,7 @@ function valueNoise( x, z ) {
 
 export class Forest {
 
-	constructor( terrain, quality, renderer ) {
+	constructor( terrain, quality, renderer, deadwood ) {
 
 		this.terrain = terrain;
 		this.quality = quality;
@@ -302,7 +483,21 @@ export class Forest {
 			makeBirch( rng ), makeBirch( rng ),
 		];
 		this.shrubVariants = [ makeShrub( rng ), makeShrub( rng ), makeShrub( rng ) ];
-		this.speciesVariants = { spruce: [ 0, 1, 2 ], larch: [ 3, 4, 5 ], birch: [ 6, 7 ] };
+		this.variants.push(
+			makeConifer( rng, 'pine' ), makeConifer( rng, 'pine' ),
+			makeBroadleaf( rng, 'aspen' ), makeBroadleaf( rng, 'aspen' ),
+			makeBroadleaf( rng, 'rowan' ), makeBroadleaf( rng, 'rowan' ),
+			makeSnag( rng ), makeSnag( rng ),
+		);
+		this.speciesVariants = { spruce: [ 0, 1, 2 ], larch: [ 3, 4, 5 ], birch: [ 6, 7 ], pine: [ 8, 9 ], aspen: [ 10, 11 ], rowan: [ 12, 13 ], snag: [ 14, 15 ] };
+		// understorey and forest-floor props, drawn only near the camera
+		this.props = {
+			fern: { variants: [ makeFern( rng ), makeFern( rng ) ], maxD: 120, cap: 9000, shadow: true },
+			heath: { variants: [ makeHeath( rng ), makeHeath( rng ) ], maxD: 95, cap: 9000, shadow: false },
+			log: { variants: deadwood.logs, maxD: 190, loD: 40, cap: 1500, shadow: true },
+			stump: { variants: deadwood.stumps, maxD: 150, loD: 35, cap: 1500, shadow: true },
+			mush: { variants: [ makeMushrooms( rng, 'agaric' ), makeMushrooms( rng, 'agaric' ), makeMushrooms( rng, 'bolete' ) ], maxD: 55, cap: 1200, shadow: false },
+		};
 
 		this.sharedNear = {
 			...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ),
@@ -338,7 +533,7 @@ export class Forest {
 
 		const r = this.renderer;
 		const cellW = 256, cellH = 512;
-		const W = cellW * MAX_VARIANTS, H = cellH;
+		const W = cellW * IMP_COLS, H = cellH * Math.ceil( MAX_VARIANTS / IMP_COLS );
 		const mk = () => new THREE.WebGLRenderTarget( W, H, {
 			type: THREE.UnsignedByteType, depthBuffer: true, generateMipmaps: true,
 			minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
@@ -375,13 +570,14 @@ export class Forest {
 				const w = h * cellW / cellH;
 				cam.left = - w / 2; cam.right = w / 2; cam.top = h - 0.5; cam.bottom = - 0.5;
 				cam.updateProjectionMatrix();
-				rt.viewport.set( i * cellW, 0, cellW, cellH );
-				rt.scissor.set( i * cellW, 0, cellW, cellH );
+				const cx = ( i % IMP_COLS ) * cellW, cy = Math.floor( i / IMP_COLS ) * cellH;
+				rt.viewport.set( cx, cy, cellW, cellH );
+				rt.scissor.set( cx, cy, cellW, cellH );
 				rt.scissorTest = true;
 				r.setRenderTarget( rt );
 				r.render( scene, cam );
 				scene.remove( mesh );
-				this.cells[ i ] = new THREE.Vector4( i * cellW / W, 0, cellW / W, 1 );
+				this.cells[ i ] = new THREE.Vector4( cx / W, cy / H, cellW / W, cellH / H );
 				this.dims[ i ] = new THREE.Vector4( w, h, - 0.5, 0 );
 
 			} );
@@ -431,12 +627,22 @@ export class Forest {
 			if ( rng.next() > p ) return;
 
 			const cluster = valueNoise( x * 0.012 + 11, z * 0.012 - 3 );
-			let larchP = 0.18 + THREE.MathUtils.smoothstep( h, 120, 520 ) * 0.5 + ( cluster - 0.5 ) * 0.5;
-			let birchP = h < 70 ? 0.3 * ( 1 - forest * 0.6 ) : 0.03;
+			const larchP = 0.18 + THREE.MathUtils.smoothstep( h, 120, 520 ) * 0.5 + ( cluster - 0.5 ) * 0.5;
+			const birchP = h < 70 ? 0.3 * ( 1 - forest * 0.6 ) : 0.03;
+			// stone pines join the larches toward the treeline, aspens stand in clonal groves low down,
+			// rowans at the margins, and a few dead snags everywhere
+			const pineP = THREE.MathUtils.smoothstep( h, 140, 460 ) * 0.3 * ( 0.4 + cluster );
+			const aspenP = h < 200 ? 0.5 * THREE.MathUtils.smoothstep( valueNoise( x * 0.009 - 7, z * 0.009 + 2 ), 0.58, 0.72 ) : 0;
+			const rowanP = h < 450 ? 0.03 + ( 1 - forest ) * 0.1 : 0.01;
+			const snagP = 0.018 + THREE.MathUtils.smoothstep( h, treeline - 220, treeline ) * 0.05;
 			const k = rng.next();
-			let species = 'spruce';
-			if ( k < birchP ) species = 'birch';
-			else if ( k < birchP + larchP ) species = 'larch';
+			let species = 'spruce', acc = snagP;
+			if ( k < acc ) species = 'snag';
+			else if ( k < ( acc += birchP ) ) species = 'birch';
+			else if ( k < ( acc += aspenP ) ) species = 'aspen';
+			else if ( k < ( acc += rowanP ) ) species = 'rowan';
+			else if ( k < ( acc += pineP ) ) species = 'pine';
+			else if ( k < ( acc += larchP ) ) species = 'larch';
 			const vs = this.speciesVariants[ species ];
 			const variant = vs[ Math.floor( rng.next() * vs.length ) ];
 			let s = rng.range( 0.72, 1.15 ) * ( 1 - 0.4 * THREE.MathUtils.smoothstep( h, treeline - 250, treeline ) );
@@ -485,6 +691,8 @@ export class Forest {
 		}
 
 		this.shrubs = shrubs;
+		this._placeProps( rng );
+		this._placeSpawnVignette();
 		if ( this.showcase ) {
 
 			// debug: a row of every variant in front of the start position
@@ -507,6 +715,120 @@ export class Forest {
 		}
 
 		return this.trees.length;
+
+	}
+
+	// Bracken and heath in patches, fallen timber and toadstools, mostly in and around the woods
+	// but spilling into the meadows too.
+	_placeProps( rng ) {
+
+		const td = this.terrain;
+		const bio = [ 0, 0, 0, 0 ];
+		const n = new THREE.Vector3();
+		const near = WORLD.near;
+		const x0 = near.cx - near.size / 2 + 30, x1 = near.cx + near.size / 2 - 30;
+		const z0 = near.cz - near.size / 2 + 30, z1 = near.cz + near.size / 2 - 30;
+		const out = { fern: [], heath: [], log: [], stump: [], mush: [] };
+		const ss = THREE.MathUtils.smoothstep;
+		const c = 3.2;
+		for ( let z = z0; z < z1; z += c ) {
+
+			for ( let x = x0; x < x1; x += c ) {
+
+				const px = x + rng.next() * c, pz = z + rng.next() * c;
+				const h = td.heightAt( px, pz );
+				if ( h < 1.1 || h > 950 ) continue;
+				td.biomeAt( px, pz, bio );
+				const grass = bio[ 0 ], forest = bio[ 1 ], rock = bio[ 2 ], shore = bio[ 3 ];
+				if ( shore > 0.3 || rock > 0.55 ) continue;
+				const edge = forest * ( 1 - forest ) * 4;
+				const r = rng.next();
+				const fernPatch = valueNoise( px * 0.028 + 17, pz * 0.028 - 5 );
+				const heathPatch = valueNoise( px * 0.02 - 9, pz * 0.02 + 31 );
+				// bracken stands at the wood edges and in clearings, rarely out in the open meadow
+				const pFern = h < 480 ? ss( fernPatch, 0.58, 0.74 ) * ( edge * 0.8 + forest * 0.35 + 0.04 ) * ( 0.4 + grass * 0.6 ) : 0;
+				const pHeath = ss( heathPatch, 0.52, 0.68 ) * ( 0.25 + ss( h, 40, 320 ) * 0.5 + edge * 0.3 ) * ( 1 - rock );
+				const pLog = 0.03 * forest + 0.006 * edge + 0.0005 * grass;
+				const pStump = 0.012 * forest + 0.006 * edge + 0.0004 * grass;
+				const pMush = ( 0.006 * edge + 0.003 * forest + 0.0012 * grass ) * ( h < 700 ? 1 : 0 );
+				let kind = null, acc = pFern * 0.4;
+				if ( r < acc ) kind = 'fern';
+				else if ( r < ( acc += pHeath * 0.35 ) ) kind = 'heath';
+				else if ( r < ( acc += pLog ) ) kind = 'log';
+				else if ( r < ( acc += pStump ) ) kind = 'stump';
+				else if ( r < ( acc += pMush ) ) kind = 'mush';
+				if ( ! kind ) continue;
+				if ( kind === 'fern' || kind === 'heath' ) {
+
+					// bracken and bilberry grow as spreading colonies: a clump of plants per pick
+					const set = this.props[ kind ];
+					const m = rng.int( 3, 6 );
+					for ( let j = 0; j < m; j ++ ) {
+
+						const qx = px + rng.range( - 1.8, 1.8 ), qz = pz + rng.range( - 1.8, 1.8 );
+						out[ kind ].push( { x: qx, y: td.heightAt( qx, qz ) - 0.04, z: qz, s: rng.range( 0.75, 1.2 ), rot: rng.next() * Math.PI * 2, pitch: 0, variant: Math.floor( rng.next() * set.variants.length ) } );
+
+					}
+
+					continue;
+
+				}
+				const set = this.props[ kind ];
+				const variant = Math.floor( rng.next() * set.variants.length );
+				const rot = rng.next() * Math.PI * 2;
+				let y = h - 0.05, pitch = 0, sc = rng.range( 0.75, 1.2 );
+				if ( kind === 'log' ) {
+
+					td.normalAt( px, pz, n, 1.5 );
+					if ( n.y < 0.9 ) continue;
+					// lie along the ground: pitch to the slope between the two ends
+					const hl = set.variants[ variant ].halfLen * sc;
+					const ax = Math.cos( rot ), az = - Math.sin( rot );
+					const ha = td.heightAt( px + ax * hl, pz + az * hl ), hb = td.heightAt( px - ax * hl, pz - az * hl );
+					pitch = Math.atan2( ha - hb, hl * 2 );
+					y = ( ha + hb ) / 2 - 0.06;
+					sc = rng.range( 0.85, 1.15 );
+
+				}
+
+				if ( kind === 'mush' ) sc = rng.range( 0.8, 1.25 );
+				out[ kind ].push( { x: px, y, z: pz, s: sc, rot, pitch, variant } );
+
+			}
+
+		}
+
+		for ( const k in out ) this.props[ k ].items = out[ k ];
+
+	}
+
+	// Just off to the left of the start: an old mossy stump and a fallen trunk, with a larch
+	// and a spruce behind them - where a red squirrel forages in plain view.
+	_placeSpawnVignette() {
+
+		const td = this.terrain;
+		const V = { stump: { x: - 9, z: 499 }, log: { x: - 19, z: 502 }, larch: { x: - 26, z: 503 }, spruce: { x: - 31, z: 496 } };
+		const clear = ( list, x, z, r ) => list.filter( ( t ) => Math.hypot( t.x - x, t.z - z ) > r );
+		for ( const set of Object.values( this.props ) ) {
+
+			set.items = clear( clear( set.items, V.stump.x, V.stump.z, 5 ), V.log.x, V.log.z, 6 );
+
+		}
+
+		this.trees = clear( clear( this.trees, V.larch.x, V.larch.z, 7 ), V.spruce.x, V.spruce.z, 7 );
+		this.shrubs = clear( this.shrubs, V.stump.x, V.stump.z, 8 );
+		const stumps = this.props.stump.variants;
+		const sv = stumps.length - 1;
+		const sy = td.heightAt( V.stump.x, V.stump.z ) - 0.05;
+		this.props.stump.items.push( { x: V.stump.x, y: sy, z: V.stump.z, s: 1, rot: 0.7, pitch: 0, variant: sv } );
+		const lvi = this.props.log.variants.findIndex( ( v ) => ! v.plate );
+		const lv = this.props.log.variants[ lvi ];
+		const rot = 0.35, ax = Math.cos( rot ), az = - Math.sin( rot );
+		const ha = td.heightAt( V.log.x + ax * lv.halfLen, V.log.z + az * lv.halfLen ), hb = td.heightAt( V.log.x - ax * lv.halfLen, V.log.z - az * lv.halfLen );
+		this.props.log.items.push( { x: V.log.x, y: ( ha + hb ) / 2 - 0.06, z: V.log.z, s: 1, rot, pitch: Math.atan2( ha - hb, lv.halfLen * 2 ), variant: lvi } );
+		const larch = { x: V.larch.x, y: td.heightAt( V.larch.x, V.larch.z ) - 0.15, z: V.larch.z, s: 0.72, rot: 1.3, variant: 4 };
+		this.trees.push( larch, { x: V.spruce.x, y: td.heightAt( V.spruce.x, V.spruce.z ) - 0.15, z: V.spruce.z, s: 0.78, rot: 2.1, variant: 1 } );
+		this.spawnVignette = { perch: { x: V.stump.x, z: V.stump.z, top: sy + stumps[ sv ].height + 0.01 }, tree: larch };
 
 	}
 
@@ -605,6 +927,52 @@ export class Forest {
 
 		this.treeMatrices = compose( this.trees );
 		this.shrubMatrices = compose( this.shrubs );
+
+		const qz = new THREE.Quaternion(), zAxis = new THREE.Vector3( 0, 0, 1 );
+		for ( const set of Object.values( this.props ) ) {
+
+			if ( set.loD ) {
+
+				set.loMeshes = set.variants.map( ( v ) => {
+
+					const m = new THREE.InstancedMesh( v.lo, this.nearMaterial, set.cap );
+					m.count = 0;
+					m.frustumCulled = false;
+					m.castShadow = set.shadow;
+					m.receiveShadow = true;
+					m.customDepthMaterial = this.depthMaterial;
+					m.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
+					this.group.add( m );
+					return m;
+
+				} );
+
+			}
+
+			set.meshes = set.variants.map( ( v ) => {
+
+				const m = new THREE.InstancedMesh( v.geometry, this.nearMaterial, set.cap );
+				m.count = 0;
+				m.frustumCulled = false;
+				m.castShadow = set.shadow;
+				m.receiveShadow = true;
+				m.customDepthMaterial = this.depthMaterial;
+				m.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
+				this.group.add( m );
+				return m;
+
+			} );
+			set.matrices = new Float32Array( set.items.length * 16 );
+			set.items.forEach( ( t, i ) => {
+
+				q.setFromAxisAngle( up, t.rot ).multiply( qz.setFromAxisAngle( zAxis, t.pitch ) );
+				mat.compose( p.set( t.x, t.y, t.z ), q, s.set( t.s, t.s, t.s ) );
+				mat.toArray( set.matrices, i * 16 );
+
+			} );
+
+		}
+
 		return this.group;
 
 	}
@@ -623,14 +991,15 @@ export class Forest {
 		this._lastUpdate.copy( cp );
 		const nearD = this.sharedNear.uNearDist.value + 4;
 		const nd2 = nearD * nearD;
-		const fill = ( list, matrices, meshes, maxD2 ) => {
+		const fill = ( list, matrices, meshes, maxD2, minD2 = - 1 ) => {
 
 			const counts = meshes.map( () => 0 );
 			for ( let i = 0; i < list.length; i ++ ) {
 
 				const t = list[ i ];
 				const dx = t.x - cp.x, dz = t.z - cp.z;
-				if ( dx * dx + dz * dz > maxD2 ) continue;
+				const d2 = dx * dx + dz * dz;
+				if ( d2 > maxD2 || d2 <= minD2 ) continue;
 				const m = meshes[ t.variant ];
 				const c = counts[ t.variant ];
 				if ( c >= m.instanceMatrix.count ) continue;
@@ -653,6 +1022,17 @@ export class Forest {
 		fill( this.trees, this.treeMatrices, this.nearMeshes, nd2 );
 		const sd = Math.min( 160, nearD );
 		fill( this.shrubs, this.shrubMatrices, this.shrubMeshes, sd * sd );
+		for ( const set of Object.values( this.props ) ) {
+
+			const d = Math.min( set.maxD, nearD );
+			if ( set.loD ) {
+
+				fill( set.items, set.matrices, set.meshes, set.loD * set.loD );
+				fill( set.items, set.matrices, set.loMeshes, d * d, set.loD * set.loD );
+
+			} else fill( set.items, set.matrices, set.meshes, d * d );
+
+		}
 
 	}
 

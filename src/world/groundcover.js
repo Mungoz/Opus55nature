@@ -27,8 +27,9 @@ function tiledInstances( tile, spacing, seed ) {
 }
 
 const wrapGLSL = /* glsl */ `
+uniform vec4 uFocus;
 vec2 wrapTile( vec2 o, float tile ) {
-	vec2 cam = cameraPosition.xz;
+	vec2 cam = uFocus.w > 0.5 ? uFocus.xy : cameraPosition.xz;
 	return o + tile * floor( ( cam - o ) / tile + 0.5 );
 }
 mat3 rotY( float a ) { float c = cos( a ), s = sin( a ); return mat3( c, 0.0, -s, 0.0, 1.0, 0.0, s, 0.0, c ); }
@@ -53,7 +54,7 @@ varying vec3 vObj;
 varying vec3 vTint;
 void main() {
 	vec2 p = wrapTile( aOff.xy, uTile );
-	float d = length( p - cameraPosition.xz );
+	float d = length( p - ( uFocus.w > 0.5 ? uFocus.xy : cameraPosition.xz ) );
 	float fade = 1.0 - smoothstep( uRadius * 0.7, uRadius, d );
 	vec4 bio = biomeAt( p );
 	vec4 hn = terrainHN( p );
@@ -61,7 +62,7 @@ void main() {
 	float depth = uWaterLevel - h;
 	// only on the strand itself; the lakebed texture carries the stones underwater
 	float dens = bio.a * 0.75 * ( 1.0 - smoothstep( -0.02, 0.1, depth ) );
-	dens += ( 1.0 - smoothstep( 0.8, 2.0, h ) ) * 0.03 + bio.b * 0.2;
+	dens += ( 1.0 - smoothstep( 0.5, 0.9, h ) ) * 0.03 + bio.b * 0.2;
 	float r1 = aOff.z, r2 = aOff.w;
 	if ( r1 > dens || fade <= 0.0 ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
 	float r3 = fract( r1 * 17.3 + r2 * 5.1 );
@@ -132,9 +133,12 @@ function stoneGeometry() {
 }
 
 // ---------------------------------------------------------------------------
+// pond positions for the cotton grass (filled in once the terrain is generated)
+export const PONDS_GC = { value: Array.from( { length: 3 }, () => new THREE.Vector4( 1e6, 1e6, 0, - 100 ) ) };
+
 // Autumn wildflowers
 // ---------------------------------------------------------------------------
-// types: 0 autumn crocus, 1 gentian, 2 yarrow, 3 harebell, 4 hawkbit
+// types: 0 autumn crocus, 1 gentian, 2 yarrow, 3 harebell, 4 hawkbit, 5 cotton grass (wet ground)
 const flowerVert = /* glsl */ `
 ${noiseGLSL}
 ${terrainUniformsGLSL}
@@ -145,6 +149,7 @@ uniform float uRadius;
 uniform float uTime;
 uniform vec4 uWind;
 uniform sampler2D uNoiseTex;
+uniform vec4 uPondsGC[ 3 ]; // x, z, radius, surface
 attribute vec4 aOff;
 attribute vec3 aGeo; // x: 0 stem / 1 petal, y: petal index
 varying vec3 vWorldPos;
@@ -153,22 +158,33 @@ varying vec3 vColor;
 varying float vPetal;
 void main() {
 	vec2 p = wrapTile( aOff.xy, uTile );
-	float d = length( p - cameraPosition.xz );
+	float d = length( p - ( uFocus.w > 0.5 ? uFocus.xy : cameraPosition.xz ) );
 	float fade = 1.0 - smoothstep( uRadius * 0.6, uRadius, d );
 	vec4 bio = biomeAt( p );
 	float r1 = aOff.z, r2 = aOff.w;
 	float patch_ = textureLod( uNoiseTex, p / 18.0 + 0.23, 0.0 ).r;
-	float dens = bio.r * smoothstep( 0.4, 0.72, patch_ ) * 0.7;
-	if ( r1 > dens || fade <= 0.0 ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
 	vec4 hn = terrainHN( p );
+	// boggy margins of the pools, the stream and the lake
+	float wet = smoothstep( 0.03, 0.2, bio.a ) * ( 1.0 - smoothstep( 0.5, 0.85, bio.a ) ) * step( 1.8, hn.x );
+	for ( int i = 0; i < 3; i ++ ) {
+		// the boggy fringe of the pools
+		vec4 pd = uPondsGC[ i ];
+		if ( length( p - pd.xy ) > pd.z * 2.4 ) continue;
+		float above = hn.x - pd.w;
+		wet = max( wet, smoothstep( 0.02, 0.1, above ) * ( 1.0 - smoothstep( 0.35, 0.8, above ) ) );
+	}
+	float cotton = wet * smoothstep( 0.55, 0.7, textureLod( uNoiseTex, p / 13.0 + 0.61, 0.0 ).b );
+	float dens = max( bio.r * smoothstep( 0.4, 0.72, patch_ ) * 0.7, cotton * 0.9 );
+	if ( r1 > dens || fade <= 0.0 ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
 	// each drift is mostly one species
-	float kind = floor( fract( textureLod( uNoiseTex, p / 31.0, 0.0 ).g * 3.7 + r2 * 0.35 ) * 5.0 );
+	float kind = cotton > 0.25 ? 5.0 : floor( fract( textureLod( uNoiseTex, p / 31.0, 0.0 ).g * 3.7 + r2 * 0.35 ) * 5.0 );
 	float stemH, headR, tilt, pw = 0.7; vec3 col;
 	if ( kind < 0.5 ) { stemH = 0.07; headR = 0.035; tilt = 1.25; col = vec3( 0.62, 0.45, 0.8 ); }
 	else if ( kind < 1.5 ) { stemH = 0.06; headR = 0.022; tilt = 1.3; col = vec3( 0.14, 0.24, 0.82 ); }
 	else if ( kind < 2.5 ) { stemH = 0.36; headR = 0.03; tilt = 0.35; pw = 1.9; col = vec3( 0.86, 0.84, 0.76 ); }
 	else if ( kind < 3.5 ) { stemH = 0.28; headR = 0.019; tilt = -1.15; col = vec3( 0.48, 0.55, 0.9 ); }
-	else { stemH = 0.2; headR = 0.026; tilt = 0.28; col = vec3( 0.98, 0.76, 0.16 ); }
+	else if ( kind < 4.5 ) { stemH = 0.2; headR = 0.026; tilt = 0.28; col = vec3( 0.98, 0.76, 0.16 ); }
+	else { stemH = 0.38; headR = 0.034; tilt = -0.75; pw = 2.3; col = vec3( 0.97, 0.96, 0.93 ); }
 	stemH *= 0.8 + 0.4 * r2;
 	headR *= 1.5;
 	float s = fade;
@@ -290,7 +306,7 @@ export class GroundCover {
 		this.flowers = new THREE.Mesh( instanced( flowerGeometry(), flowerTile, 0.42 / k, 13 ), new THREE.ShaderMaterial( {
 			vertexShader: flowerVert,
 			fragmentShader: flowerFrag,
-			uniforms: { ...lights(), uTile: { value: flowerTile }, uRadius: { value: flowerTile * 0.5 } },
+			uniforms: { ...lights(), uTile: { value: flowerTile }, uRadius: { value: flowerTile * 0.5 }, uPondsGC: PONDS_GC },
 			lights: true,
 			side: THREE.DoubleSide,
 		} ) );

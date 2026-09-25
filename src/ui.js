@@ -1,7 +1,7 @@
 import { U } from './core/uniforms.js';
 import { START_POSE } from './app.js';
 
-const STORE = 'larchmere.settings.v1';
+const STORE = 'larchmere.settings.v2';
 
 function load() {
 
@@ -180,7 +180,7 @@ export function initUI( app ) {
 	tbPlay.addEventListener( 'click', ( e ) => {
 
 		e.stopPropagation();
-		const s = app.timeSpeed > 0 ? 0 : ( settings.lastSpeed || 10 );
+		const s = app.timeSpeed > 0 ? 0 : ( settings.lastSpeed || 2 );
 		setSpeed( s );
 		toast( s > 0 ? 'Time flows' : 'Time holds still' );
 

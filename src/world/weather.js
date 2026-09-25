@@ -289,12 +289,15 @@ export class Weather {
 		}
 
 		const s = this.state, tg = this.target;
-		const k = 1 - Math.exp( - dt / 9 );
-		for ( const key of [ 'clouds', 'wind', 'rain', 'overcast', 'haze', 'mist', 'base', 'lowCloud', 'storm' ] ) s[ key ] += ( tg[ key ] - s[ key ] ) * ( key === 'rain' ? Math.min( 1, k * 1.6 ) : k );
+		const k = 1 - Math.exp( - dt / 5 );
+		// the sky clears over ~20 s, but rain starts and stops within a few seconds
+		const kRain = tg.rain < s.rain ? 1 - Math.exp( - dt / 1.2 ) : 1 - Math.exp( - dt / 3 );
+		for ( const key of [ 'clouds', 'wind', 'rain', 'overcast', 'haze', 'mist', 'base', 'lowCloud', 'storm' ] ) s[ key ] += ( tg[ key ] - s[ key ] ) * ( key === 'rain' ? kRain : k );
+		if ( tg.rain === 0 && s.rain < 0.02 ) s.rain = 0;
 
 		// surfaces soak quickly and dry slowly
 		if ( s.rain > 0.05 ) this.wetness = Math.min( 1, this.wetness + dt * s.rain * 0.08 );
-		else this.wetness = Math.max( 0, this.wetness - dt * 0.006 );
+		else this.wetness = Math.max( 0, this.wetness - dt * 0.025 );
 
 		// wind: gently veering direction, strength from weather x user setting, with gusts
 		this.windAngle += Math.sin( time * 0.013 ) * dt * 0.01;

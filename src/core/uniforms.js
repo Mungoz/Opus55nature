@@ -29,6 +29,8 @@ export const U = {
 	uWeather: { value: new THREE.Vector4( 0, 0, 0, 0 ) },
 	// x: cloud base altitude (m) for low cloud, y: low-cloud density
 	uCloudBase: { value: new THREE.Vector2( 3000, 0 ) },
+	// xy: where ground cover is centred when w = 1 (a long-lens subject); else it follows the camera
+	uFocus: { value: new THREE.Vector4( 0, 0, 0, 0 ) },
 	uWaterLevel: { value: 0 },
 	uWaterAbsorb: { value: new THREE.Vector3( 0.42, 0.075, 0.07 ) },
 	uWaterScatter: { value: new THREE.Vector3( 0.012, 0.05, 0.048 ) },

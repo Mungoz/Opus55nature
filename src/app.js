@@ -9,9 +9,12 @@ import { Sky } from './world/sky.js';
 import { Terrain } from './world/terrain.js';
 import { SunShadows } from './world/shadows.js';
 import { Water } from './world/water.js';
+import { Streams } from './world/stream.js';
+import { buildDeadwood } from './world/deadwood.js';
+import { WaterPlants } from './world/waterplants.js';
 import { Forest } from './world/trees.js';
 import { Meadow, CROP } from './world/grass.js';
-import { GroundCover } from './world/groundcover.js';
+import { GroundCover, PONDS_GC } from './world/groundcover.js';
 import { Rocks } from './world/rocks.js';
 import { Particles } from './world/particles.js';
 import { Murmuration, GeeseFlight, Eagles } from './fauna/birds.js';
@@ -41,7 +44,7 @@ export class App {
 		this.presetName = options.preset && PRESETS[ options.preset ] ? options.preset : 'high';
 		this.quality = { ...PRESETS[ this.presetName ] };
 		this.hours = options.hours ?? 16.15;
-		this.timeSpeed = options.timeSpeed ?? 10; // game seconds per real second
+		this.timeSpeed = options.timeSpeed ?? 2; // game seconds per real second
 		this.elapsed = 0;
 		this.systems = [];
 		this.frame = 0;
@@ -92,6 +95,8 @@ export class App {
 		};
 
 		if ( ! r.capabilities.isWebGL2 ) throw new Error( 'WebGL 2 is required' );
+		// stumps and fallen trunks are sculpted in workers while the GPU builds the world
+		const deadwoodP = buildDeadwood();
 
 		await step( 0.02, 'Preparing the palette' );
 		this.textures = new TextureBank( r ).build();
@@ -108,6 +113,7 @@ export class App {
 		U.uNearXf.value.copy( td.nearXf );
 		U.uFarXf.value.copy( td.farXf );
 		U.uTShadow.value = td.shadowTex;
+		td.ponds.forEach( ( pd, i ) => PONDS_GC.value[ i ].set( pd.c.x, pd.c.y, pd.r, pd.surf ) );
 
 		await step( 0.3, 'Painting the sky' );
 		this.sky = new Sky( r );
@@ -121,9 +127,13 @@ export class App {
 		await step( 0.45, 'Filling the lake' );
 		this.water = new Water( this.textures, this.quality );
 		this.scene.add( this.water.mesh );
+		this.streams = new Streams( td, this.textures );
+		this.scene.add( this.streams.group );
+		this.waterPlants = new WaterPlants( td );
+		this.scene.add( this.waterPlants.group );
 
 		await step( 0.5, 'Growing the larches' );
-		this.forest = new Forest( td, this.quality, r );
+		this.forest = new Forest( td, this.quality, r, await deadwoodP );
 		if ( this.options.showcase ) this.forest.showcase = { x: 30, z: 560 };
 		this.treeCount = this.forest.place();
 		await step( 0.6, 'Turning the larches gold' );
@@ -156,6 +166,8 @@ export class App {
 		this.scene.add( this.mammals.group );
 		// marmots crop the turf short around their burrows
 		this.mammals.marmots.forEach( ( m, i ) => CROP.value[ i ].set( m.burrow.x, m.burrow.z, 9, 0.8 ) );
+		const sv = this.forest.spawnVignette;
+		if ( sv ) CROP.value[ 5 ].set( sv.perch.x, sv.perch.z, 3.2, 0.6 );
 		this.scene.add( this.starlings.mesh, this.geese.mesh, this.eagles.mesh, this.waterfowl.group, this.fish.mesh );
 		this._buildStone();
 		this.weather = new Weather( td, this.quality, this.audio );
@@ -169,6 +181,28 @@ export class App {
 		this.controls.onClick = ( e ) => this.throwStone( e );
 		const p = this.options.cam;
 		this.controls.setPose( ...( p || START_POSE ) );
+		// debug: ?prop=log|fern|heath|mush frames the nearest one of those to the start
+		const pk = this.options.prop && this.forest.props[ this.options.prop ];
+		if ( pk ) {
+
+			const c = this.camera.position;
+			let best = null, bd = Infinity;
+			for ( const it of pk.items ) {
+
+				const d = ( it.x - c.x ) ** 2 + ( it.z - c.z ) ** 2;
+				if ( d < bd ) { bd = d; best = it; }
+
+			}
+
+			const r = this.options.prop === 'mush' ? 1.3 : this.options.prop === 'log' ? ( this.options.near ? 3 : 7 ) : 4;
+			const ang = Math.atan2( c.x - best.x, c.z - best.z );
+			const x = best.x + Math.sin( ang ) * r, z = best.z + Math.cos( ang ) * r;
+			const y = td.heightAt( x, z ) + ( this.options.prop === 'mush' ? 0.45 : 1.6 );
+			const pitch = Math.atan2( best.y + 0.15 - y, r ) * 180 / Math.PI;
+			this.controls.setPose( x, y, z, ang * 180 / Math.PI, pitch );
+
+		}
+
 		this.tour = new Tour( this.camera, td );
 
 		this.resize();
@@ -185,6 +219,7 @@ export class App {
 		// compile every program up front so the first seconds are smooth
 		this.forest.update( this.camera );
 		this.rocks.update( this.camera );
+		this.waterPlants.update( this.camera );
 		// compile in the background where the browser supports it (keeps the loader animating)
 		await r.compileAsync( this.scene, this.camera );
 		this.render();
@@ -233,10 +268,15 @@ export class App {
 			fps: Math.round( 1000 / this._ftAvg ),
 			calls: this.renderer.info.render.calls,
 			trees: this.treeCount,
+			water: this.waterPlants.counts(),
+			props: Object.fromEntries( Object.entries( this.forest.props ).map( ( [ k, v ] ) => [ k, v.items.length ] ) ),
 			tris: this.renderer.info.render.triangles,
 			cam: probe( this.camera.position.x, this.camera.position.z ),
 			sunEl: Math.round( this.sky.sunElevation * 10 ) / 10,
 			scale: this.renderScale,
+			river: this.terrainData.river.filter( ( v, i ) => i % 6 === 0 ).map( ( r ) => r.surf ).map( ( v ) => Math.round( v * 10 ) / 10 ),
+			ponds: this.terrainData.ponds.map( ( p ) => Math.round( p.surf * 10 ) / 10 ),
+			fallBase: probe( - 548, 1092 ), fallTop: probe( - 555, 1094 ),
 			load: this.loadTimes,
 		};
 
@@ -415,9 +455,11 @@ export class App {
 
 		this.forest.update( this.camera );
 		this.rocks.update( this.camera );
+		this.waterPlants.update( this.camera );
 		const sunEl = this.sky.sunElevation;
 		const day = sunEl > - 7 && this.weather.state.rain < 0.3;
-		this.starlings.update( dt, day );
+		// murmurations gather in the late afternoon and at dusk
+		this.starlings.update( dt, day && sunEl < 16 && sunEl > - 6 );
 		this.geese.update( dt, t, this.camera, sunEl > - 4 && this.weather.state.rain < 0.5 );
 		this.eagles.update( dt, t, sunEl > 1 && this.weather.state.overcast < 0.6 );
 		this.waterfowl.update( dt, t );
@@ -486,6 +528,8 @@ export class App {
 		this.audio.update( dt, this.camera, {
 			gust, wind: wind.z, forest: bio[ 1 ], shore, altitude: cp.y - Math.max( ground, 0 ),
 			night: U.uNight.value, dusk: 1 - Math.min( 1, Math.abs( sunEl + 2 ) / 6 ), rain: this.weather.state.rain,
+			brook: 1 - THREE.MathUtils.smoothstep( this.streams.distanceTo( cp ), 2, 45 ),
+			fall: Math.min( 1, 60 / Math.max( 1, cp.distanceTo( this.streams.poolPos ) ) ),
 		} );
 
 		// post parameters

@@ -12,7 +12,7 @@ if ( shotMode ) document.body.classList.add( 'shot' );
 let stored = {};
 try {
 
-	stored = JSON.parse( localStorage.getItem( 'larchmere.settings.v1' ) ) || {};
+	stored = JSON.parse( localStorage.getItem( 'larchmere.settings.v2' ) ) || {};
 
 } catch ( e ) { /* private mode */ }
 
@@ -21,6 +21,8 @@ const options = {
 	hours: params.has( 't' ) ? num( 't' ) : undefined,
 	timeSpeed: params.has( 'speed' ) ? num( 'speed' ) : ( shotMode ? undefined : stored.speed ),
 	cam: params.has( 'cam' ) ? params.get( 'cam' ).split( ',' ).map( Number ) : undefined,
+	prop: params.get( 'prop' ) || undefined,
+	near: params.has( 'near' ),
 	showcase: params.has( 'showcase' ),
 	weather: params.get( 'weather' ) || ( shotMode ? undefined : stored.weather ),
 	shot: shotMode,

@@ -42,57 +42,59 @@ function shots( app ) {
 			},
 		},
 		{
-			// 3. Mute swans: tracking alongside, just above the water
-			dur: 5.5, hours: 16.55, weather: 'clear', caption: 'Mute swans',
-			setup: () => ( { bird: app.waterfowl.birds[ 0 ] } ),
+			// 3. Mute swans, watched through a long lens from along the shore
+			dur: 5.5, hours: 16.55, weather: 'clear', caption: 'Mute swans', fov: 17,
+			setup: () => ( { bird: app.waterfowl.birds[ 0 ], side: app.waterfowl.birds[ 0 ].heading + Math.PI / 2 + 0.35 } ),
+			focus: ( c ) => c.bird.pos,
 			camera: ( u, c ) => {
 
 				const b = c.bird.pos, h = c.bird.heading;
-				const side = h + Math.PI / 2 + lerp( 0.55, 0.15, ease( u ) );
-				const r = lerp( 6.5, 5.2, u );
-				return { p: V( b.x + Math.sin( side ) * r, 0.55, b.z + Math.cos( side ) * r ), t: V( b.x + Math.sin( h ) * 1.2, 0.55, b.z + Math.cos( h ) * 1.2 ) };
+				const side = c.side + lerp( 0.08, - 0.08, easeInOut( u ) );
+				const r = 30;
+				return { p: V( b.x + Math.sin( side ) * r, 0.9, b.z + Math.cos( side ) * r ), t: V( b.x + Math.sin( h ) * 1.4 - Math.sin( side ) * 1.2, 0.5, b.z + Math.cos( h ) * 1.4 - Math.cos( side ) * 1.2 ) };
 
 			},
 		},
 		{
-			// 4. Red deer grazing at the forest edge; a slow lateral truck
-			dur: 6, hours: 16.62, weather: 'clear', caption: 'Red deer in the rut',
+			// 4. The red deer herd at sunset, from far across the meadow
+			dur: 6, hours: 16.62, weather: 'clear', caption: 'Red deer in the rut', fov: 16,
 			setup: () => {
 
 				const stag = app.mammals.deer[ 0 ];
-				const c = stag.pos.clone();
-				const a = stag.heading + 1.9;
-				return { stag, c, a };
+				return { stag, c: stag.pos.clone(), a: stag.heading + 1.9 };
 
 			},
+			focus: ( c ) => c.stag.pos,
 			camera: ( u, c ) => {
 
-				const a = c.a + lerp( - 0.12, 0.12, easeInOut( u ) );
-				const p = V( c.c.x + Math.sin( a ) * 10.5, 0, c.c.z + Math.cos( a ) * 10.5 );
-				p.y = ground( p.x, p.z ) + 0.95;
-				const s = c.stag.mesh.position;
-				return { p, t: V( s.x, s.y + 1.05, s.z ) };
+				const a = c.a + lerp( - 0.05, 0.05, easeInOut( u ) );
+				const p = V( c.c.x + Math.sin( a ) * 48, 0, c.c.z + Math.cos( a ) * 48 );
+				p.y = ground( p.x, p.z ) + 1.5;
+				const st = c.stag.mesh.position;
+				return { p, t: V( st.x, st.y + 1.0, st.z ) };
 
 			},
 		},
 		{
-			// 5. Alpine marmot on sentry duty
-			dur: 4.5, hours: 16.4, weather: 'clear', caption: 'Alpine marmot',
+			// 5. A marmot keeps watch on the colony, seen from a respectful distance
+			dur: 4.5, hours: 16.4, weather: 'clear', caption: 'Alpine marmot', fov: 13,
 			setup: () => {
 
 				const m = app.mammals.marmots[ 0 ];
 				m.forced = 'sentinel';
-				// turn it to face into the low sun so the camera sees a lit face
 				const sun = U.uTrueSunDir.value;
 				m.heading = Math.atan2( sun.x, sun.z ) - 0.45;
 				return { m };
 
 			},
+			focus: ( c ) => c.m.pos,
 			camera: ( u, c ) => {
 
 				const m = c.m.mesh.position, h = c.m.heading + 0.45;
-				const r = lerp( 1.7, 1.3, easeInOut( u ) );
-				return { p: V( m.x + Math.sin( h ) * r, m.y + 0.42, m.z + Math.cos( h ) * r ), t: V( m.x, m.y + 0.25, m.z ) };
+				const r = lerp( 15, 13.5, easeInOut( u ) );
+				const p = V( m.x + Math.sin( h ) * r, 0, m.z + Math.cos( h ) * r );
+				p.y = ground( p.x, p.z ) + 0.75;
+				return { p, t: V( m.x, m.y + 0.25, m.z ) };
 
 			},
 			teardown: ( c ) => {
@@ -102,25 +104,30 @@ function shots( app ) {
 			},
 		},
 		{
-			// 6. A trout breaks the surface
-			dur: 4.2, hours: 16.5, weather: 'clear', caption: 'Rainbow trout',
+			// 6. A trout breaks the surface, crossing the frame
+			dur: 4.2, hours: 16.5, weather: 'clear', caption: 'Rainbow trout', fov: 30,
 			setup: () => {
 
-				const p = V( - 30, 0.75, 455 ), fwd = V( - 0.15, 0, - 1 ).normalize();
-				const spot = p.clone().addScaledVector( fwd, 8.5 );
-				return { p, spot, fired: false };
+				const p = V( - 30, 0.9, 458 ), fwd = V( - 0.15, 0, - 1 ).normalize();
+				const spot = p.clone().addScaledVector( fwd, 12 );
+				// travel right-to-left across the view
+				const dir = Math.atan2( fwd.x, fwd.z ) - Math.PI / 2;
+				spot.x -= Math.sin( dir ) * 0.8;
+				spot.z -= Math.cos( dir ) * 0.8;
+				return { p, spot, dir, fired: false };
 
 			},
+			focus: ( c ) => c.spot,
 			camera: ( u, c, t ) => {
 
-				if ( ! c.fired && t > 1.0 ) {
+				if ( ! c.fired && t > 1.1 ) {
 
 					c.fired = true;
-					app.fish.forceJump( c.spot.x, c.spot.z, Math.PI * 0.5, 4.6, 1.6, 1.7 );
+					app.fish.forceJump( c.spot.x, c.spot.z, c.dir, 0.42, 2.7, 1.25 );
 
 				}
 
-				return { p: c.p.clone().add( V( u * 0.4, 0, 0 ) ), t: V( c.spot.x, 0.7, c.spot.z ) };
+				return { p: c.p.clone().add( V( u * 0.3, 0, 0 ) ), t: V( c.spot.x, 0.35, c.spot.z ) };
 
 			},
 			teardown: () => {
@@ -231,6 +238,9 @@ export class Film {
 
 	_place() {
 
+		const f = this.shot?.focus?.( this.ctx );
+		if ( f ) U.uFocus.value.set( f.x, f.z, 0, 1 );
+		else U.uFocus.value.w = 0;
 		const cam = this.app.camera;
 		cam.position.copy( this._cam.p );
 		cam.lookAt( this._cam.t );
@@ -251,6 +261,8 @@ export class Film {
 		app.weather.dynamic = false;
 		app.weather.snap( this.shot.weather );
 		this.ctx = this.shot.setup ? this.shot.setup() : {};
+		app.camera.fov = this.shot.fov ?? 55;
+		app.camera.updateProjectionMatrix();
 		this.el.caption.textContent = this.shot.caption || '';
 		// settle the world at the new place (adaptation, particles, streaming) off-camera
 		const cam = this.shot.camera( 0, this.ctx, 0 );

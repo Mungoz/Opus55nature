@@ -226,6 +226,17 @@ void main() {
 	alb = mix( alb, pebAlb, sW );
 	dn = mix( dn, pebDN * 1.3, sW );
 	cav = mix( cav, pebT.a, sW );
+	// steep banks on the valley floor: bare earth in layers, roots, a turf lip
+	float bankW = smoothstep( 0.2, 0.36, steep + gnoise( wp.xz * 1.3 ) * 0.05 ) * ( 1.0 - smoothstep( 25.0, 60.0, h ) ) * ( 1.0 - wRock ) * ( 1.0 - smoothstep( 0.5, 0.9, wShore ) );
+	if ( bankW > 0.0 ) {
+		float strata = gnoise( vec2( ( wp.x + wp.z ) * 0.35, h * 9.0 ) ) * 0.5 + 0.5;
+		vec3 earth = mix( decode( vec3( 0.33, 0.24, 0.16 ) ), decode( vec3( 0.46, 0.35, 0.24 ) ), strata );
+		earth = mix( earth, decode( vec3( 0.2, 0.15, 0.1 ) ), smoothstep( 0.55, 0.9, gnoise( wp.xz * 3.5 + h * 6.0 ) ) * 0.6 );
+		earth = mix( earth, pebAlb, smoothstep( 0.6, 0.85, pebT.a ) * 0.5 );
+		alb = mix( alb, earth, bankW );
+		dn = mix( dn, soilDN * 1.2, bankW );
+		cav = mix( cav, soilT.a, bankW );
+	}
 	// rock
 	alb = mix( alb, rockAlb, wRock );
 	dn = mix( dn, rockDN, wRock );

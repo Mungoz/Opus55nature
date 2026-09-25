@@ -3,6 +3,18 @@ import { noiseGLSL } from '../shaders/noise.glsl.js';
 import { terrainShapeGLSL } from '../shaders/terrainShape.glsl.js';
 import { FullscreenPass, passMaterial, makeTarget } from './gpu.js';
 import { WORLD, regionOrigin } from '../core/world.js';
+import { riverSamples, PONDS, RIVER_SAMPLES } from '../core/features.js';
+
+// Measures natural ground (no streams or ponds carved) at a list of points.
+const probeFrag = /* glsl */ `
+${noiseGLSL}
+${terrainShapeGLSL}
+uniform sampler2D uPos;
+void main() {
+	vec2 p = texelFetch( uPos, ivec2( gl_FragCoord.xy ), 0 ).xy;
+	gl_FragColor = vec4( terrainHeight( p, 1.0 ), 0.0, 0.0, 1.0 );
+}
+`;
 
 const heightFrag = /* glsl */ `
 ${noiseGLSL}
@@ -101,6 +113,16 @@ void main() {
 	grass *= smoothstep( -0.75, -0.35, n2 + n3 * 0.2 + meadow + smoothstep( 60.0, 0.0, h ) * 0.6 );
 	grass *= 1.0 - shore;
 
+	// streams and ponds: stony beds, open banks
+	float wet = surfaceWater( p );
+	float pond = pondWater( p );
+	vec3 rq = riverQuery( p );
+	float nearWater = 1.0 - smoothstep( rq.z + 2.0, rq.z + 12.0, rq.x );
+	grass *= 1.0 - max( wet, pond );
+	forest *= 1.0 - max( max( wet, pond ), nearWater );
+	shore = max( shore, wet );
+	rock *= 1.0 - max( wet, pond );
+
 	gl_FragColor = vec4( clamp( grass, 0.0, 1.0 ), forest, rock, shore );
 }
 `;
@@ -172,10 +194,105 @@ export class TerrainData {
 
 	}
 
+	// Streams must run downhill and sit below their banks, ponds must fill their
+	// hollows: measure the natural ground first, then derive water levels.
+	_measureWater() {
+
+		const r = this.renderer;
+		const samples = riverSamples();
+		const pts = [];
+		samples.forEach( ( smp, i ) => {
+
+			const a = samples[ Math.max( 0, i - 1 ) ].p, b = samples[ Math.min( samples.length - 1, i + 1 ) ].p;
+			const t = b.clone().sub( a ).normalize();
+			const n = new THREE.Vector2( - t.y, t.x );
+			pts.push( smp.p, smp.p.clone().addScaledVector( n, smp.width ), smp.p.clone().addScaledVector( n, - smp.width ) );
+
+		} );
+		for ( const pd of PONDS ) {
+
+			pts.push( pd.c );
+			for ( let k = 0; k < 24; k ++ ) {
+
+				const a = k / 12 * Math.PI * 2;
+				pts.push( pd.c.clone().add( new THREE.Vector2( Math.cos( a ), Math.sin( a ) ).multiplyScalar( pd.r * ( k < 12 ? 1.0 : 1.6 ) ) ) );
+
+			}
+
+		}
+
+		const n = pts.length;
+		const data = new Float32Array( n * 4 );
+		pts.forEach( ( p, i ) => data.set( [ p.x, p.y, 0, 1 ], i * 4 ) );
+		const posTex = new THREE.DataTexture( data, n, 1, THREE.RGBAFormat, THREE.FloatType );
+		posTex.needsUpdate = true;
+		const rt = makeTarget( n, 1, { type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter } );
+		const pass = new FullscreenPass( passMaterial( probeFrag, { uPos: { value: posTex }, ...this.featureUniforms } ) );
+		pass.render( r, rt );
+		const out = new Float32Array( n * 4 );
+		r.readRenderTargetPixels( rt, 0, 0, n, 1, out );
+		pass.dispose();
+		rt.dispose();
+		posTex.dispose();
+		const h = ( i ) => out[ i * 4 ];
+
+		// stream: lowest of centre and banks, stepping only downhill, smoothed
+		let surf = samples.map( ( smp, i ) => Math.min( h( i * 3 ), h( i * 3 + 1 ), h( i * 3 + 2 ) ) - 0.85 );
+		for ( let i = 1; i < surf.length; i ++ ) surf[ i ] = Math.min( surf[ i ], surf[ i - 1 ] );
+		for ( let pass2 = 0; pass2 < 4; pass2 ++ ) {
+
+			surf = surf.map( ( v, i ) => ( surf[ Math.max( 0, i - 1 ) ] + v * 2 + surf[ Math.min( surf.length - 1, i + 1 ) ] ) / 4 );
+			for ( let i = 1; i < surf.length; i ++ ) surf[ i ] = Math.min( surf[ i ], surf[ i - 1 ] );
+
+		}
+
+		surf = surf.map( ( v ) => Math.max( v, 0.04 ) );
+		surf[ surf.length - 1 ] = 0.02;
+		samples.forEach( ( smp, i ) => ( smp.surf = surf[ i ] ) );
+		// signed curvature from the turning of the tangent, smoothed along the stream
+		let K = samples.map( ( smp, i ) => {
+
+			const a = samples[ Math.max( 0, i - 1 ) ], b = samples[ Math.min( samples.length - 1, i + 1 ) ];
+			const ta = smp.p.clone().sub( a.p ).normalize(), tb = b.p.clone().sub( smp.p ).normalize();
+			if ( i === 0 || i === samples.length - 1 ) return 0;
+			return ( ta.x * tb.y - ta.y * tb.x ) / Math.max( ( b.s - a.s ) * 0.5, 1e-3 );
+
+		} );
+		for ( let pass2 = 0; pass2 < 3; pass2 ++ ) K = K.map( ( v, i ) => ( K[ Math.max( 0, i - 1 ) ] + v * 2 + K[ Math.min( K.length - 1, i + 1 ) ] ) / 4 );
+		samples.forEach( ( smp, i ) => ( smp.k = K[ i ] ) );
+		this.river = samples;
+		this.featureUniforms.uRiver.value = samples.map( ( smp ) => new THREE.Vector4( smp.p.x, smp.p.y, smp.surf, smp.width ) );
+		this.featureUniforms.uRiverK.value = K;
+		const box = new THREE.Box2().setFromPoints( samples.map( ( smp ) => smp.p ) ).expandByScalar( 40 );
+		this.featureUniforms.uRiverBox.value.set( box.min.x, box.min.y, box.max.x, box.max.y );
+
+		// ponds: fill to just below the lowest point of the rim
+		let k = samples.length * 3;
+		this.ponds = PONDS.map( ( pd ) => {
+
+			let m = h( k );
+			for ( let j = 1; j <= 24; j ++ ) m = Math.min( m, h( k + j ) );
+			k += 25;
+			return { c: pd.c.clone(), r: pd.r, surf: m - 0.3 };
+
+		} );
+		this.featureUniforms.uPonds.value = this.ponds.map( ( pd ) => new THREE.Vector4( pd.c.x, pd.c.y, pd.r, pd.surf ) );
+		this.featureUniforms.uFeatures.value = 1;
+
+	}
+
 	async generate( progress = () => {} ) {
 
 		const r = this.renderer;
 		const filter = this.floatLinear ? THREE.LinearFilter : THREE.NearestFilter;
+		this.featureUniforms = {
+			uRiver: { value: Array.from( { length: RIVER_SAMPLES }, () => new THREE.Vector4( 1e6, 1e6, 0, 0 ) ) },
+			uRiverK: { value: new Array( RIVER_SAMPLES ).fill( 0 ) },
+			uRiverBox: { value: new THREE.Vector4( - 1e6, - 1e6, 1e6, 1e6 ) },
+			uPonds: { value: Array.from( { length: 3 }, () => new THREE.Vector4( 1e6, 1e6, 0, 0 ) ) },
+			uFeatures: { value: 0 },
+		};
+		this._measureWater();
 
 		const buildRegion = ( region ) => {
 
@@ -183,6 +300,7 @@ export class TerrainData {
 			const [ ox, oz ] = regionOrigin( region );
 			const hRT = makeTarget( res, res, { type: THREE.FloatType, minFilter: filter, magFilter: filter } );
 			const hPass = new FullscreenPass( passMaterial( heightFrag, {
+				...this.featureUniforms,
 				uOrigin: { value: new THREE.Vector2( ox, oz ) },
 				uSize: { value: region.size },
 				uRes: { value: res },
@@ -202,6 +320,7 @@ export class TerrainData {
 
 			const bRT = makeTarget( res, res, { type: THREE.UnsignedByteType } );
 			const bPass = new FullscreenPass( passMaterial( biomeFrag, {
+				...this.featureUniforms,
 				uHN: { value: dRT.texture },
 				uOrigin: { value: new THREE.Vector2( ox, oz ) },
 				uSize: { value: region.size },

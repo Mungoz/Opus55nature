@@ -50,15 +50,15 @@ export class Mammals {
 		const marmotProto = buildMarmot( this.material );
 		const squirrelProto = buildSquirrel( this.material );
 
-		// --- a small herd grazing the meadow west of the start, near the trees
+		// --- a small herd grazing the open lakeshore east of the start
 		this.deer = [];
-		const herd = this._findMeadow( - 150, 640, 90 );
+		const herd = this._findMeadow( 16, 479, 8 );
 		for ( let i = 0; i < 5; i ++ ) {
 
 			const d = instance( i === 0 ? stagProto : hindProto );
 			d.stag = i === 0;
 			d.mesh.scale.setScalar( d.stag ? 1.0 : 0.88 + rng.next() * 0.06 );
-			const a = rng.next() * Math.PI * 2, r = 4 + rng.next() * 14;
+			const a = rng.next() * Math.PI * 2, r = 3 + rng.next() * 9;
 			d.pos = V( herd.x + Math.cos( a ) * r, 0, herd.y + Math.sin( a ) * r );
 			d.heading = rng.next() * Math.PI * 2;
 			d.state = 'graze';
@@ -78,9 +78,9 @@ export class Mammals {
 
 		}
 
-		// --- a marmot colony among the erratic boulders east of the start
+		// --- a marmot colony on the turf just in front of the start
 		this.marmots = [];
-		for ( const [ x, z ] of [ [ 70, 612 ], [ 88, 590 ], [ 96, 616 ], [ 62, 585 ] ] ) {
+		for ( const [ x, z ] of [ [ 0, 495 ], [ 8, 497 ], [ 4, 490 ], [ - 3, 492 ] ] ) {
 
 			const m = instance( marmotProto );
 			m.burrow = V( x, 0, z );
@@ -93,6 +93,8 @@ export class Mammals {
 			m.phase = rng.next() * 10;
 			m.target = m.pos.clone();
 			m.mesh.name = 'marmot';
+			// a big old Alpine marmot is the size of a small dog
+			m.mesh.scale.setScalar( rng.range( 1.1, 1.22 ) );
 			this.group.add( m.mesh );
 			this.marmots.push( m );
 
@@ -101,14 +103,16 @@ export class Mammals {
 		// --- red squirrels at the foot of the nearest conifers
 		this.squirrels = [];
 		const nearTrees = forest.trees
-			.filter( ( t ) => t.variant < 6 && Math.hypot( t.x - 10, t.z - 560 ) < 140 )
+			.filter( ( t ) => t.variant < 6 && Math.hypot( t.x - 10, t.z - 560 ) < 140 && t !== forest.spawnVignette?.tree )
 			.sort( ( a, b ) => Math.hypot( a.x - 10, a.z - 560 ) - Math.hypot( b.x - 10, b.z - 560 ) )
-			.slice( 0, 3 );
+			.slice( 0, 2 );
+		if ( forest.spawnVignette ) nearTrees.unshift( forest.spawnVignette.tree );
 		for ( const t of nearTrees ) {
 
 			const q = instance( squirrelProto );
 			q.tree = t;
-			q.pos = V( t.x + 2, 0, t.z + 1 );
+			q.perch = t === forest.spawnVignette?.tree ? forest.spawnVignette.perch : null;
+			q.pos = q.perch ? V( q.perch.x + 1.2, 0, q.perch.z + 0.6 ) : V( t.x + 2, 0, t.z + 1 );
 			q.heading = 0;
 			q.state = 'forage';
 			q.timer = 2;
@@ -198,6 +202,7 @@ export class Mammals {
 		const dist = Math.hypot( dx, dz );
 		const rng = this.rng;
 		d.timer -= dt;
+		if ( dist > 60 ) d.wary = false;
 		if ( d.forced ) {
 
 			const f = d.forced;
@@ -207,14 +212,16 @@ export class Mammals {
 			d.fleeDir = d.heading;
 			d.target.set( d.pos.x + Math.sin( d.heading ) * 50, 0, d.pos.z + Math.cos( d.heading ) * 50 );
 
-		} else if ( dist < 26 && d.state !== 'flee' ) {
+		} else if ( dist < 24 && d.state !== 'flee' ) {
 
 			d.state = 'flee';
 			d.timer = rng.range( 6, 9 );
 			d.fleeDir = Math.atan2( - dx, - dz ) + rng.range( - 0.4, 0.4 );
 			if ( d.stag ) this.audio?.bark?.( d.pos );
 
-		} else if ( dist < 60 && ( d.state === 'graze' || d.state === 'walk' ) ) {
+		} else if ( dist < 45 && ( d.state === 'graze' || d.state === 'walk' ) && ! d.wary ) {
+
+			d.wary = true;
 
 			d.state = 'alert';
 			d.timer = rng.range( 3, 6 );
@@ -269,7 +276,7 @@ export class Mammals {
 				d.speed = damp( d.speed, 0, 4, dt );
 				if ( d.timer <= 0 ) {
 
-					d.state = dist < 50 ? 'walk' : 'graze';
+					d.state = dist < 32 ? 'walk' : 'graze';
 					d.timer = rng.range( 4, 8 );
 					d.target.set( d.pos.x - dx / dist * 12, 0, d.pos.z - dz / dist * 12 );
 
@@ -430,19 +437,22 @@ export class Mammals {
 
 		} else if ( m.state !== 'hide' && m.state !== 'dive' ) {
 
-			if ( dist < 16 ) {
+			if ( dist < 8 ) {
 
 				m.state = 'dive';
 				if ( ! m.warned ) this.audio?.whistle?.( m.pos );
 				m.warned = true;
 
-			} else if ( dist < 34 && m.state !== 'sentinel' ) {
+			} else if ( dist < 24 && m.state !== 'sentinel' && ! m.watched ) {
 
 				m.state = 'sentinel';
-				m.timer = rng.range( 4, 8 );
-				this.audio?.whistle?.( m.pos );
+				m.watched = true;
+				m.timer = rng.range( 6, 12 );
+				if ( dist < 16 ) this.audio?.whistle?.( m.pos );
 
 			}
+
+			if ( dist > 32 ) m.watched = false;
 
 		}
 
@@ -453,7 +463,7 @@ export class Mammals {
 			case 'forage':
 				if ( m.timer <= 0 ) {
 
-					m.target.set( m.burrow.x + rng.range( - 5, 5 ), 0, m.burrow.z + rng.range( - 5, 5 ) );
+					m.target.set( m.burrow.x + rng.range( - 3.5, 3.5 ), 0, m.burrow.z + rng.range( - 3.5, 3.5 ) );
 					m.state = 'amble';
 					m.timer = 4;
 
@@ -467,8 +477,8 @@ export class Mammals {
 				speed = 0.5;
 				if ( Math.hypot( tx, tz ) < 0.3 || m.timer <= 0 ) {
 
-					m.state = rng.next() < 0.35 ? 'sentinel' : 'forage';
-					m.timer = rng.range( 3, 9 );
+					m.state = rng.next() < 0.5 ? 'sentinel' : 'forage';
+					m.timer = m.state === 'sentinel' ? rng.range( 5, 12 ) : rng.range( 3, 9 );
 
 				}
 
@@ -478,8 +488,8 @@ export class Mammals {
 
 			case 'sentinel':
 				sitT = 1;
-				if ( dist < 34 ) m.heading = turnToward( m.heading, Math.atan2( cam.x - m.pos.x, cam.z - m.pos.z ), dt * 3 );
-				if ( m.timer <= 0 && dist > 34 ) {
+				if ( dist < 30 ) m.heading = turnToward( m.heading, Math.atan2( cam.x - m.pos.x, cam.z - m.pos.z ), dt * 3 );
+				if ( m.timer <= 0 && dist > 13 ) {
 
 					m.state = 'forage';
 					m.timer = rng.range( 3, 8 );
@@ -505,7 +515,7 @@ export class Mammals {
 			}
 
 			case 'hide':
-				if ( m.timer <= 0 && dist > 36 ) {
+				if ( m.timer <= 0 && dist > 20 ) {
 
 					m.state = 'sentinel';
 					m.timer = rng.range( 5, 10 );
@@ -552,9 +562,10 @@ export class Mammals {
 		const t = q.tree;
 		const dist = Math.hypot( cam.x - q.pos.x, cam.z - q.pos.z );
 		q.timer -= dt;
-		if ( dist < 13 && q.state !== 'climb' && q.state !== 'up' ) {
+		if ( dist < ( q.perch ? 6 : 17 ) && q.state !== 'climb' && q.state !== 'up' ) {
 
 			q.state = 'climb';
+			q.onPerch = false;
 			q.from.copy( q.pos );
 			q.hop = 0;
 			this.audio?.chatter?.( q.pos );
@@ -567,9 +578,22 @@ export class Mammals {
 			case 'forage':
 				if ( q.timer <= 0 ) {
 
-					const a = rng.next() * Math.PI * 2, r = rng.range( 1.2, 4.5 );
 					q.from.copy( q.pos );
-					q.to.set( t.x + Math.cos( a ) * r, 0, t.z + Math.sin( a ) * r );
+					q.fromY = q.onPerch ? q.perch.top : this._ground( q.pos );
+					q.toPerch = !! q.perch && ! q.onPerch && rng.next() < 0.45;
+					if ( q.toPerch ) {
+
+						q.to.set( q.perch.x, 0, q.perch.z );
+
+					} else {
+
+						const c = q.perch || t;
+						const a = rng.next() * Math.PI * 2, r = q.perch ? rng.range( 0.8, 3.5 ) : rng.range( 1.2, 4.5 );
+						q.to.set( c.x + Math.cos( a ) * r, 0, c.z + Math.sin( a ) * r );
+
+					}
+
+					q.toY = q.toPerch ? q.perch.top : this._ground( q.to );
 					q.state = 'hop';
 					q.hop = 0;
 
@@ -585,7 +609,8 @@ export class Mammals {
 				if ( q.hop >= 1 ) {
 
 					q.state = 'forage';
-					q.timer = rng.range( 1, 5 );
+					q.onPerch = !! q.toPerch;
+					q.timer = q.onPerch ? rng.range( 4, 10 ) : rng.range( 1, 5 );
 
 				}
 
@@ -620,7 +645,7 @@ export class Mammals {
 			}
 
 			case 'up':
-				if ( q.timer <= 0 && dist > 20 ) {
+				if ( q.timer <= 0 && dist > ( q.perch ? 9 : 20 ) ) {
 
 					q.climb = Math.max( 0, q.climb - dt * 1.5 );
 					if ( q.climb === 0 ) {
@@ -649,7 +674,9 @@ export class Mammals {
 
 		} else {
 
-			q.mesh.position.set( q.pos.x, g + hopY, q.pos.z );
+			let y = q.onPerch ? q.perch.top : g;
+			if ( q.state === 'hop' && q.fromY !== undefined ) y = THREE.MathUtils.lerp( q.fromY, q.toY, q.hop ) + Math.sin( q.hop * Math.PI ) * Math.abs( q.toY - q.fromY ) * 0.6;
+			q.mesh.position.set( q.pos.x, y + hopY, q.pos.z );
 			q.mesh.rotation.set( 0, q.heading, 0, 'YXZ' );
 			// forage: sit up with paws to the mouth, nibbling
 			const sit = q.state === 'forage' ? 1 : 0;

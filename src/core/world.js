@@ -4,7 +4,7 @@
 export const WORLD = {
 	size: 12000,
 	waterLevel: 0,
-	near: { cx: 0, cz: - 300, size: 2048, res: 2048 },
+	near: { cx: - 100, cz: - 40, size: 2560, res: 2048 },
 	far: { cx: 0, cz: 0, size: 12000, res: 2048 },
 	lakeCenter: [ 0, - 330 ],
 	latitude: 46.5,

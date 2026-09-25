@@ -87,6 +87,7 @@ void main() {
 	s *= 0.16 * rough;
 
 	// ---- ripple rings (fish, wakes, stones) ----
+	float splashFoam = 0.0;
 	for ( int i = 0; i < ${MAX_RIPPLES}; i ++ ) {
 		vec4 r = uRipples[ i ];
 		if ( r.w <= 0.0 ) continue;
@@ -100,6 +101,8 @@ void main() {
 		float amp = r.w * exp( -age * 0.55 ) / ( 1.0 + R * 0.8 );
 		float k = 9.0 / ( 1.0 + age * 0.35 );
 		s += ( d / dl ) * cos( x * k ) * env * amp * k * 0.06;
+		// aerated white water at the point of impact, breaking up as it spreads
+		if ( r.w > 0.8 ) splashFoam = max( splashFoam, exp( -dl * dl / ( 0.05 + age * 0.3 ) ) * exp( -age * 2.2 ) * ( r.w - 0.6 ) * smoothstep( 0.25, 0.6, texture2D( uNoiseTex, wp.xz * 1.7 + r.xy ).b + 0.3 - age * 0.3 ) );
 	}
 
 	if ( uWeather.x > 0.01 && dist < 80.0 ) s += rainRings( wp.xz, t ) * 0.2 * uWeather.x * ( 1.0 - smoothstep( 25.0, 80.0, dist ) );
@@ -134,6 +137,7 @@ void main() {
 	float crest = texture2D( tWaterN, wp.xz / 7.0 + wind * t * 0.06 ).b * 0.6 + texture2D( tWaterN, wp.xz / 3.1 - side * t * 0.05 ).b * 0.4;
 	float caps = smoothstep( 0.7, 0.86, crest ) * smoothstep( 1.4, 2.2, uWind.z ) * gust * 0.5 * smoothstep( 1.0, 4.0, depth );
 	foam = max( foam, caps );
+	foam = max( foam, saturate( splashFoam * 1.4 ) );
 	col = mix( col, foamCol, foam );
 	alpha = mix( alpha, 1.0, foam );
 	// fade out where the bed rises above the surface (thin film at the waterline)

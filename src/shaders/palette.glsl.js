@@ -15,6 +15,9 @@ vec3 grassColor( vec2 p, float h ) {
 	vec3 c = mix( green, olive, smoothstep( -0.6, 0.6, n1 ) );
 	c = mix( c, straw, smoothstep( -0.1, 0.8, n2 ) * 0.75 );
 	c = mix( c, rust, smoothstep( 0.35, 0.9, n3 ) * 0.45 );
+	// broad swathes where the sward has cured to tawny straw
+	float cured = smoothstep( -0.15, 0.55, gnoise( p * 0.0045 + 11.0 ) + n2 * 0.25 );
+	c = mix( c, mix( straw, vec3( 0.62, 0.48, 0.26 ), smoothstep( 0.0, 0.8, n3 ) ), cured * 0.55 );
 	// damp ground near the lake stays greener
 	c = mix( c, vec3( 0.26, 0.36, 0.12 ), ( 1.0 - smoothstep( 1.0, 6.0, h ) ) * 0.55 );
 	// alpine tundra above the treeline: heather and bilberry in deep reds

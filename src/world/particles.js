@@ -206,7 +206,23 @@ export class Particles {
 
 	}
 
-	splash( at, count, power ) {
+	drip( at, vel, count = 1 ) {
+
+		for ( let n = 0; n < count; n ++ ) {
+
+			const i = this.dropNext;
+			this.dropNext = ( this.dropNext + 1 ) % this.drops.max;
+			this.drops.pos.set( [ at.x + ( this.rng.next() - 0.5 ) * 0.08, at.y, at.z + ( this.rng.next() - 0.5 ) * 0.08 ], i * 3 );
+			this.dropVel.set( [ vel.x + ( this.rng.next() - 0.5 ) * 0.6, vel.y + this.rng.next() * 0.4, vel.z + ( this.rng.next() - 0.5 ) * 0.6 ], i * 3 );
+			this.dropLife[ i ] = 1.2;
+			this.drops.size[ i ] = 0.03 + this.rng.next() * 0.03;
+			this.drops.alpha[ i ] = 0.85;
+
+		}
+
+	}
+
+	splash( at, count, power, size = 1 ) {
 
 		for ( let n = 0; n < count; n ++ ) {
 
@@ -216,7 +232,7 @@ export class Particles {
 			this.drops.pos.set( [ at.x + Math.cos( a ) * r * 0.3, at.y + 0.05, at.z + Math.sin( a ) * r * 0.3 ], i * 3 );
 			this.dropVel.set( [ Math.cos( a ) * r * power * 0.8, power * ( 0.8 + this.rng.next() * 0.9 ), Math.sin( a ) * r * power * 0.8 ], i * 3 );
 			this.dropLife[ i ] = 1.2;
-			this.drops.size[ i ] = 0.025 + this.rng.next() * 0.035;
+			this.drops.size[ i ] = ( 0.03 + this.rng.next() * 0.05 ) * size;
 			this.drops.alpha[ i ] = 0.8;
 
 		}
