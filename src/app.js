@@ -74,8 +74,12 @@ function splitSharedMaterials( scene ) {
 		for ( const list of byKind.values() ) {
 
 			if ( first ) { first = false; continue; }
+			// cloned without its uniforms (render-target textures cannot be copied), which the
+			// copy then shares
+			const u = mat.uniforms;
+			if ( u ) mat.uniforms = {};
 			const copy = mat.clone();
-			if ( mat.uniforms ) copy.uniforms = mat.uniforms;
+			if ( u ) mat.uniforms = copy.uniforms = u;
 			for ( const o of list ) o.material = copy;
 
 		}
