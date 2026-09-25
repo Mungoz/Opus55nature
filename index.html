@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+	<title>Larchmere</title>
+	<meta name="description" content="An interactive autumn evening beside a glacial lake in the high Alps, built with three.js." />
+	<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2317171b'/%3E%3Cpath d='M8 48 L26 18 L34 30 L40 22 L56 48Z' fill='%23e9b86a'/%3E%3Cpath d='M26 18 L30 25 L22 25Z' fill='%23fff3dc'/%3E%3C/svg%3E" />
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+	<canvas id="scene" tabindex="0"></canvas>
+
+	<div id="loader">
+		<div class="loader-inner">
+			<h1>Larchmere</h1>
+			<p class="subtitle">an autumn evening in the high valley</p>
+			<div class="bar"><div id="load-bar"></div></div>
+			<p id="load-label">Preparing the palette</p>
+			<button id="enter" class="enter" type="button">Enter the valley</button>
+			<p class="loader-note">Headphones recommended · everything you see and hear is generated live</p>
+		</div>
+	</div>
+
+	<div id="ui">
+		<div id="brand">
+			<span class="brand-name">Larchmere</span>
+			<span id="clock">16:09</span>
+		</div>
+
+		<nav id="toolbar" aria-label="Controls">
+			<button data-act="time" title="Time &amp; weather">
+				<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.4M12 19.1v2.4M4.3 4.3l1.7 1.7M18 18l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.3 19.7 6 18M18 6l1.7-1.7" /></svg>
+			</button>
+			<button data-act="tour" title="Cinematic tour (T)">
+				<svg viewBox="0 0 24 24"><rect x="3" y="6.5" width="12.5" height="11" rx="1.6" /><path d="M15.5 10.5 21 7.5v9l-5.5-3" /></svg>
+			</button>
+			<button data-act="walk" title="Walk / fly (G)">
+				<svg viewBox="0 0 24 24"><circle cx="12.5" cy="4.6" r="1.8" /><path d="M11.2 8.2 8.4 12.6l2.6 1.4M12.6 8.3l1.8 5-1.9 3.1 1.2 4.7M14.3 13.4l3.1 1.5M10.7 15.3 8.6 20.6" /></svg>
+			</button>
+			<button data-act="sound" title="Sound (M)">
+				<svg viewBox="0 0 24 24"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" /><path class="wave" d="M15.3 9a4.2 4.2 0 0 1 0 6M17.8 6.6a7.6 7.6 0 0 1 0 10.8" /></svg>
+			</button>
+			<button data-act="settings" title="Settings">
+				<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></svg>
+			</button>
+			<button data-act="help" title="Controls (H)">
+				<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6" /><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6" /><circle cx="12" cy="16.9" r=".6" /></svg>
+			</button>
+			<button data-act="fullscreen" title="Fullscreen (F)">
+				<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+			</button>
+		</nav>
+
+		<section id="panel-time" class="panel" hidden>
+			<h2>Time &amp; weather</h2>
+			<div class="time-row">
+				<input id="time-slider" type="range" min="0" max="24" step="0.01" aria-label="Time of day" />
+				<output id="time-out">16:09</output>
+			</div>
+			<div class="chips" id="time-presets">
+				<button data-t="6.55">Dawn</button>
+				<button data-t="10">Morning</button>
+				<button data-t="16.15">Golden hour</button>
+				<button data-t="17.05">Sunset</button>
+				<button data-t="17.6">Blue hour</button>
+				<button data-t="22">Night</button>
+			</div>
+			<h3>Weather</h3>
+			<div class="chips" id="weather">
+				<button data-w="clear">Clear</button>
+				<button data-w="breezy">Breezy</button>
+				<button data-w="overcast">Overcast</button>
+				<button data-w="rain">Rain</button>
+				<button data-w="storm">Storm</button>
+			</div>
+			<label class="row check"><span>Let the weather change by itself</span><input id="dynweather" type="checkbox" /></label>
+			<h3>Flow of time</h3>
+			<div class="chips" id="time-speed">
+				<button data-s="0">Still</button>
+				<button data-s="1">Real</button>
+				<button data-s="10">×10</button>
+				<button data-s="60">×60</button>
+				<button data-s="400">×400</button>
+			</div>
+		</section>
+
+		<section id="panel-settings" class="panel" hidden>
+			<h2>Settings</h2>
+			<h3>Quality</h3>
+			<div class="chips" id="quality">
+				<button data-q="low">Low</button>
+				<button data-q="medium">Medium</button>
+				<button data-q="high">High</button>
+				<button data-q="ultra">Ultra</button>
+			</div>
+			<label class="row"><span>Cloud cover</span><input id="clouds" type="range" min="0" max="0.9" step="0.01" /></label>
+			<label class="row"><span>Wind</span><input id="wind" type="range" min="0" max="2" step="0.01" /></label>
+			<label class="row"><span>Volume</span><input id="volume" type="range" min="0" max="1" step="0.01" /></label>
+			<label class="row"><span>Look sensitivity</span><input id="sens" type="range" min="0.3" max="2.5" step="0.05" /></label>
+			<label class="row check"><span>Northern lights at night</span><input id="aurora" type="checkbox" /></label>
+			<label class="row check"><span>Invert vertical look</span><input id="invert" type="checkbox" /></label>
+			<label class="row check"><span>Adaptive resolution</span><input id="autores" type="checkbox" /></label>
+		</section>
+
+		<section id="panel-help" class="panel" hidden>
+			<h2>Wander</h2>
+			<dl class="keys">
+				<dt>Drag</dt><dd>Look around (L to lock the mouse)</dd>
+				<dt>W A S D</dt><dd>Move</dd>
+				<dt>E / Space · Q / C</dt><dd>Rise · sink</dd>
+				<dt>Shift</dt><dd>Hurry · scroll to set flying speed</dd>
+				<dt>Click water</dt><dd>Skim a stone</dd>
+				<dt>G</dt><dd>Walk on the ground / fly</dd>
+				<dt>T</dt><dd>Cinematic tour</dd>
+				<dt>[ &nbsp; ]</dt><dd>Wind time back / forward</dd>
+				<dt>P</dt><dd>Photo mode (hide interface)</dd>
+				<dt>M · F · H</dt><dd>Mute · fullscreen · this help</dd>
+			</dl>
+			<p class="fine">Touch: drag the left side to move, the right side to look.</p>
+		</section>
+
+		<div id="hint">Drag to look · WASD to move · click the lake to skim a stone · H for help</div>
+		<div id="toast" role="status"></div>
+	</div>
+
+	<script type="module" src="./src/main.js"></script>
+</body>
+</html>

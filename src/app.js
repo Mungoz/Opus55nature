@@ -1,0 +1,486 @@
+import * as THREE from 'three';
+import { U } from './core/uniforms.js';
+import { PRESETS } from './core/quality.js';
+import { Controls } from './core/controls.js';
+import { TerrainData } from './gen/terrainGen.js';
+import { TextureBank } from './gen/textures.js';
+import { nextFrame } from './gen/gpu.js';
+import { Sky } from './world/sky.js';
+import { Terrain } from './world/terrain.js';
+import { SunShadows } from './world/shadows.js';
+import { Water } from './world/water.js';
+import { Forest } from './world/trees.js';
+import { Meadow } from './world/grass.js';
+import { Rocks } from './world/rocks.js';
+import { Particles } from './world/particles.js';
+import { Murmuration, GeeseFlight, Eagles } from './fauna/birds.js';
+import { Waterfowl } from './fauna/waterfowl.js';
+import { LeapingFish } from './fauna/fish.js';
+import { creatureMaterial, PartBuilder } from './fauna/creature.js';
+import { Soundscape } from './audio.js';
+import { Tour } from './tour.js';
+import { Weather } from './world/weather.js';
+import { Post } from './fx/post.js';
+
+const _v = new THREE.Vector3();
+const _ray = new THREE.Ray();
+const _ndc = new THREE.Vector2();
+const bio = [ 0, 0, 0, 0 ];
+
+export const START_POSE = [ - 5, 3.5, 508, 4, 4 ];
+
+export class App {
+
+	constructor( canvas, options = {} ) {
+
+		this.canvas = canvas;
+		this.options = options;
+		this.presetName = options.preset && PRESETS[ options.preset ] ? options.preset : 'high';
+		this.quality = { ...PRESETS[ this.presetName ] };
+		this.hours = options.hours ?? 16.15;
+		this.timeSpeed = options.timeSpeed ?? 10; // game seconds per real second
+		this.elapsed = 0;
+		this.systems = [];
+		this.frame = 0;
+		this.renderScale = 1;
+		this.autoResolution = ! options.shot;
+		this._ftAvg = 16;
+		this._resTimer = 0;
+		this.stones = [];
+		this.onToast = () => {};
+
+		const r = this.renderer = new THREE.WebGLRenderer( {
+			canvas,
+			antialias: false,
+			alpha: false,
+			powerPreference: 'high-performance',
+			stencil: false,
+			depth: true,
+		} );
+		r.setPixelRatio( Math.min( window.devicePixelRatio, this.quality.pixelRatio ) );
+		r.toneMapping = THREE.NoToneMapping;
+		r.outputColorSpace = THREE.SRGBColorSpace;
+		r.shadowMap.enabled = true;
+		r.shadowMap.type = THREE.PCFShadowMap;
+		r.shadowMap.autoUpdate = false;
+		r.info.autoReset = false;
+
+		this.scene = new THREE.Scene();
+		this.camera = new THREE.PerspectiveCamera( 55, 1, 0.25, 16000 );
+		this.camera.layers.enable( 1 );
+		this.scene.add( this.camera );
+		this.audio = new Soundscape();
+
+	}
+
+	async load( progress = () => {} ) {
+
+		const r = this.renderer;
+		const step = async ( frac, label ) => {
+
+			progress( frac, label );
+			await nextFrame();
+
+		};
+
+		if ( ! r.capabilities.isWebGL2 ) throw new Error( 'WebGL 2 is required' );
+
+		await step( 0.02, 'Preparing the palette' );
+		this.textures = new TextureBank( r ).build();
+		U.uNoiseTex.value = this.textures.noise;
+
+		await step( 0.1, 'Raising the mountains' );
+		this.terrainData = new TerrainData( r );
+		await this.terrainData.generate();
+		const td = this.terrainData;
+		U.uHNear.value = td.near.hnTex;
+		U.uHFar.value = td.far.hnTex;
+		U.uBiomeNear.value = td.near.biomeTex;
+		U.uBiomeFar.value = td.far.biomeTex;
+		U.uNearXf.value.copy( td.nearXf );
+		U.uFarXf.value.copy( td.farXf );
+		U.uTShadow.value = td.shadowTex;
+
+		await step( 0.3, 'Painting the sky' );
+		this.sky = new Sky( r );
+		this.scene.add( this.sky.mesh );
+		this.sky.mesh.layers.enableAll();
+
+		await step( 0.38, 'Carving the valley' );
+		this.terrain = new Terrain( td, this.textures, this.quality );
+		this.scene.add( this.terrain.mesh, this.terrain.reflectMesh );
+
+		await step( 0.45, 'Filling the lake' );
+		this.water = new Water( this.textures, this.quality );
+		this.scene.add( this.water.mesh );
+
+		await step( 0.5, 'Growing the larches' );
+		this.forest = new Forest( td, this.quality, r );
+		if ( this.options.showcase ) this.forest.showcase = { x: 30, z: 560 };
+		this.treeCount = this.forest.place();
+		await step( 0.6, 'Turning the larches gold' );
+		this.scene.add( this.forest.build() );
+
+		await step( 0.66, 'Scattering boulders' );
+		this.rocks = new Rocks( td, this.textures );
+		this.rocks.place( [
+			{ x: - 14, z: 492, s: 2.6, sink: 0.45 }, { x: 52, z: 522, s: 1.5 }, { x: 78, z: 598, s: 4.2 }, { x: - 30, z: 560, s: 1.2 }, { x: 5, z: 500, s: 0.9 },
+		] );
+		this.scene.add( this.rocks.group );
+
+		await step( 0.72, 'Sowing the meadows' );
+		this.meadow = new Meadow( this.quality );
+		this.scene.add( this.meadow.group );
+		this.particles = new Particles( td, this.quality );
+		this.scene.add( this.particles.group );
+
+		await step( 0.8, 'Waking the wildlife' );
+		this.starlings = new Murmuration( Math.round( 900 * Math.max( 0.45, this.quality.particles ) ), td );
+		this.geese = new GeeseFlight( td, ( p, n ) => this.audio.honk( p, n ) );
+		this.eagles = new Eagles( td );
+		this.waterfowl = new Waterfowl( td, this.water );
+		this.fish = new LeapingFish( td, this.water, this.particles, ( p, s ) => this.audio.splash( p, s ) );
+		this.scene.add( this.starlings.mesh, this.geese.mesh, this.eagles.mesh, this.waterfowl.group, this.fish.mesh );
+		this._buildStone();
+		this.weather = new Weather( td, this.quality, this.audio );
+		this.scene.add( this.weather.group );
+		if ( this.options.weather ) this.weather.snap( this.options.weather );
+
+		this.shadows = new SunShadows( this.scene, this.quality );
+		this.post = new Post( r, { msaa: this.quality.msaa } );
+
+		this.controls = new Controls( this.camera, this.canvas, td );
+		this.controls.onClick = ( e ) => this.throwStone( e );
+		const p = this.options.cam;
+		this.controls.setPose( ...( p || START_POSE ) );
+		this.tour = new Tour( this.camera, td );
+
+		this.resize();
+		window.addEventListener( 'resize', () => this.resize() );
+
+		// Prime the sky & terrain shadows so the first frame is right.
+		this.updateTime( 0 );
+		td.updateShadows( this.sky.sunDir, true );
+
+		await step( 0.9, 'Warming the shaders' );
+		// compile every program up front so the first seconds are smooth
+		this.forest.update( this.camera );
+		this.rocks.update( this.camera );
+		r.compile( this.scene, this.camera );
+		this.render();
+
+		await step( 1, 'Ready' );
+
+	}
+
+	_buildStone() {
+
+		const b = new PartBuilder();
+		const g = new THREE.IcosahedronGeometry( 0.06, 1 );
+		g.scale( 1.2, 0.6, 1 );
+		b.add( g, '#6d6a64' );
+		this.stoneGeo = b.build();
+		this.stoneMat = creatureMaterial();
+
+	}
+
+	stats() {
+
+		const td = this.terrainData;
+		const probe = ( x, z ) => Math.round( td.heightAt( x, z ) * 10 ) / 10;
+		return {
+			fps: Math.round( 1000 / this._ftAvg ),
+			calls: this.renderer.info.render.calls,
+			trees: this.treeCount,
+			tris: this.renderer.info.render.triangles,
+			cam: probe( this.camera.position.x, this.camera.position.z ),
+			sunEl: Math.round( this.sky.sunElevation * 10 ) / 10,
+			scale: this.renderScale,
+			flock: [ ...this.starlings.pos.slice( 0, 3 ) ].map( Math.round ), attr: this.starlings.attractor.toArray().map( Math.round ), flockVis: this.starlings.mesh.visible, flockCount: this.starlings.mesh.count,
+		};
+
+	}
+
+	resize() {
+
+		const w = window.innerWidth, h = window.innerHeight;
+		this.renderer.setSize( w, h, false );
+		this.canvas.style.width = w + 'px';
+		this.canvas.style.height = h + 'px';
+		this.camera.aspect = w / h;
+		this.camera.updateProjectionMatrix();
+		const pr = this.renderer.getPixelRatio();
+		this.post.setSize( w * pr, h * pr, this.renderScale );
+		this.water.setSize( w * pr * this.renderScale, h * pr * this.renderScale );
+
+	}
+
+	// ---------- settings ----------
+	setQuality( name ) {
+
+		if ( ! PRESETS[ name ] ) return;
+		this.presetName = name;
+		const keepSpacing = this.quality.terrainSpacing;
+		Object.assign( this.quality, PRESETS[ name ], { terrainSpacing: keepSpacing } );
+		const q = this.quality;
+		this.renderer.setPixelRatio( Math.min( window.devicePixelRatio, q.pixelRatio ) );
+		this.post.setMSAA( q.msaa );
+		this.shadows.configure( q );
+		this.scene.remove( this.meadow.group );
+		this.meadow = new Meadow( q );
+		this.scene.add( this.meadow.group );
+		this.forest.setNearDistance( q.treeNear );
+		this.terrain.uniforms.uGrassFar.value = q.grassFar;
+		this.renderScale = 1;
+		this.resize();
+
+	}
+
+	setClouds( v ) { this.weather.userClouds = v; }
+
+	setWind( v ) { this.weather.userWind = v; }
+
+	setWeather( name ) { this.weather.set( name ); }
+
+	updateTime( dt ) {
+
+		this.hours = ( this.hours + dt * this.timeSpeed / 3600 + 24 ) % 24;
+		this.sky.update( this.hours );
+		this.weather?.applyToLight();
+
+	}
+
+	exposureFor( sunY ) {
+
+		const el = Math.asin( THREE.MathUtils.clamp( sunY, - 1, 1 ) ) * 180 / Math.PI;
+		// piecewise log-exposure curve tuned by eye
+		const pts = [ [ - 18, 4.5 ], [ - 10, 4.2 ], [ - 6, 3.4 ], [ - 3, 2.5 ], [ 0, 1.5 ], [ 4, 0.8 ], [ 10, 0.35 ], [ 30, 0.0 ] ];
+		let ev = pts[ pts.length - 1 ][ 1 ];
+		if ( el <= pts[ 0 ][ 0 ] ) ev = pts[ 0 ][ 1 ];
+		else for ( let i = 0; i < pts.length - 1; i ++ ) {
+
+			const [ a0, e0 ] = pts[ i ], [ a1, e1 ] = pts[ i + 1 ];
+			if ( el >= a0 && el <= a1 ) {
+
+				const t = ( el - a0 ) / ( a1 - a0 );
+				ev = e0 + ( e1 - e0 ) * t * t * ( 3 - 2 * t );
+				break;
+
+			}
+
+		}
+
+		return Math.pow( 2, ev ) * 0.95;
+
+	}
+
+	// ---------- interaction: skim a stone onto the lake ----------
+	throwStone( e ) {
+
+		if ( this.tour.active ) return;
+		const rect = this.canvas.getBoundingClientRect();
+		if ( document.pointerLockElement === this.canvas ) _ndc.set( 0, 0 );
+		else _ndc.set( ( ( e.clientX - rect.left ) / rect.width ) * 2 - 1, - ( ( e.clientY - rect.top ) / rect.height ) * 2 + 1 );
+		_ray.origin.copy( this.camera.position );
+		_ray.direction.set( _ndc.x, _ndc.y, 0.5 ).unproject( this.camera ).sub( this.camera.position ).normalize();
+		if ( _ray.direction.y > - 0.005 ) return;
+		const t = - _ray.origin.y / _ray.direction.y;
+		const hit = _ray.at( t, new THREE.Vector3() );
+		if ( t > 90 || this.terrainData.heightAt( hit.x, hit.z ) > - 0.15 ) return;
+		const start = this.camera.position.clone().add( new THREE.Vector3( 0.25, - 0.35, 0 ).applyQuaternion( this.camera.quaternion ) );
+		const flight = 0.35 + t / 26;
+		const vel = hit.clone().sub( start ).divideScalar( flight );
+		vel.y += 0.5 * 9.81 * flight;
+		const mesh = new THREE.Mesh( this.stoneGeo, this.stoneMat );
+		mesh.position.copy( start );
+		this.scene.add( mesh );
+		// a flat, fast throw skips: each bounce loses speed
+		const skips = t > 12 && _ray.direction.y > - 0.35 ? 1 + Math.floor( Math.random() * 4 ) : 0;
+		this.stones.push( { mesh, vel, skips, spin: new THREE.Vector3( Math.random() * 20, Math.random() * 20, Math.random() * 20 ) } );
+
+	}
+
+	_updateStones( dt ) {
+
+		for ( let i = this.stones.length - 1; i >= 0; i -- ) {
+
+			const s = this.stones[ i ];
+			s.vel.y -= 9.81 * dt;
+			s.mesh.position.addScaledVector( s.vel, dt );
+			s.mesh.rotation.x += s.spin.x * dt;
+			s.mesh.rotation.y += s.spin.y * dt;
+			const p = s.mesh.position;
+			if ( p.y <= 0 && s.vel.y < 0 ) {
+
+				const floor = this.terrainData.heightAt( p.x, p.z );
+				if ( floor > 0 ) {
+
+					this.scene.remove( s.mesh );
+					this.stones.splice( i, 1 );
+					continue;
+
+				}
+
+				if ( s.skips > 0 ) {
+
+					s.skips --;
+					s.vel.y = Math.abs( s.vel.y ) * 0.45 + 1.2;
+					s.vel.x *= 0.72;
+					s.vel.z *= 0.72;
+					p.y = 0.01;
+					this.water.addRipple( p.x, p.z, 0.45 );
+					this.particles.splash( p, 6, 1.2 );
+					this.audio.splash( p, 0.25 );
+
+				} else {
+
+					this.water.addRipple( p.x, p.z, 0.8 );
+					this.water.addRipple( p.x, p.z, 0.35, 0.3 );
+					this.particles.splash( p, 16, 1.9 );
+					this.audio.splash( p, 0.6 );
+					this.scene.remove( s.mesh );
+					this.stones.splice( i, 1 );
+
+				}
+
+			}
+
+		}
+
+	}
+
+	// ---------- frame ----------
+	update( dt ) {
+
+		this._ftAvg += ( ( this.realDt ?? dt ) * 1000 - this._ftAvg ) * 0.05;
+		this.elapsed += dt;
+		const t = this.elapsed;
+		U.uTime.value = t;
+		this.updateTime( dt );
+		if ( this.tour.active ) this.tour.update( dt );
+		else this.controls.update( dt );
+		this.camera.updateMatrixWorld();
+
+		const td = this.terrainData;
+		td.updateShadows( this.sky.sunDir );
+		this.shadows.update( this.camera, U.uSunDir.value );
+		this.weather.update( dt, t, this.camera, this.sky );
+
+		this.forest.update( this.camera );
+		this.rocks.update( this.camera );
+		const sunEl = this.sky.sunElevation;
+		const day = sunEl > - 7 && this.weather.state.rain < 0.3;
+		this.starlings.update( dt, day );
+		this.geese.update( dt, t, this.camera, sunEl > - 4 && this.weather.state.rain < 0.5 );
+		this.eagles.update( dt, t, sunEl > 1 && this.weather.state.overcast < 0.6 );
+		this.waterfowl.update( dt, t );
+		this.fish.update( dt, this.camera, true );
+		this._updateStones( dt );
+
+		// leaves fall from nearby larches and birches
+		if ( ( this._leafTimer = ( this._leafTimer ?? 0 ) - dt ) <= 0 ) {
+
+			this._leafTimer = 2;
+			const cp = this.camera.position;
+			const list = [];
+			for ( const tr of this.forest.trees ) {
+
+				if ( tr.variant < 3 ) continue;
+				const dx = tr.x - cp.x, dz = tr.z - cp.z;
+				if ( dx * dx + dz * dz < 3600 ) list.push( { x: tr.x, y: tr.y, z: tr.z, h: this.forest.variants[ tr.variant ].height * tr.s } );
+
+			}
+
+			this.particles.trees = list;
+
+		}
+
+		const wind = U.uWind.value;
+		// raindrops bounce off the lake around the viewer
+		const rain = this.weather.state.rain;
+		if ( rain > 0.05 ) {
+
+			const cp0 = this.camera.position;
+			for ( let k = 0; k < Math.ceil( rain * 5 ); k ++ ) {
+
+				const a = Math.random() * Math.PI * 2, d = 1.5 + Math.random() * 14;
+				const x = cp0.x + Math.cos( a ) * d, z = cp0.z + Math.sin( a ) * d;
+				if ( td.heightAt( x, z ) < - 0.05 ) this.particles.splash( _v.set( x, 0, z ), 2, 0.7 );
+
+			}
+
+		}
+
+		this.particles.update( dt, t, this.camera, wind, this.water );
+
+		// soundscape
+		const cp = this.camera.position;
+		const ground = td.heightAt( cp.x, cp.z );
+		td.biomeAt( cp.x, cp.z, bio );
+		let shore = 0;
+		for ( let k = 0; k < 8; k ++ ) {
+
+			const a = k / 8 * Math.PI * 2;
+			for ( const d of [ 4, 12, 28 ] ) {
+
+				if ( td.heightAt( cp.x + Math.cos( a ) * d, cp.z + Math.sin( a ) * d ) < 0 ) shore = Math.max( shore, 1 - d / 36 );
+
+			}
+
+		}
+
+		if ( ground < 0 ) shore = Math.max( shore, 0.5 );
+		shore *= 1 - THREE.MathUtils.smoothstep( cp.y - Math.max( ground, 0 ), 5, 40 );
+		const gust = 0.5 + 0.5 * Math.sin( t * 0.37 ) * Math.sin( t * 0.113 + 1.3 );
+		this.audio.update( dt, this.camera, {
+			gust, wind: wind.z, forest: bio[ 1 ], shore, altitude: cp.y - Math.max( ground, 0 ),
+			night: U.uNight.value, dusk: 1 - Math.min( 1, Math.abs( sunEl + 2 ) / 6 ), rain: this.weather.state.rain,
+		} );
+
+		// post parameters
+		const post = this.post;
+		post.exposure = this.exposureFor( this.sky.sunDir.y ) * ( 1 + this.weather.state.overcast * 1.1 );
+		post.night = U.uNight.value;
+		_v.copy( this.sky.sunDir ).multiplyScalar( 1000 ).add( this.camera.position ).project( this.camera );
+		const onScreen = _v.z < 1 && Math.abs( _v.x ) < 1.4 && Math.abs( _v.y ) < 1.4;
+		post.sunScreen.set( _v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5 );
+		post.sunVisible = onScreen && this.quality.rays ? THREE.MathUtils.smoothstep( this.sky.sunDir.y, - 0.03, 0.02 ) * ( 1 - THREE.MathUtils.smoothstep( Math.max( Math.abs( _v.x ), Math.abs( _v.y ) ), 1.0, 1.4 ) ) : 0;
+		post.raysTint.copy( U.uSunColor.value ).normalize().multiplyScalar( 1.5 ).addScalar( 0.2 );
+
+		// dynamic resolution keeps things fluid on slower GPUs
+		this._resTimer += this.realDt ?? dt;
+		if ( this.autoResolution && this._resTimer > 1.5 && this.frame > 120 ) {
+
+			this._resTimer = 0;
+			let s = this.renderScale;
+			if ( this._ftAvg > 24 && s > 0.55 ) s = Math.max( 0.55, s - 0.1 );
+			else if ( this._ftAvg < 15 && s < 1 ) s = Math.min( 1, s + 0.05 );
+			if ( s !== this.renderScale ) {
+
+				this.renderScale = s;
+				this.resize();
+
+			}
+
+		}
+
+	}
+
+	render() {
+
+		const r = this.renderer;
+		r.info.reset();
+		r.shadowMap.needsUpdate = true;
+		this.water.render( r, this.scene, this.camera );
+
+		r.setRenderTarget( this.post.sceneRT );
+		r.setClearColor( 0x000000, 1 );
+		r.clear( true, true, false );
+		r.render( this.scene, this.camera );
+		r.setRenderTarget( null );
+		this.post.render( this.elapsed );
+		this.frame ++;
+
+	}
+
+}
