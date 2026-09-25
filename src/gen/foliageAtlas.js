@@ -453,9 +453,9 @@ function paintFern( ctx, r, rng ) {
 	const tone = () => {
 
 		const k = rng.next();
-		if ( k < 0.55 ) return [ 20 + rng.next() * 10, 0.6 + rng.next() * 0.15, 0.3 + rng.next() * 0.1 ];
-		if ( k < 0.8 ) return [ 32 + rng.next() * 8, 0.5, 0.45 + rng.next() * 0.1 ];
-		return [ 58 + rng.next() * 16, 0.45, 0.36 ];
+		if ( k < 0.5 ) return [ 22 + rng.next() * 10, 0.42 + rng.next() * 0.12, 0.26 + rng.next() * 0.08 ];
+		if ( k < 0.78 ) return [ 32 + rng.next() * 8, 0.35, 0.36 + rng.next() * 0.08 ];
+		return [ 62 + rng.next() * 18, 0.3, 0.3 ];
 
 	};
 

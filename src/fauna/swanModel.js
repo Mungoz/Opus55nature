@@ -29,7 +29,7 @@ export function swanGeometry() {
 
 	};
 
-	const F = { bone: 'body', color: white, mat: MAT.FEATHER };
+	const F = { bone: 'body', color: white, mat: MAT.FEATHER, pat: ( x, y ) => [ 0, 0.3 * ss( 0.18, 0.3, y ), 0 ] };
 	const P = ( k, extra = {} ) => ( { ...F, k, ...extra } );
 	// hull: long deep body and a full, rounded breast
 	S.ellipsoid( [ 0, 0.1, - 0.04 ], [ 0.25, 0.16, 0.5 ], P( 0.12 ) );
@@ -39,7 +39,7 @@ export function swanGeometry() {
 	for ( const sd of [ - 1, 1 ] ) {
 
 		const dir = new THREE.Vector3( sd * 0.12, 0.34, - 1 ).normalize();
-		S.ellipsoid( [ sd * 0.13, 0.27, - 0.14 ], [ 0.11, 0.42, 0.13 ], P( 0.08 ), Sculpt.frame( dir, [ sd, 0.5, 0 ] ) );
+		S.ellipsoid( [ sd * 0.13, 0.27, - 0.14 ], [ 0.11, 0.42, 0.13 ], P( 0.04 ), Sculpt.frame( dir, [ sd, 0.5, 0 ] ) );
 		// the loose tertial plumes that stand up at the back
 		for ( let i = 0; i < 4; i ++ ) {
 
@@ -88,63 +88,85 @@ export function swanGeometry() {
 }
 
 // Mallard (~58 cm), sculpted like the swan. Drake: glossy green head, white
-// collar, chestnut breast, pale vermiculated flanks, grey-brown back, blue
-// speculum, black stern with curled tail feathers. Hen: mottled brown.
+// collar, chestnut breast, pale grey flanks finely vermiculated, grey-brown back,
+// blue speculum edged in white, black stern with curled tail feathers. Hen: every
+// feather dark-centred with a buff fringe, dark eye stripe, orange-and-brown bill.
+// Colour zones come from the region function; the fine plumage (vermiculation,
+// scalloped feathers, iridescence) is drawn per pixel from the pattern weights.
 export function mallardGeometry( drake ) {
 
 	const S = new Sculpt();
 	S.bone( 'body', [ 0, 0.08, 0 ] );
-	const col = drake ? ( x, y, z ) => {
+	// which part of the plumage a point is on
+	const region = ( x, y, z ) => {
 
 		const ax = Math.abs( x );
-		const n = noise3( x * 90, y * 90, z * 90 );
-		if ( z > 0.14 && y > 0.185 ) return new THREE.Color( '#0f3f26' ).lerp( new THREE.Color( '#2a6b3d' ), ss( 0.2, 0.26, y ) * 0.5 + n * 0.1 );
-		if ( z > 0.12 && y > 0.172 ) return '#efefe9';
-		if ( z > 0.07 && y > 0.03 ) return new THREE.Color( '#5a3121' ).multiplyScalar( 1 + n * 0.06 );
-		if ( z < - 0.23 ) return y > 0.12 || ax < 0.03 ? '#101010' : '#e8e6df';
-		if ( y > 0.115 ) {
+		if ( z > 0.14 && y > 0.185 ) return 'head';
+		if ( z > 0.12 && y > 0.172 ) return 'collar';
+		if ( z > 0.07 && y > 0.03 ) return 'breast';
+		if ( z < - 0.23 ) return y > 0.12 || ax < 0.03 ? 'stern' : 'tail';
+		if ( y > 0.108 ) {
 
-			const spec = ss( - 0.14, - 0.12, z ) * ( 1 - ss( - 0.06, - 0.04, z ) ) * ss( 0.07, 0.09, ax );
-			return spec > 0.5 ? '#27409a' : new THREE.Color( '#877f71' ).multiplyScalar( 1 + n * 0.08 );
-
-		}
-
-		// fine grey vermiculation on the flanks
-		return new THREE.Color( '#b9b6ae' ).multiplyScalar( 1 + Math.sin( z * 400 + n * 3 ) * 0.04 );
-
-	} : ( x, y, z ) => {
-
-		// hen: each feather dark-centred with a buff edge
-		const n = noise3( x * 70, y * 70, z * 70 );
-		const scal = Math.sin( z * 140 + n * 4 ) * Math.sin( x * 120 + y * 60 );
-		if ( z > 0.15 && y > 0.19 ) {
-
-			const stripe = ss( 0.012, 0.004, Math.abs( y - 0.255 + ( z - 0.22 ) * 0.2 ) );
-			const crown = ss( 0.275, 0.285, y );
-			return new THREE.Color( '#8d714f' ).lerp( new THREE.Color( '#3b2c1f' ), Math.max( stripe, crown ) );
+			// the speculum: a narrow band along the rear of the folded wing, edged in white
+			const spec = ss( - 0.125, - 0.115, z ) * ( 1 - ss( - 0.075, - 0.065, z ) ) * ss( 0.125, 0.13, y ) * ss( 0.07, 0.08, ax );
+			const edge = ss( - 0.135, - 0.125, z ) * ( 1 - ss( - 0.065, - 0.055, z ) ) * ss( 0.121, 0.126, y ) * ss( 0.068, 0.078, ax );
+			if ( spec > 0.5 ) return 'speculum';
+			if ( edge > 0.5 ) return 'specEdge';
+			return ax > 0.055 ? 'wing' : 'back';
 
 		}
 
-		const spec = y > 0.115 && z > - 0.14 && z < - 0.05 && Math.abs( x ) > 0.075 ? 1 : 0;
-		if ( spec ) return '#27409a';
-		return new THREE.Color( '#8a6a47' ).lerp( new THREE.Color( '#4a3522' ), ss( 0.2, 0.7, scal ) * 0.8 ).multiplyScalar( 1 + n * 0.08 );
+		return 'flank';
 
 	};
 
-	const P = ( k, extra = {} ) => ( { bone: 'body', color: col, k, mat: MAT.FEATHER, ...extra } );
-	S.ellipsoid( [ 0, 0.07, - 0.02 ], [ 0.125, 0.085, 0.235 ], P( 0.06 ) );
-	S.ellipsoid( [ 0, 0.1, 0.12 ], [ 0.1, 0.095, 0.1 ], P( 0.06 ) );
-	S.ellipsoid( [ 0, 0.105, - 0.19 ], [ 0.09, 0.07, 0.1 ], P( 0.05 ) );
-	// folded wings along the back
-	for ( const sd of [ - 1, 1 ] ) S.ellipsoid( [ sd * 0.07, 0.125, - 0.07 ], [ 0.06, 0.17, 0.03 ], P( 0.03 ), Sculpt.frame( [ sd * 0.1, 0.12, - 1 ], [ sd * 0.4, 1, 0 ] ) );
+	const DRAKE = {
+		head: '#12422a', collar: '#efefe9', breast: '#5c3322', stern: '#101010', tail: '#e8e6df',
+		speculum: '#2c3fa0', specEdge: '#f0f0ea', wing: '#7b7367', back: '#6f6557', flank: '#bdbab2',
+	};
+	const HEN = {
+		head: '#8d714f', collar: '#8d714f', breast: '#8a6a47', stern: '#6e5236', tail: '#9a8466',
+		speculum: '#2c3fa0', specEdge: '#f0f0ea', wing: '#7a5e40', back: '#6e5236', flank: '#8a6a47',
+	};
+	const PAT = drake ? {
+		head: [ 0, 0, 1 ], breast: [ 0, 0.25, 0 ], flank: [ 1, 0, 0 ], back: [ 0.6, 0.2, 0 ], wing: [ 0, 0.35, 0 ], speculum: [ 0, 0, 1 ],
+	} : {
+		head: [ 0, 0, 0 ], breast: [ 0, 1, 0 ], flank: [ 0, 1, 0 ], back: [ 0, 1, 0 ], wing: [ 0, 0.8, 0 ], stern: [ 0, 1, 0 ], tail: [ 0, 0.6, 0 ], speculum: [ 0, 0, 1 ],
+	};
+	const col = ( x, y, z ) => {
+
+		const r = region( x, y, z );
+		const n = noise3( x * 90, y * 90, z * 90 );
+		if ( ! drake && r === 'head' ) {
+
+			// hen's face: buff with a dark eye stripe and crown
+			const stripe = ss( 0.012, 0.004, Math.abs( y - 0.255 + ( z - 0.22 ) * 0.2 ) );
+			const crown = ss( 0.275, 0.285, y );
+			return new THREE.Color( '#9a7d58' ).lerp( new THREE.Color( '#3b2c1f' ), Math.max( stripe, crown ) );
+
+		}
+
+		const c = new THREE.Color( ( drake ? DRAKE : HEN )[ r ] );
+		if ( drake && r === 'head' ) c.lerp( new THREE.Color( '#2a6b3d' ), ss( 0.2, 0.26, y ) * 0.5 );
+		return c.multiplyScalar( 1 + n * 0.05 );
+
+	};
+
+	const pat = ( x, y, z ) => PAT[ region( x, y, z ) ] || [ 0, 0, 0 ];
+	const P = ( k, extra = {} ) => ( { bone: 'body', color: col, pat, k, mat: MAT.FEATHER, ...extra } );
+	S.ellipsoid( [ 0, 0.07, - 0.02 ], [ 0.125, 0.085, 0.235 ], P( 0.05 ) );
+	S.ellipsoid( [ 0, 0.1, 0.12 ], [ 0.1, 0.095, 0.1 ], P( 0.05 ) );
+	S.ellipsoid( [ 0, 0.105, - 0.19 ], [ 0.09, 0.07, 0.1 ], P( 0.04 ) );
+	// folded wings lie over the flanks with a clean edge
+	for ( const sd of [ - 1, 1 ] ) S.ellipsoid( [ sd * 0.072, 0.128, - 0.07 ], [ 0.058, 0.17, 0.028 ], P( 0.01 ), Sculpt.frame( [ sd * 0.1, 0.12, - 1 ], [ sd * 0.4, 1, 0 ] ) );
 	// tail
-	S.cone( [ 0, 0.12, - 0.25 ], [ 0, 0.14, - 0.31 ], 0.035, 0.01, P( 0.03 ) );
-	// neck and head
-	S.cone( [ 0, 0.13, 0.16 ], [ 0, 0.21, 0.2 ], 0.05, 0.034, P( 0.04 ) );
-	S.ellipsoid( [ 0, 0.25, 0.215 ], [ 0.037, 0.043, 0.055 ], P( 0.03 ) );
+	S.cone( [ 0, 0.12, - 0.25 ], [ 0, 0.14, - 0.31 ], 0.035, 0.01, P( 0.02 ) );
+	// neck and a distinctly rounded head
+	S.cone( [ 0, 0.13, 0.16 ], [ 0, 0.21, 0.2 ], 0.046, 0.03, P( 0.025 ) );
+	S.ellipsoid( [ 0, 0.25, 0.215 ], [ 0.037, 0.043, 0.055 ], P( 0.018 ) );
 	// bill
 	const billC = drake ? '#d4c23a' : ( x, y, z ) => ( z < 0.29 && y > 0.237 ? '#3d2a1c' : '#c47a2e' );
-	S.ellipsoid( [ 0, 0.236, 0.29 ], [ 0.02, 0.042, 0.009 ], { bone: 'body', color: billC, k: 0.012, mat: MAT.BILL }, Sculpt.frame( [ 0, 0.25, 1 ], [ 0, 1, - 0.25 ] ) );
+	S.ellipsoid( [ 0, 0.236, 0.29 ], [ 0.02, 0.042, 0.009 ], { bone: 'body', color: billC, k: 0.01, mat: MAT.BILL }, Sculpt.frame( [ 0, 0.25, 1 ], [ 0, 1, - 0.25 ] ) );
 	if ( drake ) {
 
 		// the curled black tail feathers
@@ -152,7 +174,7 @@ export function mallardGeometry( drake ) {
 
 	}
 
-	const g = S.build( 0.0065 );
+	const g = S.build( 0.006 );
 	g.deleteAttribute( 'skinIndex' );
 	g.deleteAttribute( 'skinWeight' );
 	return g;

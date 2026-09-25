@@ -609,6 +609,8 @@ export class Forest {
 
 		const consider = ( x, z, cellArea, detailed ) => {
 
+			// nothing behind the cirque headwall can be seen from the valley
+			if ( z > 2150 + 0.00022 * x * x ) return;
 			const h = td.heightAt( x, z );
 			if ( h < 1.2 ) return;
 			td.biomeAt( x, z, bio );
@@ -795,6 +797,23 @@ export class Forest {
 				out[ kind ].push( { x: px, y, z: pz, s: sc, rot, pitch, variant } );
 
 			}
+
+		}
+
+		// driftwood: bleached trunks and branches washed up on the strand near the start
+		const logs = this.props.log.variants.map( ( v, i ) => ( { v, i } ) ).filter( ( e ) => ! e.v.plate );
+		for ( let k = 0, placed = 0; k < 3000 && placed < 16; k ++ ) {
+
+			const px = - 5 + rng.range( - 320, 320 ), pz = rng.range( 330, 520 );
+			const h = td.heightAt( px, pz );
+			if ( h < 0.38 || h > 0.9 ) continue;
+			const e = logs[ Math.floor( rng.next() * logs.length ) ];
+			const rot = rng.next() * Math.PI * 2, sc = rng.range( 0.45, 0.8 );
+			const hl = e.v.halfLen * sc, ax = Math.cos( rot ), az = - Math.sin( rot );
+			const ha = td.heightAt( px + ax * hl, pz + az * hl ), hb = td.heightAt( px - ax * hl, pz - az * hl );
+			if ( Math.min( ha, hb ) < 0.3 ) continue;
+			out.log.push( { x: px, y: ( ha + hb ) / 2 - 0.05, z: pz, s: sc, rot, pitch: Math.atan2( ha - hb, hl * 2 ), variant: e.i } );
+			placed ++;
 
 		}
 

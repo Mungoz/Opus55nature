@@ -219,7 +219,7 @@ function makeSedge( rng ) {
 		const dir = new THREE.Vector3( Math.cos( az ), 0, Math.sin( az ) );
 		const pts = [], ws = [], cs = [];
 		const p = new THREE.Vector3( Math.cos( az ) * r0, - 0.02, Math.sin( az ) * r0 );
-		const autumn = rng.range( 0.3, 1 );
+		const autumn = Math.pow( rng.next(), 1.6 ) * 0.9 + 0.05;
 		const isDead = rng.next() < 0.14;
 		const w0 = rng.range( 0.007, 0.012 );
 		const N = 7;
@@ -615,6 +615,8 @@ export class WaterPlants {
 				if ( h > 1.3 || h < - 2.2 ) continue;
 				const patch = valueNoise( px * 0.03 + 5, pz * 0.03 - 2 );
 				const fine = valueNoise( px * 0.2, pz * 0.2 + 7 );
+				// the shore people see from the start is lusher
+				const lush = 1 - THREE.MathUtils.smoothstep( Math.hypot( px + 5, pz - 508 ), 140, 420 );
 				if ( h < - 0.6 && h > - 2.0 && patch > 0.7 && rng.next() < 0.012 ) colony( px, pz, rng.range( 2.5, 5 ), 0, rng.int( 60, 160 ), ( x2, z2 ) => {
 
 					const h2 = td.heightAt( x2, z2 );
@@ -622,7 +624,18 @@ export class WaterPlants {
 
 				} );
 				else if ( h < 0.05 && h > - 0.5 && patch > 0.55 && fine > 0.45 && rng.next() < 0.3 ) add( 'horsetail', px, pz, rng.range( 0.8, 1.2 ), h - 0.02 );
-				else if ( h > 0.3 && h < 1.2 && patch > 0.5 && fine > 0.4 && rng.next() < 0.12 ) add( fine > 0.75 ? 'rush' : 'sedge', px, pz );
+				else if ( h > 0.25 && h < 1.2 + 0.3 * lush && rng.next() < 1.2 - h * 0.6 && patch > 0.5 - 0.25 * lush && fine > 0.4 - 0.2 * lush && rng.next() < 0.12 + 0.2 * lush ) {
+
+					// tussocks gather in little colonies
+					const m = lush > 0.3 ? rng.int( 1, 3 ) : 1;
+					for ( let j = 0; j < m; j ++ ) {
+
+						const qx = px + rng.range( - 1.2, 1.2 ) * ( j ? 1 : 0 ), qz = pz + rng.range( - 1.2, 1.2 ) * ( j ? 1 : 0 );
+						add( fine > 0.7 || rng.next() < 0.2 ? 'rush' : 'sedge', qx, qz, rng.range( 0.55, 1.3 ) );
+
+					}
+
+				} else if ( lush > 0.2 && h > 0.05 && h < 0.35 && fine > 0.55 && rng.next() < 0.1 * lush ) add( 'horsetail', px, pz, rng.range( 0.7, 1.0 ) );
 
 			}
 

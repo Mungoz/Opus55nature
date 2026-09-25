@@ -95,6 +95,13 @@ export class Sculpt {
 		P.fuzzFreq = o.fuzzFreq ?? 60;
 		P.sub = !! o.sub;
 		P.mat = o.mat ?? 2;
+		// fur: length (m), tip colour (hex or fn), comb direction (object space; hairs lie
+		// back along the body unless told otherwise); pat: plumage pattern weights
+		// [ vermiculation, scalloped feathers, iridescence ] (array or fn)
+		P.fur = o.fur ?? 0;
+		P.tip = o.tip ?? null;
+		P.comb = o.comb ?? null;
+		P.pat = o.pat ?? null;
 		// bounding sphere for culling
 		this.parts.push( P );
 		return this;
@@ -301,6 +308,12 @@ export class Sculpt {
 		const skinIndex = new Uint16Array( nv * 4 ), skinWeight = new Float32Array( nv * 4 );
 		const color = new Float32Array( nv * 3 );
 		const matAttr = new Float32Array( nv );
+		const furAttr = new Float32Array( nv * 4 );
+		const combAttr = new Float32Array( nv * 3 );
+		const patAttr = new Float32Array( nv * 3 );
+		const tipC = new THREE.Color();
+		const defComb = new THREE.Vector3( 0, - 0.35, - 1 ).normalize();
+		const comb = new THREE.Vector3();
 		const cols = this.parts.map( ( P ) => ( typeof P.color === 'function' ? null : new THREE.Color( P.color ).convertSRGBToLinear() ) );
 		const tmpC = new THREE.Color();
 		const pd = new Float32Array( this.parts.length );
@@ -321,6 +334,8 @@ export class Sculpt {
 			for ( let p = 1; p < this.parts.length; p ++ ) if ( pd[ p ] < pd[ nearest ] ) nearest = p;
 			matAttr[ v ] = this.parts[ nearest ].mat;
 			let cr = 0, cg = 0, cb = 0, cw = 0;
+			let fl = 0, tr = 0, tg = 0, tb = 0, p0 = 0, p1 = 0, p2 = 0;
+			comb.set( 0, 0, 0 );
 			for ( let p = 0; p < this.parts.length; p ++ ) {
 
 				const P = this.parts[ p ];
@@ -331,8 +346,29 @@ export class Sculpt {
 				const c = cols[ p ] ?? tmpC.set( P.color( x, y, z ) ).convertSRGBToLinear();
 				const cwt = Math.exp( - ( pd[ p ] - dmin ) / 0.006 );
 				cr += c.r * cwt; cg += c.g * cwt; cb += c.b * cwt; cw += cwt;
+				fl += ( typeof P.fur === 'function' ? P.fur( x, y, z ) : P.fur ) * cwt;
+				if ( P.tip ) tipC.set( typeof P.tip === 'function' ? P.tip( x, y, z ) : P.tip ).convertSRGBToLinear();
+				else tipC.setRGB( c.r * 1.3, c.g * 1.3, c.b * 1.3 );
+				tr += tipC.r * cwt; tg += tipC.g * cwt; tb += tipC.b * cwt;
+				if ( P.comb ) {
+
+					const cv = typeof P.comb === 'function' ? P.comb( x, y, z ) : P.comb;
+					comb.x += cv[ 0 ] * cwt; comb.y += cv[ 1 ] * cwt; comb.z += cv[ 2 ] * cwt;
+
+				}
+				else comb.addScaledVector( defComb, cwt );
+				if ( P.pat ) {
+
+					const pt = typeof P.pat === 'function' ? P.pat( x, y, z ) : P.pat;
+					p0 += pt[ 0 ] * cwt; p1 += pt[ 1 ] * cwt; p2 += pt[ 2 ] * cwt;
+
+				}
 
 			}
+
+			furAttr.set( [ tr / cw, tg / cw, tb / cw, fl / cw ], v * 4 );
+			combAttr.set( [ comb.x / cw, comb.y / cw, comb.z / cw ], v * 3 );
+			patAttr.set( [ p0 / cw, p1 / cw, p2 / cw ], v * 3 );
 
 			// ambient occlusion from the field itself: how quickly space opens up along the normal
 			let occ = 0, sca = 1;
@@ -366,6 +402,9 @@ export class Sculpt {
 		g.setAttribute( 'skinWeight', new THREE.BufferAttribute( skinWeight, 4 ) );
 		g.setAttribute( 'aFlap', new THREE.BufferAttribute( new Float32Array( nv ), 1 ) );
 		g.setAttribute( 'aMat', new THREE.BufferAttribute( matAttr, 1 ) );
+		g.setAttribute( 'aFur', new THREE.BufferAttribute( furAttr, 4 ) );
+		g.setAttribute( 'aComb', new THREE.BufferAttribute( combAttr, 3 ) );
+		g.setAttribute( 'aPat', new THREE.BufferAttribute( patAttr, 3 ) );
 		g.setIndex( idx );
 		g.computeBoundingSphere();
 		return g;

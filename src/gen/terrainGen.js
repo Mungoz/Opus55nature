@@ -3,7 +3,25 @@ import { noiseGLSL } from '../shaders/noise.glsl.js';
 import { terrainShapeGLSL } from '../shaders/terrainShape.glsl.js';
 import { FullscreenPass, passMaterial, makeTarget } from './gpu.js';
 import { WORLD, regionOrigin } from '../core/world.js';
-import { riverSamples, PONDS, RIVER_SAMPLES } from '../core/features.js';
+import { riverSamples, PONDS, RIVER_SAMPLES, RIVER_CHUNK } from '../core/features.js';
+
+// The stream data for the shaders, parked far away until the water is measured.
+function riverTexture() {
+
+	const d = new Float32Array( RIVER_SAMPLES * 3 * 4 );
+	for ( let i = 0; i < RIVER_SAMPLES; i ++ ) {
+
+		d.set( [ 1e6, 1e6, 0, 0 ], i * 4 );
+		d.set( [ 1e6, 1e6, - 1e6, - 1e6 ], ( RIVER_SAMPLES * 2 + i ) * 4 ); // empty chunk bounds
+
+	}
+
+	const t = new THREE.DataTexture( d, RIVER_SAMPLES, 3, THREE.RGBAFormat, THREE.FloatType );
+	t.minFilter = t.magFilter = THREE.NearestFilter;
+	t.needsUpdate = true;
+	return t;
+
+}
 
 // Measures natural ground (no streams or ponds carved) at a list of points.
 const probeFrag = /* glsl */ `
@@ -102,6 +120,9 @@ void main() {
 	forest *= 1.0 - smoothstep( treeline - 80.0, treeline + 60.0, h );
 	forest *= 1.0 - smoothstep( 0.42, 0.62, steep );
 	forest *= smoothstep( 6.0, 30.0 + n2 * 20.0, lake );
+	// a stand of spruce and larch on the island
+	float isl = 1.0 - smoothstep( 18.0, 42.0, length( ( p - ISLAND_C ) * vec2( 1.0, 0.8 ) ) );
+	forest = max( forest, isl * smoothstep( 1.5, 4.0, h ) * ( 0.65 + 0.35 * n3 ) );
 	vec2 meadowC = vec2( 40.0, 640.0 );
 	float meadow = 1.0 - smoothstep( 150.0, 360.0, length( ( p - meadowC ) * vec2( 1.0, 0.8 ) ) + n2 * 90.0 );
 	forest *= 1.0 - meadow * 0.92;
@@ -247,7 +268,13 @@ export class TerrainData {
 		}
 
 		surf = surf.map( ( v ) => Math.max( v, 0.04 ) );
-		surf[ surf.length - 1 ] = 0.02;
+		// run out level with the lake over the last stretch
+		for ( let i = 0; i < surf.length; i ++ ) {
+
+			const k = THREE.MathUtils.smoothstep( samples[ i ].s, samples[ samples.length - 1 ].s - 40, samples[ samples.length - 1 ].s - 8 );
+			surf[ i ] = THREE.MathUtils.lerp( surf[ i ], 0.0, k );
+
+		}
 		samples.forEach( ( smp, i ) => ( smp.surf = surf[ i ] ) );
 		// signed curvature from the turning of the tangent, smoothed along the stream
 		let K = samples.map( ( smp, i ) => {
@@ -261,8 +288,23 @@ export class TerrainData {
 		for ( let pass2 = 0; pass2 < 3; pass2 ++ ) K = K.map( ( v, i ) => ( K[ Math.max( 0, i - 1 ) ] + v * 2 + K[ Math.min( K.length - 1, i + 1 ) ] ) / 4 );
 		samples.forEach( ( smp, i ) => ( smp.k = K[ i ] ) );
 		this.river = samples;
-		this.featureUniforms.uRiver.value = samples.map( ( smp ) => new THREE.Vector4( smp.p.x, smp.p.y, smp.surf, smp.width ) );
-		this.featureUniforms.uRiverK.value = K;
+		const rd = this.featureUniforms.uRiverTex.value.image.data;
+		samples.forEach( ( smp, i ) => {
+
+			rd.set( [ smp.p.x, smp.p.y, smp.surf, smp.width ], i * 4 );
+			rd.set( [ K[ i ], 0, 0, 0 ], ( RIVER_SAMPLES + i ) * 4 );
+
+		} );
+		// padded bounds of each chunk of segments, so the shader skips the far ones
+		for ( let c = 0; c * RIVER_CHUNK < RIVER_SAMPLES - 1; c ++ ) {
+
+			const pts = samples.slice( c * RIVER_CHUNK, Math.min( c * RIVER_CHUNK + RIVER_CHUNK, RIVER_SAMPLES - 1 ) + 1 ).map( ( smp ) => smp.p );
+			const box = new THREE.Box2().setFromPoints( pts ).expandByScalar( 34 );
+			rd.set( [ box.min.x, box.min.y, box.max.x, box.max.y ], ( RIVER_SAMPLES * 2 + c ) * 4 );
+
+		}
+
+		this.featureUniforms.uRiverTex.value.needsUpdate = true;
 		const box = new THREE.Box2().setFromPoints( samples.map( ( smp ) => smp.p ) ).expandByScalar( 40 );
 		this.featureUniforms.uRiverBox.value.set( box.min.x, box.min.y, box.max.x, box.max.y );
 
@@ -286,8 +328,7 @@ export class TerrainData {
 		const r = this.renderer;
 		const filter = this.floatLinear ? THREE.LinearFilter : THREE.NearestFilter;
 		this.featureUniforms = {
-			uRiver: { value: Array.from( { length: RIVER_SAMPLES }, () => new THREE.Vector4( 1e6, 1e6, 0, 0 ) ) },
-			uRiverK: { value: new Array( RIVER_SAMPLES ).fill( 0 ) },
+			uRiverTex: { value: riverTexture() },
 			uRiverBox: { value: new THREE.Vector4( - 1e6, - 1e6, 1e6, 1e6 ) },
 			uPonds: { value: Array.from( { length: 3 }, () => new THREE.Vector4( 1e6, 1e6, 0, 0 ) ) },
 			uFeatures: { value: 0 },

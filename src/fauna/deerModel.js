@@ -79,70 +79,73 @@ export function buildDeer( stag, material ) {
 		// the pale caudal (rump) patch: a tall oval around the tail, softly edged darker
 		const rp = Math.hypot( ax / 0.13, ( y - 0.97 ) / 0.22 );
 		const behind = ss( - 0.5, - 0.62, z );
-		const patch = behind * ( 1 - ss( 0.85, 1.0, rp ) );
+		const patch = behind * ( 1 - ss( 0.7, 1.05, rp + 0.15 * noise3( x * 20, y * 20, z * 20 ) ) );
 		const rim = behind * ss( 0.8, 1.0, rp ) * ( 1 - ss( 1.05, 1.3, rp ) );
 		const under = ss( 0.84, 0.7, y ) * ss( - 0.45, - 0.3, z ) * ss( 0.55, 0.4, z );
 		const top = ss( 1.04, 1.16, y );
 		const toNeck = ss( 0.3, 0.5, z ) * ss( 0.95, 1.1, y );
 		const toLeg = ss( 0.72, 0.56, y );
-		return coatMix( red, [ [ back, top * 0.8 ], [ belly, under ], [ neckC, toNeck ], [ legC, toLeg ], [ '#4a3626', rim * 0.8 ], [ '#d9c7a4', patch ] ], x, y, z );
+		return coatMix( red, [ [ back, top * 0.8 ], [ belly, under ], [ neckC, toNeck ], [ legC, toLeg ], [ '#4a3626', rim * 0.3 * ss( 0.04, 0.1, ax ) ], [ '#cdb58f', patch ] ], x, y, z );
 
 	};
 
-	const B = ( bone, color, k = 0.08, extra = {} ) => ( { bone, color, k, ...extra } );
+	const tipOf = ( fn, grey = 0.3 ) => ( x, y, z ) => new THREE.Color( typeof fn === 'function' ? fn( x, y, z ) : fn ).lerp( new THREE.Color( '#a39380' ), grey ).multiplyScalar( 1.12 );
+	const B = ( bone, color, k = 0.08, extra = {} ) => ( { bone, color, k, mat: MAT.FUR, fur: 0.011, tip: tipOf( color ), ...extra } );
+	const LEG = { fur: 0.006, comb: [ 0, - 1, 0 ] };
 	// torso from masses: deep ribcage, tucked flank, rump, withers, brisket
-	S.ellipsoid( [ 0, 0.9, 0.12 ], [ 0.19, 0.29, 0.36 ], B( 'body', coat, 0.1 ) );
-	S.ellipsoid( [ 0, 0.94, - 0.3 ], [ 0.175, 0.21, 0.3 ], B( 'body', coat, 0.12 ) );
-	S.ellipsoid( [ 0, 1.0, - 0.5 ], [ 0.17, 0.2, 0.2 ], B( 'body', coat, 0.08 ) );
-	S.ellipsoid( [ 0, 1.12, 0.3 ], [ 0.09, 0.1, 0.22 ], B( 'body', coat, 0.1 ) );
-	S.ellipsoid( [ 0, 0.8, 0.44 ], [ 0.13, 0.16, 0.12 ], B( 'body', coat, 0.08 ) );
+	S.ellipsoid( [ 0, 0.9, 0.12 ], [ 0.19, 0.29, 0.36 ], B( 'body', coat, 0.07 ) );
+	S.ellipsoid( [ 0, 0.94, - 0.3 ], [ 0.175, 0.21, 0.3 ], B( 'body', coat, 0.08 ) );
+	S.ellipsoid( [ 0, 1.0, - 0.5 ], [ 0.17, 0.2, 0.2 ], B( 'body', coat, 0.06 ) );
+	S.ellipsoid( [ 0, 1.12, 0.3 ], [ 0.09, 0.1, 0.22 ], B( 'body', coat, 0.07 ) );
+	S.ellipsoid( [ 0, 0.8, 0.44 ], [ 0.13, 0.16, 0.12 ], B( 'body', coat, 0.06 ) );
 
 	for ( const [ sd, s ] of SIDES ) {
 
 		// shoulder blade, upper arm, muscular forearm tapering to a slim cannon
-		S.ellipsoid( [ sd * 0.13, 1.0, 0.37 ], [ 0.06, 0.21, 0.12 ], B( 'fS' + s, coat, 0.08 ), Sculpt.frame( [ 0, 1, - 0.35 ], [ sd, 0, 0 ] ) );
-		S.cone( J[ 'fS' + s ], J[ 'fE' + s ], 0.085, 0.066, B( 'fS' + s, coat, 0.07 ) );
-		S.cone( J[ 'fE' + s ], J[ 'fK' + s ], 0.068, 0.034, B( 'fE' + s, legC, 0.04 ) );
-		S.ellipsoid( J[ 'fK' + s ].clone().add( V( 0, 0.005, 0.004 ) ), [ 0.034, 0.044, 0.038 ], B( 'fK' + s, legC, 0.02 ) );
-		S.cone( J[ 'fK' + s ], J[ 'fF' + s ], 0.028, 0.023, B( 'fK' + s, legC, 0.02 ) );
-		S.cone( J[ 'fF' + s ], J[ 'fF' + s ].clone().add( V( 0, - 0.045, 0.03 ) ), 0.026, 0.024, B( 'fF' + s, legC, 0.015 ) );
-		S.cone( J[ 'fF' + s ].clone().add( V( 0, - 0.04, 0.03 ) ), J[ 'fF' + s ].clone().add( V( 0, - 0.08, 0.075 ) ), 0.029, 0.017, B( 'fF' + s, '#17120e', 0.008 ) );
+		S.ellipsoid( [ sd * 0.13, 1.0, 0.37 ], [ 0.06, 0.21, 0.12 ], B( 'fS' + s, coat, 0.06 ), Sculpt.frame( [ 0, 1, - 0.35 ], [ sd, 0, 0 ] ) );
+		S.cone( J[ 'fS' + s ], J[ 'fE' + s ], 0.085, 0.066, B( 'fS' + s, coat, 0.06 ) );
+		S.cone( J[ 'fE' + s ], J[ 'fK' + s ], 0.068, 0.034, B( 'fE' + s, legC, 0.035, LEG ) );
+		S.ellipsoid( J[ 'fK' + s ].clone().add( V( 0, 0.005, 0.004 ) ), [ 0.034, 0.044, 0.038 ], B( 'fK' + s, legC, 0.015, LEG ) );
+		S.cone( J[ 'fK' + s ], J[ 'fF' + s ], 0.028, 0.023, B( 'fK' + s, legC, 0.015, LEG ) );
+		S.cone( J[ 'fF' + s ], J[ 'fF' + s ].clone().add( V( 0, - 0.045, 0.03 ) ), 0.026, 0.024, B( 'fF' + s, '#3a2e24', 0.012, LEG ) );
+		S.cone( J[ 'fF' + s ].clone().add( V( 0, - 0.04, 0.03 ) ), J[ 'fF' + s ].clone().add( V( 0, - 0.08, 0.075 ) ), 0.029, 0.017, { bone: 'fF' + s, color: '#17120e', k: 0.006, mat: MAT.BILL } );
 		// haunch, thigh, gaskin, hock
-		S.ellipsoid( [ sd * 0.105, 0.86, - 0.46 ], [ 0.1, 0.27, 0.19 ], B( 'hH' + s, coat, 0.09 ) );
-		S.cone( J[ 'hH' + s ], J[ 'hS' + s ], 0.11, 0.07, B( 'hH' + s, coat, 0.07 ) );
-		S.cone( J[ 'hS' + s ], J[ 'hC' + s ], 0.07, 0.034, B( 'hS' + s, legC, 0.04 ) );
-		S.ellipsoid( J[ 'hC' + s ].clone().add( V( 0, 0.01, - 0.018 ) ), [ 0.028, 0.046, 0.037 ], B( 'hC' + s, legC, 0.02 ) );
-		S.cone( J[ 'hC' + s ], J[ 'hF' + s ], 0.03, 0.023, B( 'hC' + s, legC, 0.02 ) );
-		S.cone( J[ 'hF' + s ], J[ 'hF' + s ].clone().add( V( 0, - 0.045, 0.03 ) ), 0.026, 0.024, B( 'hF' + s, legC, 0.015 ) );
-		S.cone( J[ 'hF' + s ].clone().add( V( 0, - 0.04, 0.03 ) ), J[ 'hF' + s ].clone().add( V( 0, - 0.08, 0.075 ) ), 0.029, 0.017, B( 'hF' + s, '#17120e', 0.008 ) );
+		S.ellipsoid( [ sd * 0.105, 0.86, - 0.46 ], [ 0.1, 0.27, 0.19 ], B( 'hH' + s, coat, 0.06 ) );
+		S.cone( J[ 'hH' + s ], J[ 'hS' + s ], 0.11, 0.07, B( 'hH' + s, coat, 0.05 ) );
+		S.cone( J[ 'hS' + s ], J[ 'hC' + s ], 0.07, 0.034, B( 'hS' + s, legC, 0.035, LEG ) );
+		S.ellipsoid( J[ 'hC' + s ].clone().add( V( 0, 0.01, - 0.018 ) ), [ 0.028, 0.046, 0.037 ], B( 'hC' + s, legC, 0.015, LEG ) );
+		S.cone( J[ 'hC' + s ], J[ 'hF' + s ], 0.03, 0.023, B( 'hC' + s, legC, 0.015, LEG ) );
+		S.cone( J[ 'hF' + s ], J[ 'hF' + s ].clone().add( V( 0, - 0.045, 0.03 ) ), 0.026, 0.024, B( 'hF' + s, '#3a2e24', 0.012, LEG ) );
+		S.cone( J[ 'hF' + s ].clone().add( V( 0, - 0.04, 0.03 ) ), J[ 'hF' + s ].clone().add( V( 0, - 0.08, 0.075 ) ), 0.029, 0.017, { bone: 'hF' + s, color: '#17120e', k: 0.006, mat: MAT.BILL } );
 
 	}
 
 	// neck carried forward: thick and maned in the stag, slender in the hind
 	const nb = stag ? 0.24 : 0.17, nm = stag ? 0.165 : 0.118, nt = stag ? 0.11 : 0.085;
-	S.cone( [ 0, 1.0, 0.4 ], [ 0, 1.24, 0.64 ], nb, nm, B( 'neck1', neckC, 0.14 ) );
-	S.cone( [ 0, 1.24, 0.64 ], [ 0, 1.45, 0.8 ], nm, nt, B( 'neck2', neckC, 0.05 ) );
-	if ( stag ) S.ellipsoid( [ 0, 1.1, 0.66 ], [ 0.12, 0.23, 0.12 ], B( 'neck1', '#4b3a2d', 0.06, { fuzz: 0.016, fuzzFreq: 38 } ), Sculpt.frame( [ 0, 1, 0.9 ], [ 0, - 0.7, 1 ] ) );
+	S.cone( [ 0, 1.0, 0.4 ], [ 0, 1.24, 0.64 ], nb, nm, B( 'neck1', neckC, 0.1, stag ? { fur: 0.03, comb: [ 0, - 1, 0.3 ], tip: tipOf( neckC, 0.15 ) } : {} ) );
+	S.cone( [ 0, 1.24, 0.64 ], [ 0, 1.45, 0.8 ], nm, nt, B( 'neck2', neckC, 0.05, stag ? { fur: 0.022, comb: [ 0, - 1, 0.3 ] } : {} ) );
+	if ( stag ) S.ellipsoid( [ 0, 1.1, 0.66 ], [ 0.12, 0.23, 0.12 ], B( 'neck1', '#4b3a2d', 0.06, { fur: 0.06, comb: [ 0, - 1, 0.25 ], tip: tipOf( '#4b3a2d', 0.1 ) } ), Sculpt.frame( [ 0, 1, 0.9 ], [ 0, - 0.7, 1 ] ) );
 
 	// head: a long face (~0.4 m), domed forehead, blunt dark muzzle, pale chin
 	const face = stag ? '#6f5847' : '#7c6552';
 	const fdir = V( 0, - 0.45, 1 ).normalize();
 	const headCol = ( x, y, z ) => coatMix( face, [ [ '#b3a58c', ss( 1.345, 1.325, y ) * ss( 1.02, 1.08, z ) ], [ '#2a2019', ss( 1.09, 1.14, z ) * ss( 1.31, 1.34, y ) ], [ neckC, ss( 0.84, 0.78, z ) ], [ '#4f3f33', ss( 1.52, 1.56, y ) ] ], x, y, z, 0.05 );
-	S.ellipsoid( [ 0, 1.5, 0.84 ], [ 0.08, 0.085, 0.12 ], B( 'head', headCol, 0.035 ) );
-	S.cone( [ 0, 1.475, 0.9 ], [ 0, 1.35, 1.14 ], 0.068, 0.05, B( 'head', headCol, 0.04 ) );
-	S.ellipsoid( [ 0, 1.41, 0.93 ], [ 0.058, 0.05, 0.13 ], B( 'head', headCol, 0.03 ), Sculpt.frame( fdir.clone().applyAxisAngle( V( 1, 0, 0 ), - Math.PI / 2 ), fdir ) );
-	S.ellipsoid( [ 0, 1.35, 1.16 ], [ 0.047, 0.046, 0.032 ], B( 'head', '#1d1611', 0.02 ) );
+	const HEAD = { fur: 0.005, comb: [ 0, 0.3, - 1 ] };
+	S.ellipsoid( [ 0, 1.5, 0.84 ], [ 0.08, 0.085, 0.12 ], B( 'head', headCol, 0.03, HEAD ) );
+	S.cone( [ 0, 1.475, 0.9 ], [ 0, 1.35, 1.14 ], 0.068, 0.05, B( 'head', headCol, 0.035, HEAD ) );
+	S.ellipsoid( [ 0, 1.41, 0.93 ], [ 0.058, 0.05, 0.13 ], B( 'head', headCol, 0.03, HEAD ), Sculpt.frame( fdir.clone().applyAxisAngle( V( 1, 0, 0 ), - Math.PI / 2 ), fdir ) );
+	S.ellipsoid( [ 0, 1.35, 1.16 ], [ 0.047, 0.046, 0.032 ], { bone: 'head', color: '#1d1611', k: 0.02, mat: MAT.BILL } );
 	// ears: large, set wide, raised up and out
 	const earLen = stag ? 0.16 : 0.19;
 	for ( const [ sd, s ] of SIDES ) {
 
 		const base = V( sd * 0.07, 1.57, 0.8 );
 		const dir = V( sd * 0.8, 0.6, - 0.2 ).normalize();
-		S.ellipsoid( base.clone().addScaledVector( dir, earLen * 0.5 ), [ stag ? 0.06 : 0.072, earLen * 0.5, 0.016 ], B( 'ear' + s, '#6a5442', 0.015 ), Sculpt.frame( dir, [ sd * 0.3, 0.3, 1 ] ) );
+		S.ellipsoid( base.clone().addScaledVector( dir, earLen * 0.5 ), [ stag ? 0.06 : 0.072, earLen * 0.5, 0.016 ], B( 'ear' + s, '#6a5442', 0.012, { fur: 0.004, comb: [ 0, 1, 0 ], tip: '#9a8a78' } ), Sculpt.frame( dir, [ sd * 0.3, 0.3, 1 ] ) );
 
 	}
 
-	S.cone( [ 0, 1.06, - 0.7 ], [ 0, 0.95, - 0.765 ], 0.045, 0.03, B( 'tail', '#6a4a33', 0.03 ) );
+	S.cone( [ 0, 1.06, - 0.7 ], [ 0, 0.95, - 0.765 ], 0.045, 0.03, B( 'tail', '#6a4a33', 0.03, { fur: 0.02, comb: [ 0, - 1, 0 ] } ) );
 
 	const { mesh, bones } = S.mesh( material, 0.019 );
 	const head = bones.get( 'head' );
@@ -155,7 +158,7 @@ export function buildDeer( stag, material ) {
 	}
 
 	if ( stag ) head.add( antlers( material ) );
-	return { mesh, bones, stag };
+	return { mesh, bones, stag, fur: { density: 170 } };
 
 }
 

@@ -20,11 +20,13 @@ uniform float uWagSpeed;
 attribute vec3 color;
 attribute float aFlap;
 attribute float aMat;
+attribute vec3 aPat;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 varying vec3 vColor;
 varying vec3 vObj;
 varying float vMat;
+varying vec3 vPat;
 #include <skinning_pars_vertex>
 void main() {
 	#ifdef USE_INSTANCING
@@ -67,6 +69,7 @@ void main() {
 	vColor = color;
 	vObj = position;
 	vMat = aMat;
+	vPat = aPat;
 	gl_Position = projectionMatrix * viewMatrix * wp;
 }
 `;
@@ -78,11 +81,39 @@ varying vec3 vNormal;
 varying vec3 vColor;
 varying vec3 vObj;
 varying float vMat;
+varying vec3 vPat;
 void main() {
 	vec3 N = normalize( vNormal );
 	if ( !gl_FrontFacing ) N = -N;
 	vec3 V = normalize( cameraPosition - vWorldPos );
 	vec3 alb = vColor;
+	float irid = 0.0;
+	if ( vPat.x + vPat.y + vPat.z > 0.01 ) {
+		// ---- plumage, drawn per pixel ----
+		// vermiculation: fine wavy dark lines (drake flanks), faded out before it can alias
+		float ph = vObj.y * 1500.0 + gnoise3( vObj * 70.0 ) * 5.0 + gnoise3( vObj * 260.0 ) * 1.2;
+		float vf = 1.0 - smoothstep( 1.5, 4.5, fwidth( ph ) );
+		float vl = smoothstep( 0.55, 0.95, sin( ph ) ) * vf;
+		alb = mix( alb, alb * mix( 1.0, 0.45, vl ), vPat.x );
+		alb *= 1.0 - vPat.x * ( 1.0 - vf ) * 0.12;
+		// scalloped feathers: overlapping rows, each tip curved; dark centre, pale fringe
+		vec3 q = vObj * 40.0;
+		q += 0.9 * vec3( gnoise3( q * 0.17 ), gnoise3( q * 0.17 + 5.0 ), gnoise3( q * 0.17 + 9.0 ) );
+		float rz = -q.z;
+		float row = floor( rz );
+		float rf = fract( rz );
+		float colF = q.y * 0.9 + q.x * 0.55 + row * 0.5;
+		float af = fract( colF ) - 0.5;
+		float tone = hash12( vec2( row, floor( colF ) ) );
+		// each feather: a dark chevron down its centre, a pale fringe round its tip
+		float tipLine = rf - 0.5 * ( 1.0 - 4.0 * af * af );
+		float fringe = smoothstep( -0.04, 0.06, tipLine ) * ( 1.0 - smoothstep( 0.1, 0.26, tipLine ) );
+		float centre = smoothstep( 0.3, 0.06, abs( af ) + ( 1.0 - rf ) * 0.12 ) * smoothstep( 0.1, 0.45, rf );
+		float sf = 1.0 - smoothstep( 0.5, 1.4, fwidth( rz ) );
+		vec3 feather = alb * ( 0.82 + 0.36 * tone ) * mix( 1.0, 0.5, centre ) + fringe * alb * vec3( 0.55, 0.5, 0.35 );
+		alb = mix( alb, mix( alb, feather, sf ), vPat.y );
+		irid = vPat.z;
+	}
 	float rough = 0.55, f0 = 0.04, ao = 1.0, wrap = 0.0, sheen = 0.0;
 	if ( vMat > 0.5 && vMat < 1.5 ) {
 		// feathers: overlapping scalloped rows with soft, fluffy light
@@ -117,6 +148,14 @@ void main() {
 		rough = 0.35;
 		f0 = 0.05;
 	}
+	if ( irid > 0.01 ) {
+		// structural colour: the hue swings from green toward blue-violet at grazing angles
+		float g = pow( 1.0 - saturate( dot( N, V ) ), 1.5 );
+		vec3 shifted = vec3( alb.g * 0.35 + alb.b * 0.6, alb.g * 0.55 + alb.b * 0.3, alb.g * 0.9 + alb.b );
+		alb = mix( alb, shifted, irid * g );
+		rough = mix( rough, 0.32, irid );
+		f0 = mix( f0, 0.07, irid );
+	}
 	float sh = sunShadow( vWorldPos, N );
 	vec3 col = shadeSurface( alb, N, V, vWorldPos, ao, sh, rough, f0 );
 	// soft wrap-around light through feathers and fur
@@ -147,6 +186,133 @@ export function creatureMaterial( { flapSpeed = 0, flapAmp = 0, glide = 0, wag =
 		lights: true,
 		side: THREE.DoubleSide,
 	} );
+
+}
+
+// Fur as shells: the skin drawn again N times (instanced, one draw call), each layer pushed
+// out along the normal and combed back along the body. Strands are columns of 3D noise
+// that thin toward their tips; root colour comes from the skin, tips from aFur.
+const furVert = /* glsl */ `
+uniform float uShells;
+uniform float uFurScale;
+attribute vec3 color;
+attribute vec4 aFur; // tip colour (linear), length (m)
+attribute vec3 aComb;
+varying vec3 vWorldPos;
+varying vec3 vNormal;
+varying vec3 vRoot;
+varying vec3 vRootCol;
+varying vec3 vTipCol;
+varying float vH;
+varying float vLen;
+#include <skinning_pars_vertex>
+void main() {
+	float h = ( float( gl_InstanceID ) + 1.0 ) / uShells;
+	float len = aFur.w * uFurScale;
+	vec3 n = normalize( normal );
+	// hairs rise off the skin, then lie over along the comb as they lengthen
+	vec3 transformed = position + n * len * h * 0.8 + aComb * len * h * h * 0.55;
+	vec3 objectNormal = normal;
+	#include <skinbase_vertex>
+	#include <skinnormal_vertex>
+	#include <skinning_vertex>
+	vec4 wp = modelMatrix * vec4( transformed, 1.0 );
+	vWorldPos = wp.xyz;
+	vNormal = normalize( mat3( modelMatrix ) * objectNormal );
+	vRoot = position;
+	vRootCol = color;
+	vTipCol = aFur.rgb;
+	vH = h;
+	vLen = aFur.w;
+	gl_Position = projectionMatrix * viewMatrix * wp;
+}
+`;
+
+const furFrag = /* glsl */ `
+${commonParsGLSL}
+uniform float uDensity;
+varying vec3 vWorldPos;
+varying vec3 vNormal;
+varying vec3 vRoot;
+varying vec3 vRootCol;
+varying vec3 vTipCol;
+varying float vH;
+varying float vLen;
+void main() {
+	// bare skin (hooves, nose): no hair
+	if ( vLen < 0.0012 ) discard;
+	float h = vH;
+	// long hair falls in coarser, softer locks
+	vec3 q = vRoot * uDensity / ( 1.0 + vLen * 30.0 );
+	// clumped strands: a coarse clump field and finer hairs within it
+	float n = ( gnoise3( q ) * 0.5 + 0.5 ) * 0.6 + ( gnoise3( q * 2.6 + 11.0 ) * 0.5 + 0.5 ) * 0.4;
+	float thr = mix( 0.3, 0.78, pow( h, 0.85 ) );
+	// where a strand is smaller than a pixel, stop drawing strands: inner layers solid,
+	// outer layers gone (no sparkle)
+	float fw = length( fwidth( q ) );
+	thr = mix( thr, h > 0.45 ? 2.0 : -1.0, smoothstep( 0.9, 2.4, fw ) );
+	if ( n < thr ) discard;
+	vec3 N = normalize( vNormal );
+	if ( ! gl_FrontFacing ) N = -N;
+	vec3 V = normalize( cameraPosition - vWorldPos );
+	// the root colour already carries the skin's ambient occlusion; tips pick it up partly
+	float aoRoot = clamp( luma( vRootCol ) / max( luma( vTipCol ) * 0.75, 1e-3 ), 0.35, 1.0 );
+	vec3 alb = mix( vRootCol * 0.7, vTipCol * mix( aoRoot, 1.0, 0.5 ), smoothstep( 0.0, 0.55, h ) );
+	alb *= 0.82 + 0.36 * n;
+	float ao = mix( 0.4, 1.0, pow( h, 0.7 ) );
+	float sh = sunShadow( vWorldPos, N );
+	vec3 L = uSunDir;
+	float wrap = saturate( ( dot( N, L ) + 0.4 ) / 1.4 );
+	vec3 col = alb / PI * ( uSunColor * sh * wrap * ( 0.55 + 0.45 * ao ) + skyIrradiance( N ) * ao );
+	// light glancing through the tips of the fur at the silhouette
+	float rim = pow( 1.0 - saturate( dot( N, V ) ), 2.5 ) * h;
+	col += alb * ( uSunColor * sh * ( 0.25 + pow( saturate( dot( -V, L ) ), 3.0 ) ) * 0.5 + skyIrradiance( N ) * 0.1 ) * rim;
+	col *= underwaterLight( vWorldPos );
+	col = applyAtmosphere( col, vWorldPos );
+	gl_FragColor = vec4( col, 1.0 );
+}
+`;
+
+export function furMaterial( { density = 300, shells = 12, scale = 1 } = {} ) {
+
+	return new THREE.ShaderMaterial( {
+		vertexShader: furVert,
+		fragmentShader: furFrag,
+		uniforms: {
+			...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ),
+			...sharedUniforms(),
+			uShells: { value: shells },
+			uFurScale: { value: scale },
+			uDensity: { value: density },
+		},
+		lights: true,
+	} );
+
+}
+
+// the skin's geometry, drawn once per shell
+export function furGeometry( geo, shells ) {
+
+	const g = new THREE.InstancedBufferGeometry();
+	g.index = geo.index;
+	for ( const k of [ 'position', 'normal', 'color', 'skinIndex', 'skinWeight', 'aFur', 'aComb' ] ) g.setAttribute( k, geo.getAttribute( k ) );
+	g.instanceCount = shells;
+	g.boundingSphere = geo.boundingSphere.clone();
+	return g;
+
+}
+
+// Fur on a skinned mesh: a child that follows the same skeleton.
+export function addFur( mesh, geo, mat ) {
+
+	const f = new THREE.SkinnedMesh( geo, mat );
+	f.frustumCulled = false;
+	f.castShadow = false;
+	f.receiveShadow = false;
+	f.name = 'fur';
+	mesh.add( f );
+	f.bind( mesh.skeleton, mesh.bindMatrix );
+	return f;
 
 }
 

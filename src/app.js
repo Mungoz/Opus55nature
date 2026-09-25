@@ -162,10 +162,10 @@ export class App {
 		this.fish = new LeapingFish( td, this.water, this.particles, ( p, s ) => this.audio.splash( p, s ) );
 		this.shallows = new Shallows( td );
 		this.scene.add( this.shallows.group );
-		this.mammals = new Mammals( td, this.forest, this.audio );
+		this.mammals = new Mammals( td, this.forest, this.audio, this.quality );
 		this.scene.add( this.mammals.group );
 		// marmots crop the turf short around their burrows
-		this.mammals.marmots.forEach( ( m, i ) => CROP.value[ i ].set( m.burrow.x, m.burrow.z, 9, 0.8 ) );
+		this.mammals.marmots.forEach( ( m, i ) => CROP.value[ i ].set( m.burrow.x + ( i % 2 ? 1.5 : - 1.2 ), m.burrow.z + ( i % 3 ? 0.8 : - 1.4 ), 6 + ( i % 3 ), 0.6 ) );
 		const sv = this.forest.spawnVignette;
 		if ( sv ) CROP.value[ 5 ].set( sv.perch.x, sv.perch.z, 3.2, 0.6 );
 		this.scene.add( this.starlings.mesh, this.geese.mesh, this.eagles.mesh, this.waterfowl.group, this.fish.mesh );
@@ -239,6 +239,8 @@ export class App {
 		if ( f === 'swan' ) { const b = this.waterfowl.birds[ 0 ]; p = b.pos.clone().setY( 0.5 ); h = 0.3; back = 4.5; this._followHeading = b.heading; }
 		if ( this.mammals && this.mammals.debugTarget ) { const d = this.mammals.debugTarget( f ); if ( d ) { p = d.p; h = d.h; back = d.back; this._followHeading = d.heading; } }
 		if ( ! p ) return;
+		if ( this.options.back ) back = this.options.back;
+		if ( this.options.h !== undefined ) h = this.options.h;
 		// side-on when the target reports its heading (studio view), else a 3/4 view
 		const hd = this._followHeading;
 		const sx = hd !== undefined ? Math.cos( hd + ( this.options.angle || 0 ) ) : 0.7, sz = hd !== undefined ? - Math.sin( hd + ( this.options.angle || 0 ) ) : 0.7;
@@ -467,6 +469,7 @@ export class App {
 		this.shallows.update( dt, this.camera );
 		// (the debug follow camera must not spook what it films)
 		this.mammals.update( dt, t, this.options.follow || this.director ? { position: new THREE.Vector3( 1e4, 0, 1e4 ) } : this.camera, 1 - Math.min( 1, Math.abs( sunEl + 1 ) / 7 ) );
+		this.mammals.lod( this.camera );
 		if ( this.options.follow ) this._debugFollow();
 		this._updateStones( dt );
 

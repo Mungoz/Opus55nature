@@ -47,6 +47,7 @@ ${wrapGLSL}
 uniform float uTile;
 uniform float uRadius;
 uniform float uWaterLevel;
+uniform sampler2D uNoiseTex;
 attribute vec4 aOff;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
@@ -61,27 +62,29 @@ void main() {
 	float h = hn.x;
 	float depth = uWaterLevel - h;
 	// only on the strand itself; the lakebed texture carries the stones underwater
-	float dens = bio.a * 0.75 * ( 1.0 - smoothstep( -0.02, 0.1, depth ) );
+	float beds = smoothstep( 0.35, 0.75, textureLod( uNoiseTex, p / 26.0 + 0.4, 0.0 ).r ) * 0.8 + 0.2;
+	float dens = bio.a * 0.55 * beds * ( 1.0 - smoothstep( -0.02, 0.1, depth ) );
 	dens += ( 1.0 - smoothstep( 0.5, 0.9, h ) ) * 0.03 + bio.b * 0.2;
 	float r1 = aOff.z, r2 = aOff.w;
 	if ( r1 > dens || fade <= 0.0 ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
 	float r3 = fract( r1 * 17.3 + r2 * 5.1 );
 	// mostly pebbles, an occasional cobble
-	float size = ( 0.025 + 0.3 * pow( r2, 5.0 ) + 0.04 * r3 ) * fade;
-	// flattish, elongated cobbles lying at random angles
-	vec3 sc = vec3( 1.0 + r3 * 0.9, 0.32 + 0.45 * fract( r1 * 9.1 ), 0.7 + 0.5 * r2 ) * size;
+	float size = ( 0.02 + 0.035 * r3 + 0.13 * pow( r2, 4.0 ) + 0.12 * pow( r2, 14.0 ) ) * fade;
+	// water-worn: rounded, a little elongated and flattened, lying on their broad side
+	vec3 sc = vec3( 1.0 + r3 * 0.5, 0.5 + 0.35 * fract( r1 * 9.1 ), 0.75 + 0.35 * r2 ) * size;
 	mat3 R = rotY( r2 * 40.0 ) * rotX( ( r3 - 0.5 ) * 0.9 ) * rotY( r1 * 23.0 );
 	vec3 lp = R * ( position * sc );
-	vec3 base = vec3( p.x, h - sc.y * 0.35, p.y );
+	// bedded into the gravel, big ones more deeply
+	vec3 base = vec3( p.x, h - sc.y * ( 0.35 + 0.3 * smoothstep( 0.06, 0.2, size ) ), p.y );
 	vWorldPos = base + lp;
 	vNormal = normalize( R * ( normal / sc ) );
 	vObj = position * 3.0 + r2 * 17.0;
 	float t = fract( r3 * 7.7 );
-	vec3 col = mix( vec3( 0.3, 0.29, 0.27 ), vec3( 0.54, 0.52, 0.48 ), r3 );
-	col = mix( col, vec3( 0.46, 0.37, 0.29 ), step( 0.72, t ) * 0.8 );
-	col = mix( col, vec3( 0.74, 0.72, 0.68 ), step( 0.95, fract( t * 5.3 ) ) );
-	col = mix( col, vec3( 0.17, 0.18, 0.19 ), step( 0.8, fract( t * 2.9 ) ) );
-	col = mix( col, vec3( 0.36, 0.38, 0.3 ), step( 0.85, fract( t * 7.7 ) ) * 0.6 ); // lichen-greened
+	vec3 col = mix( vec3( 0.42, 0.41, 0.38 ), vec3( 0.58, 0.56, 0.52 ), r3 );
+	col = mix( col, vec3( 0.52, 0.47, 0.4 ), step( 0.7, t ) * 0.6 );
+	col = mix( col, vec3( 0.33, 0.33, 0.32 ), step( 0.82, fract( t * 2.9 ) ) * 0.7 );
+	col = mix( col, vec3( 0.5, 0.4, 0.32 ), step( 0.93, fract( t * 5.3 ) ) * 0.5 );
+	col = mix( col, vec3( 0.42, 0.43, 0.36 ), step( 0.88, fract( t * 7.7 ) ) * 0.4 ); // lichen-greened
 	vTint = pow( col, vec3( 2.2 ) );
 	gl_Position = projectionMatrix * viewMatrix * vec4( vWorldPos, 1.0 );
 }
@@ -98,7 +101,8 @@ void main() {
 	vec3 V = normalize( cameraPosition - vWorldPos );
 	float speck = gnoise3( vObj * 9.0 ) * 0.5 + 0.5;
 	float speck2 = gnoise3( vObj * 2.5 ) * 0.5 + 0.5;
-	vec3 alb = vTint * ( 0.72 + 0.28 * speck + 0.25 * speck2 );
+	float vein = smoothstep( 0.9, 0.97, 1.0 - abs( gnoise3( vObj * 1.6 + vec3( 3.0 ) ) ) );
+	vec3 alb = vTint * ( 0.82 + 0.16 * speck + 0.14 * speck2 ) * ( 1.0 + vein * 0.25 );
 	float above = vWorldPos.y - uWaterLevel;
 	// wet below the swash line, algae once submerged
 	float wet = 1.0 - smoothstep( 0.0, 0.25, above );
@@ -115,15 +119,19 @@ void main() {
 
 function stoneGeometry() {
 
-	let g = new THREE.IcosahedronGeometry( 1, 2 );
+	let g = new THREE.IcosahedronGeometry( 1, 3 );
 	g.deleteAttribute( 'uv' );
 	g = mergeVertices( g );
 	const p = g.getAttribute( 'position' );
-	const rng = new RNG( 77 );
+	const v = new THREE.Vector3();
 	for ( let i = 0; i < p.count; i ++ ) {
 
-		const s = 0.72 + rng.next() * 0.5;
-		p.setXYZ( i, p.getX( i ) * s, p.getY( i ) * s, p.getZ( i ) * s );
+		v.fromBufferAttribute( p, i );
+		// a lumpy, water-worn ellipsoid: a couple of broad bulges, no facets
+		const s = 1 + 0.12 * Math.sin( v.x * 2.1 + 0.7 ) * Math.cos( v.z * 1.7 ) + 0.07 * Math.sin( v.y * 3.3 + v.x * 1.3 );
+		// a flatter underside
+		const flat = v.y < 0 ? 0.75 : 1;
+		p.setXYZ( i, v.x * s, v.y * s * flat, v.z * s );
 
 	}
 

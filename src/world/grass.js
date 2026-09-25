@@ -75,15 +75,18 @@ void main() {
 	// patches cropped short by grazing deer and marmots
 	float graze = smoothstep( 0.45, 0.7, textureLod( uNoiseTex, p / 57.0 + 0.7, 0.0 ).b );
 	height *= mix( 1.0, 0.45, graze * step( uType, 0.5 ) );
+	float cropK = 0.0;
 	for ( int i = 0; i < 6; i ++ ) {
 		vec4 cr = uCrop[ i ];
 		if ( cr.z <= 0.0 ) continue;
-		float k = 1.0 - smoothstep( cr.z * 0.55, cr.z, length( p - cr.xy ) + ( r3 - 0.5 ) * cr.z * 0.3 );
+		float k = 1.0 - smoothstep( cr.z * 0.45, cr.z, length( p - cr.xy ) + ( r3 - 0.5 ) * cr.z * 0.3 + ( patchN - 0.5 ) * cr.z * 0.8 );
 		height *= 1.0 - k * cr.w;
+		cropK = max( cropK, k * cr.w );
 	}
 
 	// grass species: fine blades, broad leaves, flowering stems, dry lodged blades
-	float width = uWidth;
+	// grazed turf: short, broad, close-set blades so the ground stays covered
+	float width = uWidth * ( 1.0 + cropK * 1.2 );
 	float kBase = 0.3 + r2 * 0.5;
 	float headFrac = 0.0;
 	vec3 c = grassColor( p, h );
@@ -150,6 +153,7 @@ void main() {
 	c *= 0.72 + 0.56 * r2;
 	c = mix( c, c * vec3( 1.4, 1.14, 0.6 ), smoothstep( 0.35, 1.0, y ) * ( 0.45 + 0.45 * r4 ) * ( 1.0 - headT ) );
 	c = mix( c, srgbToLinear( mix( vec3( 0.7, 0.62, 0.44 ), vec3( 0.56, 0.47, 0.36 ), r4 ) ), headT );
+	c = mix( c, c * vec3( 1.2, 1.15, 0.85 ) + vec3( 0.012, 0.01, 0.0 ), cropK * 0.6 );
 	vColor = c;
 	vY = y;
 	vAO = mix( 0.25, 1.0, smoothstep( 0.0, 0.7, y ) ) * hn.w;

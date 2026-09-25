@@ -7,6 +7,7 @@ ${ featuresGLSL }
 const vec2 LAKE_C = vec2( 0.0, -330.0 );
 const vec2 LAKE_AX = vec2( 330.0, 780.0 );
 const vec2 HORN_C = vec2( -120.0, -3350.0 );
+const vec2 ISLAND_C = vec2( -70.0, 205.0 );
 
 float sdSegment( vec2 p, vec2 a, vec2 b ) {
 	vec2 pa = p - a, ba = b - a;
@@ -84,14 +85,15 @@ float terrainHeight( vec2 p, float detail ) {
 	// and pinches into a hanging valley beneath the horn
 	float widen = smoothstep( 300.0, 2500.0, p.y ) * 240.0 - smoothstep( -1200.0, -2000.0, p.y ) * 250.0;
 	float wall = smoothstep( 430.0 + widen, 1850.0 + widen * 1.4, dv );
+	// the valley ends in a cirque not far behind the meadows: a curved headwall
+	float cirque = smoothstep( 1250.0, 2600.0, p.y + 0.00022 * p.x * p.x + 120.0 * fbm2( p * 0.0012 + 3.0, 3 ) );
+	wall = max( wall, cirque * 0.82 );
 	wall = wall * wall * ( 3.0 - 2.0 * wall );
 
 	// Valley floor: gently rolling, rising slowly down the outflow valley.
 	float floorH = 4.0 + 4.0 * fbm2( p * 0.004, 3 ) + max( 0.0, p.y - 600.0 ) * 0.012;
 	// low rolling hills and moraines across the outer valley floor
 	floorH += 30.0 * smoothstep( 500.0, 2500.0, p.y ) * ( 0.5 + 0.5 * fbm2( p * 0.0018 + 13.0, 4 ) );
-	// a rock bar (riegel) across the valley closes the view downstream
-	floorH += 70.0 * exp( -pow( ( p.y - 1720.0 - 60.0 * gnoise( p * 0.003 ) ) / 170.0, 2.0 ) ) * ( 0.75 + 0.25 * gnoise( p * 0.01 ) );
 
 	// Ridged ranges on warped coordinates.
 	vec2 wq = p / 2300.0;
@@ -159,10 +161,11 @@ float terrainHeight( vec2 p, float detail ) {
 	h = s > 0.0 ? land : bed;
 
 	// A small rocky island.
-	vec2 ip = p - vec2( -90.0, -520.0 );
+	// a rocky knoll, higher at its north end where the ice plucked it into a crag
+	vec2 ip = p - ISLAND_C;
 	float ir = length( ip * vec2( 1.0, 0.8 ) ) + 12.0 * gnoise( p * 0.03 );
-	float island = 8.0 - 19.0 * pow( ir / 58.0, 2.0 );
-	island += 1.5 * gnoise( p * 0.08 ) * ( 1.0 - smoothstep( 10.0, 45.0, ir ) );
+	float island = 13.0 - 21.0 * pow( ir / 58.0, 2.0 ) + 5.0 * smoothstep( 20.0, -30.0, ip.y ) * ( 1.0 - smoothstep( 15.0, 45.0, ir ) );
+	island += 2.5 * gnoise( p * 0.08 ) * ( 1.0 - smoothstep( 10.0, 45.0, ir ) ) + 1.2 * gnoise( p * 0.25 ) * ( 1.0 - smoothstep( 20.0, 50.0, ir ) );
 	h = max( h, island );
 
 	return applyWater( p, h );

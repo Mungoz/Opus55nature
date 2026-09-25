@@ -15,10 +15,29 @@ export const FALL = {
 // The stream from the plunge pool, meandering across the meadow into the lake.
 const RIVER_CTRL = [
 	[ - 539, 1090 ], [ - 470, 1064 ], [ - 390, 1052 ], [ - 300, 1010 ], [ - 215, 948 ], [ - 150, 905 ],
-	[ - 70, 890 ], [ 10, 850 ], [ 70, 785 ], [ 92, 715 ], [ 68, 655 ], [ 88, 592 ], [ 78, 530 ], [ 58, 468 ],
+	[ - 70, 890 ], [ 10, 850 ], [ 70, 785 ], [ 92, 715 ], [ 68, 655 ], [ 88, 592 ], [ 78, 530 ], [ 58, 468 ], [ 48, 438 ],
 ].map( ( [ x, z ] ) => new THREE.Vector3( x, 0, z ) );
 
 export const RIVER_SAMPLES = 160;
+export const RIVER_CHUNK = 8; // segments per bounding box in the shader's coarse pass
+
+// smooth 1D value noise (quintic), deterministic
+const hash1 = ( i ) => {
+
+	const x = Math.sin( i * 127.1 + 311.7 ) * 43758.5453;
+	return x - Math.floor( x );
+
+};
+
+function vnoise01( x ) {
+
+	const i = Math.floor( x ), f = x - i;
+	const u = f * f * f * ( f * ( f * 6 - 15 ) + 10 );
+	return hash1( i ) + ( hash1( i + 1 ) - hash1( i ) ) * u;
+
+}
+
+const vnoise = ( x ) => vnoise01( x ) * 2 - 1;
 
 // Evenly spaced samples along the stream: { p: Vector2, width (half-width, m), s (m from source) }.
 // Below the tumbling reach under the fall the stream meanders across the flat meadow.
@@ -28,16 +47,16 @@ export function riverSamples() {
 	const len = curve.getLength();
 	const N = RIVER_SAMPLES * 4;
 	const pts = [];
-	let phase = 0.6;
 	for ( let i = 0; i < N; i ++ ) {
 
 		const u = i / ( N - 1 );
 		const s = u * len;
 		const p = curve.getPointAt( u ), t = curve.getTangentAt( u );
-		// wavelength wanders a little so the loops are not regular
-		phase += ( len / ( N - 1 ) ) * Math.PI * 2 / ( 48 + 14 * Math.sin( s * 0.011 ) );
-		const A = 8.5 * THREE.MathUtils.smoothstep( s, 110, 240 ) * ( 1 - 0.55 * THREE.MathUtils.smoothstep( s, len - 90, len - 10 ) );
-		const off = A * Math.sin( phase ) * ( 0.8 + 0.2 * Math.sin( s * 0.037 ) );
+		// irregular meanders: bends of every size from smooth noise, with tight loops,
+		// lazy sweeps and nearly straight reaches where the amplitude dies away
+		const reach = 0.2 + 0.8 * Math.pow( vnoise01( s / 150 + 11.3 ), 1.4 );
+		const A = 13 * reach * THREE.MathUtils.smoothstep( s, 110, 240 ) * ( 1 - 0.6 * THREE.MathUtils.smoothstep( s, len - 90, len - 10 ) );
+		const off = A * ( 0.8 * vnoise( s / 34 + 2.7 ) + 0.35 * vnoise( s / 15 + 8.1 ) ) + 1.2 * vnoise( s / 7 + 4.4 );
 		pts.push( new THREE.Vector3( p.x - t.z * off, 0, p.z + t.x * off ) );
 
 	}
@@ -61,7 +80,7 @@ export function riverSamples() {
 // Small ponds: centre, nominal radius. The outline is lobed and warped (pondShape in GLSL);
 // surface heights are measured from the terrain at load.
 export const PONDS = [
-	{ c: new THREE.Vector2( - 96, 612 ), r: 15 },
+	{ c: new THREE.Vector2( - 58, 540 ), r: 15 },
 	{ c: new THREE.Vector2( - 262, 810 ), r: 22 },
 	{ c: new THREE.Vector2( 250, 1185 ), r: 27 },
 ];
@@ -69,8 +88,12 @@ export const PONDS = [
 // GLSL: shared constants + the carving functions. Uniforms are filled by the generator.
 export const featuresGLSL = /* glsl */ `
 #define RIVER_N ${RIVER_SAMPLES}
-uniform vec4 uRiver[ RIVER_N ];   // x, z, surface height, half-width
-uniform float uRiverK[ RIVER_N ]; // signed curvature of the channel (1/m, + turning left)
+// the stream as a float texture (a texture, not a uniform array, so it fits the uniform
+// limits of mobile GPUs): row 0 = x, z, surface height, half-width; row 1 = signed
+// curvature of the channel (1/m, + turning left); row 2 = padded bounds of each chunk
+// of RIVER_CHUNK segments
+#define RIVER_CHUNK 8
+uniform highp sampler2D uRiverTex;
 uniform vec4 uRiverBox;           // bounds of the stream (min x, min z, max x, max z), padded
 uniform vec4 uPonds[ 3 ];         // x, z, radius, surface height
 uniform float uFeatures;          // 0 during the pre-pass that measures the natural ground
@@ -85,16 +108,23 @@ vec3 riverQueryB( vec2 p, out float bend ) {
 	float best = 1e9, surf = 0.0, w = 0.0;
 	bend = 0.0;
 	if ( any( lessThan( p, uRiverBox.xy ) ) || any( greaterThan( p, uRiverBox.zw ) ) ) return vec3( 1e9, 0.0, 0.0 );
-	for ( int i = 0; i < RIVER_N - 1; i ++ ) {
-		vec4 a = uRiver[ i ], b = uRiver[ i + 1 ];
+	for ( int c = 0; c < ( RIVER_N + RIVER_CHUNK - 2 ) / RIVER_CHUNK; c ++ ) {
+	vec4 bb = texelFetch( uRiverTex, ivec2( c, 2 ), 0 );
+	if ( any( lessThan( p, bb.xy ) ) || any( greaterThan( p, bb.zw ) ) ) continue;
+	int i0 = c * RIVER_CHUNK, i1 = min( i0 + RIVER_CHUNK, RIVER_N - 1 );
+	vec4 b = texelFetch( uRiverTex, ivec2( i0, 0 ), 0 );
+	for ( int i = i0; i < i1; i ++ ) {
+		vec4 a = b;
+		b = texelFetch( uRiverTex, ivec2( i + 1, 0 ), 0 );
 		vec2 pa = p - a.xy, ba = b.xy - a.xy;
 		float t = clamp( dot( pa, ba ) / dot( ba, ba ), 0.0, 1.0 );
 		float d = length( pa - ba * t );
 		if ( d < best ) {
 			best = d; surf = mix( a.z, b.z, t ); w = mix( a.w, b.w, t );
 			float side = sign( ba.x * pa.y - ba.y * pa.x );
-			bend = side * mix( uRiverK[ i ], uRiverK[ i + 1 ], t );
+			bend = side * mix( texelFetch( uRiverTex, ivec2( i, 1 ), 0 ).r, texelFetch( uRiverTex, ivec2( i + 1, 1 ), 0 ).r, t );
 		}
+	}
 	}
 	return vec3( best, surf, w );
 }

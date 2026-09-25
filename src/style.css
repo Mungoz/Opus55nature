@@ -51,15 +51,18 @@ html, body {
 body.entered #loader { opacity: 0; visibility: hidden; pointer-events: none; }
 body.shot #loader { display: none; }
 
-.loader-inner { text-align: center; width: min(460px, 84vw); }
+.loader-inner { text-align: center; width: max-content; max-width: 92vw; margin: 0 auto; }
 
 #loader h1 {
 	font-family: var(--serif);
 	font-weight: 300;
 	letter-spacing: 0.46em;
 	text-transform: uppercase;
-	font-size: clamp(30px, 5.4vw, 58px);
-	margin: 0 0 0.2em 0.46em;
+	font-size: clamp(26px, 5.4vw, 58px);
+	white-space: nowrap;
+	/* balance the trailing letter-space so the word sits on the centre line */
+	margin: 0 0 0.2em;
+	padding-left: 0.46em;
 }
 
 .subtitle { font-family: var(--serif); color: var(--ink-dim); font-style: italic; margin: 0 0 2.4em; font-size: 20px; }
@@ -89,7 +92,6 @@ body.ready .enter { opacity: 1; transform: none; pointer-events: auto; }
 body.ready .bar, body.ready #load-label { opacity: 0; }
 .enter:hover, .enter:focus-visible { background: rgba(233, 184, 106, 0.12); border-color: var(--accent); outline: none; }
 
-.loader-note { margin-top: 2.4em; font-size: 11px; letter-spacing: 0.1em; color: var(--ink-faint); }
 
 /* ---------- in-scene interface ---------- */
 #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; opacity: 0; transition: opacity 1.2s ease 0.6s; }

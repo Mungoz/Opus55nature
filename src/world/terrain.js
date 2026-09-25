@@ -172,6 +172,21 @@ void main() {
 	vec4 pebT = texture( tMat, vec3( puv, PEBBLE ) );
 	vec3 pebDN = tn2w( unpackN( texture( tMatN, vec3( puv, PEBBLE ) ) ) );
 	vec3 pebAlb = decode( pebT.rgb ) * ( 0.8 + 0.35 * gnoise( wp.xz * 0.11 ) );
+	{
+		// a second, larger pebble scale, rotated, breaks up the tiling
+		vec2 puv2 = mat2( 0.8, -0.6, 0.6, 0.8 ) * wp.xz / 5.3 + 0.37;
+		vec4 pebT2 = texture( tMat, vec3( puv2, PEBBLE ) );
+		float mixP = smoothstep( 0.3, 0.7, texture2D( uNoiseTex, wp.xz / 19.0 + 0.2 ).g );
+		pebAlb = mix( pebAlb, decode( pebT2.rgb ) * ( 0.85 + 0.3 * gnoise( wp.xz * 0.07 + 3.0 ) ), mixP );
+		pebT.a = mix( pebT.a, pebT2.a, mixP );
+		// pale sand and fine grit in patches, and washed up along the swash line
+		float grit = gnoise( wp.xz * 9.0 ) * 0.5 + 0.5;
+		vec3 sand = decode( vec3( 0.58, 0.53, 0.44 ) ) * ( 0.85 + 0.25 * grit );
+		float sandW = smoothstep( 0.45, 0.75, texture2D( uNoiseTex, wp.xz / 31.0 + 0.61 ).b + 0.2 * gnoise( wp.xz * 0.4 ) );
+		sandW = max( sandW, smoothstep( 0.55, 0.3, h ) * smoothstep( 0.05, 0.2, h ) * 0.6 );
+		pebAlb = mix( pebAlb, sand, sandW * ( 1.0 - smoothstep( 0.6, 0.9, pebT.a ) * 0.6 ) );
+		pebT.a = mix( pebT.a, 0.4 + 0.2 * grit, sandW * 0.7 );
+	}
 
 	// ---------- soil / forest floor ----------
 	vec2 suv = wp.xz / 3.2;
