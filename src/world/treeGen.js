@@ -217,15 +217,40 @@ function leafCard( B, c, face, size, rect, kind, treeH, ao, phase, rng, roll = 1
 
 // ---------------------------------------------------------------------------
 
-export function makeConifer( rng, species ) {
+// form: 'normal'; 'narrow' (a columnar subalpine spruce); 'young' (short, dense, to the
+// ground); 'old' (a tall veteran: high bare stem, gaps in the crown, a broken or
+// flattened top, a few long heavy limbs) - the shapes that make a real stand uneven.
+export function makeConifer( rng, species, form = 'normal' ) {
 
 	const larch = species === 'larch';
 	// Swiss stone pine: shorter and stouter, a dense dome of upswept brushes
 	const pine = species === 'pine';
 	const B = new Builder();
-	const H = larch ? rng.range( 19, 23 ) : pine ? rng.range( 12, 17 ) : rng.range( 21, 26 );
-	const R = H * ( larch ? rng.range( 0.19, 0.23 ) : pine ? rng.range( 0.25, 0.31 ) : rng.range( 0.16, 0.19 ) );
-	const crownBase = H * ( larch ? rng.range( 0.18, 0.3 ) : pine ? rng.range( 0.1, 0.22 ) : rng.range( 0.06, 0.16 ) );
+	let H = larch ? rng.range( 19, 23 ) : pine ? rng.range( 12, 17 ) : rng.range( 21, 26 );
+	let R = H * ( larch ? rng.range( 0.19, 0.23 ) : pine ? rng.range( 0.25, 0.31 ) : rng.range( 0.16, 0.19 ) );
+	let crownBase = H * ( larch ? rng.range( 0.18, 0.3 ) : pine ? rng.range( 0.1, 0.22 ) : rng.range( 0.06, 0.16 ) );
+	if ( form === 'narrow' ) {
+
+		H *= 1.08;
+		R *= 0.62;
+		crownBase = H * rng.range( 0.02, 0.08 );
+
+	} else if ( form === 'young' ) {
+
+		H *= rng.range( 0.4, 0.55 );
+		R = H * ( larch ? 0.26 : 0.24 );
+		crownBase = H * 0.03;
+
+	} else if ( form === 'old' ) {
+
+		H *= rng.range( 1.08, 1.2 );
+		R *= rng.range( 1.1, 1.3 );
+		crownBase = H * rng.range( 0.32, 0.45 );
+
+	}
+
+	const broken = form === 'old' && rng.next() < 0.7;
+	const gapSeed = rng.next() * 100;
 	const r0 = H * ( larch ? 0.013 : pine ? 0.02 : 0.012 );
 	const barkKind = larch ? KIND.LARCH_BARK : pine ? KIND.PINE_BARK : KIND.SPRUCE_BARK;
 	const leafKind = larch ? KIND.LARCH_LEAF : pine ? KIND.PINE_LEAF : KIND.SPRUCE_LEAF;
@@ -255,7 +280,16 @@ export function makeConifer( rng, species ) {
 
 		const y = crownBase + ( H - 0.6 - crownBase ) * Math.pow( ( b + rng.next() ) / count, 0.92 );
 		const t = ( y - crownBase ) / ( H - crownBase );
-		const envelope = pine ? R * Math.pow( Math.sin( Math.PI * Math.min( 1, 0.14 + t * 0.9 ) ), 0.5 ) + 0.35 : R * Math.pow( 1 - t, larch ? 0.85 : 0.95 ) + 0.35;
+		let envelope = pine ? R * Math.pow( Math.sin( Math.PI * Math.min( 1, 0.14 + t * 0.9 ) ), 0.5 ) + 0.35 : R * Math.pow( 1 - t, larch ? 0.85 : 0.95 ) + 0.35;
+		if ( form === 'old' ) {
+
+			// storm-thinned crown: whole sections missing, a flat top where the leader broke
+			if ( Math.sin( y * 1.7 + gapSeed ) + Math.sin( y * 0.63 + gapSeed * 2 ) > 1.1 ) continue;
+			if ( broken && t > 0.8 ) envelope = Math.max( envelope, R * 0.45 );
+
+		}
+
+		if ( form === 'young' ) envelope = R * Math.pow( 1 - t, 0.8 ) + 0.2;
 		{
 
 			az += 2.39996 + rng.range( - 0.35, 0.35 );
@@ -279,8 +313,33 @@ export function makeConifer( rng, species ) {
 
 	}
 
-	// leader at the top (stone pines often carry several)
-	const tops = pine ? rng.int( 2, 4 ) : 1;
+	// an old tree's heavy low limbs, reaching out and up
+	if ( form === 'old' ) {
+
+		const nl = rng.int( 2, 4 );
+		for ( let k = 0; k < nl; k ++ ) {
+
+			const y = crownBase + rng.range( 0, 0.3 ) * ( H - crownBase );
+			const a = rng.next() * Math.PI * 2;
+			const L = R * rng.range( 1.1, 1.5 );
+			const dir = new THREE.Vector3( Math.cos( a ), larch ? 0.2 : - 0.05, Math.sin( a ) ).normalize();
+			const limb = [ { p: new THREE.Vector3( 0, y, 0 ), r: r0 * 0.35, flex: 0.1 }, { p: new THREE.Vector3( dir.x * L * 0.6, y + L * ( larch ? 0.18 : 0.02 ), dir.z * L * 0.6 ), r: r0 * 0.18, flex: 0.3 }, { p: new THREE.Vector3( dir.x * L, y + L * ( larch ? 0.3 : - 0.05 ), dir.z * L ), r: r0 * 0.06, flex: 0.5 } ];
+			tube( B, limb, 5, barkKind, H, 1 );
+			for ( let c = 0; c < 4; c ++ ) {
+
+				const u = 0.35 + c * 0.18;
+				const o = limb[ 0 ].p.clone().lerp( limb[ 2 ].p, u );
+				const side = new THREE.Vector3( - dir.z, 0, dir.x );
+				card( B, o, dir, side, L * 0.45, L * 0.35, larch ? 0.4 : 0.25, 0.1, rect, leafKind, H, R, 0.5, 0.95, rng.next(), 3 );
+
+			}
+
+		}
+
+	}
+
+	// leader at the top (stone pines often carry several; a broken veteran has none)
+	const tops = broken ? 0 : pine ? rng.int( 2, 4 ) : 1;
 	for ( let m = 0; m < tops; m ++ ) {
 
 		const off = m === 0 ? new THREE.Vector3() : new THREE.Vector3( rng.range( - 1, 1 ), rng.range( - 1.4, - 0.5 ), rng.range( - 1, 1 ) );
@@ -295,7 +354,7 @@ export function makeConifer( rng, species ) {
 
 	}
 
-	return { geometry: B.build(), height: H, radius: R + 0.4, species };
+	return { geometry: B.build(), height: H, radius: ( form === 'old' ? R * 1.5 : R ) + 0.4, species };
 
 }
 

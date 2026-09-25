@@ -24,6 +24,7 @@ import { Waterfowl } from './fauna/waterfowl.js';
 import { LeapingFish } from './fauna/fish.js';
 import { Shallows } from './fauna/fishSchool.js';
 import { RiverFish } from './fauna/riverFish.js';
+import { MoreBirds } from './fauna/moreBirds.js';
 import { Mammals } from './fauna/mammals.js';
 import { creatureMaterial, PartBuilder } from './fauna/creature.js';
 import { Soundscape } from './audio.js';
@@ -143,7 +144,7 @@ export class App {
 
 		await step( 0.5, 'Growing the larches' );
 		this.forest = new Forest( td, this.quality, r, await deadwoodP );
-		if ( this.options.showcase ) this.forest.showcase = { x: 30, z: 560 };
+		if ( this.options.showcase ) this.forest.showcase = { x: 30, z: 560, page: this.options.showcasePage || 0 };
 		this.treeCount = this.forest.place();
 		await step( 0.6, 'Turning the larches gold' );
 		this.scene.add( this.forest.build() );
@@ -173,6 +174,8 @@ export class App {
 		this.scene.add( this.shallows.group );
 		this.riverFish = new RiverFish( td, this.streams.path );
 		this.scene.add( this.riverFish.group );
+		this.moreBirds = new MoreBirds( td, this.water );
+		this.scene.add( this.moreBirds.group );
 		this.mammals = new Mammals( td, this.forest, this.audio, this.quality );
 		this.scene.add( this.mammals.group );
 		// marmots crop the turf short around their burrows
@@ -198,6 +201,15 @@ export class App {
 		this.controls.onClick = ( e ) => this.throwStone( e );
 		const p = this.options.cam;
 		this.controls.setPose( ...( p || START_POSE ) );
+		// debug: ?cam=x,y,z&look=x,y,z aims the camera at a point
+		if ( p && this.options.look ) {
+
+			const [ lx, ly, lz ] = this.options.look;
+			const dx = lx - p[ 0 ], dy = ly - p[ 1 ], dz = lz - p[ 2 ];
+			this.controls.setPose( p[ 0 ], p[ 1 ], p[ 2 ], Math.atan2( - dx, - dz ) * 180 / Math.PI, Math.atan2( dy, Math.hypot( dx, dz ) ) * 180 / Math.PI );
+
+		}
+
 		// on foot by default (screenshots and the trailer place the camera freely)
 		this.controls.walk = ! this.options.shot;
 		// debug: ?prop=log|fern|heath|mush frames the nearest one of those to the start
@@ -492,6 +504,7 @@ export class App {
 		this.fish.update( dt, this.camera, true );
 		this.shallows.update( dt, this.camera );
 		this.riverFish.update( dt, t, this.camera );
+		this.moreBirds.update( dt, t, this.options.follow || this.director ? { position: new THREE.Vector3( 1e4, 0, 1e4 ) } : this.camera );
 		// (the debug follow camera must not spook what it films)
 		this.mammals.update( dt, t, this.options.follow || this.director ? { position: new THREE.Vector3( 1e4, 0, 1e4 ) } : this.camera, 1 - Math.min( 1, Math.abs( sunEl + 1 ) / 7 ) );
 		this.mammals.lod( this.camera );

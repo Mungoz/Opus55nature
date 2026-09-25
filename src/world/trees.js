@@ -358,7 +358,7 @@ void main() {
 }
 `;
 
-const MAX_VARIANTS = 16;
+const MAX_VARIANTS = 24;
 const IMP_COLS = 8;
 
 const bbVert = /* glsl */ `
@@ -393,7 +393,8 @@ void main() {
 	vec3 fwd = vec3( toC.x, 0.0, toC.y ) / max( d, 1e-3 );
 	vec3 right = vec3( fwd.z, 0.0, -fwd.x );
 	vec4 dim = uDim[ vi ];
-	vec3 wp = o + right * position.x * dim.x * s + vec3( 0.0, ( position.y * dim.y + dim.z ) * s, 0.0 );
+	float aspect = abs( aVar.y ), flip = sign( aVar.y );
+	vec3 wp = o + right * position.x * dim.x * s * aspect + vec3( 0.0, ( position.y * dim.y + dim.z ) * s, 0.0 );
 	// lean slightly toward the camera when seen from above so trees don't look paper-thin
 	vec3 toCam3 = normalize( cameraPosition - o );
 	wp += fwd * position.y * dim.y * s * clamp( toCam3.y, 0.0, 0.6 ) * 0.5;
@@ -402,12 +403,12 @@ void main() {
 	float rnd = hash12( floor( o.xz * 3.0 ) );
 	wp.xz += wdir * position.y * position.y * s * uWind.z * ( 0.25 + 0.12 * sin( uTime + rnd * 6.28 ) );
 	vec4 cell = uCell[ vi ];
-	vUv = cell.xy + vec2( 0.5 + position.x * aVar.y, position.y ) * cell.zw;
+	vUv = cell.xy + vec2( 0.5 + position.x * flip, position.y ) * cell.zw;
 	vWorldPos = wp;
 	vRight = right;
 	vFwd = fwd;
 	vFade = fade;
-	vFlip = aVar.y;
+	vFlip = flip;
 	vRnd = rnd;
 	gl_Position = projectionMatrix * viewMatrix * vec4( wp, 1.0 );
 }
@@ -488,8 +489,12 @@ export class Forest {
 			makeBroadleaf( rng, 'aspen' ), makeBroadleaf( rng, 'aspen' ),
 			makeBroadleaf( rng, 'rowan' ), makeBroadleaf( rng, 'rowan' ),
 			makeSnag( rng ), makeSnag( rng ),
+			// growth forms, so a stand is not a row of the same tree
+			makeConifer( rng, 'spruce', 'narrow' ), makeConifer( rng, 'spruce', 'old' ), makeConifer( rng, 'spruce', 'young' ),
+			makeConifer( rng, 'larch', 'old' ), makeConifer( rng, 'larch', 'young' ), makeConifer( rng, 'larch', 'old' ),
+			makeConifer( rng, 'pine', 'old' ), makeBroadleaf( rng, 'birch' ),
 		);
-		this.speciesVariants = { spruce: [ 0, 1, 2 ], larch: [ 3, 4, 5 ], birch: [ 6, 7 ], pine: [ 8, 9 ], aspen: [ 10, 11 ], rowan: [ 12, 13 ], snag: [ 14, 15 ] };
+		this.speciesVariants = { spruce: [ 0, 1, 2, 16, 16, 17, 18 ], larch: [ 3, 4, 5, 19, 20, 21 ], birch: [ 6, 7, 23 ], pine: [ 8, 9, 22 ], aspen: [ 10, 11 ], rowan: [ 12, 13 ], snag: [ 14, 15 ] };
 		// understorey and forest-floor props, drawn only near the camera
 		this.props = {
 			fern: { variants: [ makeFern( rng ), makeFern( rng ) ], maxD: 120, cap: 9000, shadow: true },
@@ -649,7 +654,8 @@ export class Forest {
 			const variant = vs[ Math.floor( rng.next() * vs.length ) ];
 			let s = rng.range( 0.72, 1.15 ) * ( 1 - 0.4 * THREE.MathUtils.smoothstep( h, treeline - 250, treeline ) );
 			if ( forest < 0.3 ) s *= rng.range( 0.75, 1.0 );
-			trees.push( { x, y: h - 0.15, z, s, rot: rng.next() * Math.PI * 2, variant } );
+			const aspect = rng.range( 0.82, 1.2 );
+			trees.push( { x, y: h - 0.15, z, s, rot: rng.next() * Math.PI * 2, variant, aspect, lean: rng.range( - 0.03, 0.03 ), leanA: rng.next() * Math.PI * 2 } );
 
 		};
 
@@ -701,9 +707,12 @@ export class Forest {
 			const { x, z } = this.showcase;
 			this.trees = this.trees.filter( ( t ) => Math.hypot( t.x - x, t.z - z ) > 90 );
 			this.shrubs = this.shrubs.filter( ( t ) => Math.hypot( t.x - x, t.z - z ) > 60 );
+			// ?showcase=N shows variants 8N..8N+7
+			const page = this.showcase.page || 0;
 			this.variants.forEach( ( v, i ) => {
 
-				const px = x + ( i - 3.5 ) * 11, pz = z - 38;
+				if ( Math.floor( i / 8 ) !== page ) return;
+				const px = x + ( ( i % 8 ) - 3.5 ) * 11, pz = z - 38;
 				this.trees.push( { x: px, y: td.heightAt( px, pz ) - 0.15, z: pz, s: 1, rot: i, variant: i } );
 
 			} );
@@ -867,7 +876,7 @@ export class Forest {
 		this.trees.forEach( ( t, i ) => {
 
 			aTree.set( [ t.x, t.y, t.z, t.s ], i * 4 );
-			aVar.set( [ t.variant, t.rot > Math.PI ? 1 : - 1 ], i * 2 );
+			aVar.set( [ t.variant, ( t.rot > Math.PI ? 1 : - 1 ) * ( t.aspect ?? 1 ) ], i * 2 );
 
 		} );
 		geo.setAttribute( 'aTree', new THREE.InstancedBufferAttribute( aTree, 4 ) );
@@ -944,7 +953,23 @@ export class Forest {
 
 		};
 
-		this.treeMatrices = compose( this.trees );
+		// trees: width scaled apart from height, and a slight lean
+		{
+
+			const arr = new Float32Array( this.trees.length * 16 );
+			const ql = new THREE.Quaternion(), axis = new THREE.Vector3();
+			this.trees.forEach( ( t, i ) => {
+
+				const a = t.aspect ?? 1;
+				axis.set( Math.cos( t.leanA ?? 0 ), 0, Math.sin( t.leanA ?? 0 ) );
+				q.setFromAxisAngle( axis, t.lean ?? 0 ).multiply( ql.setFromAxisAngle( up, t.rot ) );
+				mat.compose( p.set( t.x, t.y, t.z ), q, s.set( t.s * a, t.s, t.s * a ) );
+				mat.toArray( arr, i * 16 );
+
+			} );
+			this.treeMatrices = arr;
+
+		}
 		this.shrubMatrices = compose( this.shrubs );
 
 		const qz = new THREE.Quaternion(), zAxis = new THREE.Vector3( 0, 0, 1 );
