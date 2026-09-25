@@ -11,11 +11,14 @@ import { SunShadows } from './world/shadows.js';
 import { Water } from './world/water.js';
 import { Forest } from './world/trees.js';
 import { Meadow } from './world/grass.js';
+import { GroundCover } from './world/groundcover.js';
 import { Rocks } from './world/rocks.js';
 import { Particles } from './world/particles.js';
 import { Murmuration, GeeseFlight, Eagles } from './fauna/birds.js';
 import { Waterfowl } from './fauna/waterfowl.js';
 import { LeapingFish } from './fauna/fish.js';
+import { Shallows } from './fauna/fishSchool.js';
+import { Mammals } from './fauna/mammals.js';
 import { creatureMaterial, PartBuilder } from './fauna/creature.js';
 import { Soundscape } from './audio.js';
 import { Tour } from './tour.js';
@@ -76,8 +79,13 @@ export class App {
 	async load( progress = () => {} ) {
 
 		const r = this.renderer;
+		this.loadTimes = [];
+		let tPrev = performance.now();
 		const step = async ( frac, label ) => {
 
+			const now = performance.now();
+			this.loadTimes.push( [ label, Math.round( now - tPrev ) ] );
+			tPrev = now;
 			progress( frac, label );
 			await nextFrame();
 
@@ -131,6 +139,8 @@ export class App {
 		await step( 0.72, 'Sowing the meadows' );
 		this.meadow = new Meadow( this.quality );
 		this.scene.add( this.meadow.group );
+		this.groundCover = new GroundCover( this.quality );
+		this.scene.add( this.groundCover.group );
 		this.particles = new Particles( td, this.quality );
 		this.scene.add( this.particles.group );
 
@@ -140,6 +150,10 @@ export class App {
 		this.eagles = new Eagles( td );
 		this.waterfowl = new Waterfowl( td, this.water );
 		this.fish = new LeapingFish( td, this.water, this.particles, ( p, s ) => this.audio.splash( p, s ) );
+		this.shallows = new Shallows( td );
+		this.scene.add( this.shallows.group );
+		this.mammals = new Mammals( td, this.forest, this.audio );
+		this.scene.add( this.mammals.group );
 		this.scene.add( this.starlings.mesh, this.geese.mesh, this.eagles.mesh, this.waterfowl.group, this.fish.mesh );
 		this._buildStone();
 		this.weather = new Weather( td, this.quality, this.audio );
@@ -162,14 +176,39 @@ export class App {
 		this.updateTime( 0 );
 		td.updateShadows( this.sky.sunDir, true );
 
+		// debug: ?hide=name,name hides objects by name
+		for ( const n of ( this.options.hide || '' ).split( ',' ).filter( Boolean ) ) this.scene.traverse( ( o ) => { if ( o.name === n ) o.visible = false; } );
+
 		await step( 0.9, 'Warming the shaders' );
 		// compile every program up front so the first seconds are smooth
 		this.forest.update( this.camera );
 		this.rocks.update( this.camera );
-		r.compile( this.scene, this.camera );
+		// compile in the background where the browser supports it (keeps the loader animating)
+		await r.compileAsync( this.scene, this.camera );
 		this.render();
 
 		await step( 1, 'Ready' );
+
+	}
+
+	// debug camera that frames a creature (?follow=minnows|trout|swan|deer|marmot|squirrel)
+	_debugFollow() {
+
+		const f = this.options.follow;
+		let p = null, h = 2.2, back = 1.4;
+		if ( f === 'minnows' ) { p = this.shallows.groups[ 0 ].pos[ 0 ]; h = 6.5; back = 1.2; }
+		if ( f === 'trout' ) { p = this.shallows.groups[ 2 ].pos[ 0 ]; h = 3; back = 2.5; }
+		if ( f === 'duck' ) { const b = this.waterfowl.birds[ 2 ]; p = b.pos.clone().setY( 0.12 ); h = 0.12; back = 1.3; this._followHeading = b.heading; }
+		if ( f === 'swan' ) { const b = this.waterfowl.birds[ 0 ]; p = b.pos.clone().setY( 0.5 ); h = 0.3; back = 4.5; this._followHeading = b.heading; }
+		if ( this.mammals && this.mammals.debugTarget ) { const d = this.mammals.debugTarget( f ); if ( d ) { p = d.p; h = d.h; back = d.back; this._followHeading = d.heading; } }
+		if ( ! p ) return;
+		// side-on when the target reports its heading (studio view), else a 3/4 view
+		const hd = this._followHeading;
+		const sx = hd !== undefined ? Math.cos( hd + ( this.options.angle || 0 ) ) : 0.7, sz = hd !== undefined ? - Math.sin( hd + ( this.options.angle || 0 ) ) : 0.7;
+		const gx = p.x + back * sx, gz = p.z + back * sz;
+		this.camera.position.set( gx, hd !== undefined ? p.y + h : Math.max( this.terrainData.heightAt( gx, gz ), 0 ) + h, gz );
+		this.camera.lookAt( p.x, p.y, p.z );
+		this.camera.updateMatrixWorld();
 
 	}
 
@@ -196,7 +235,7 @@ export class App {
 			cam: probe( this.camera.position.x, this.camera.position.z ),
 			sunEl: Math.round( this.sky.sunElevation * 10 ) / 10,
 			scale: this.renderScale,
-			flock: [ ...this.starlings.pos.slice( 0, 3 ) ].map( Math.round ), attr: this.starlings.attractor.toArray().map( Math.round ), flockVis: this.starlings.mesh.visible, flockCount: this.starlings.mesh.count,
+			load: this.loadTimes,
 		};
 
 	}
@@ -208,6 +247,8 @@ export class App {
 		this.canvas.style.width = w + 'px';
 		this.canvas.style.height = h + 'px';
 		this.camera.aspect = w / h;
+		// keep a comfortable horizontal field of view on tall (portrait) screens
+		this.camera.fov = w < h ? Math.min( 82, 55 / Math.pow( w / h, 0.6 ) ) : 55;
 		this.camera.updateProjectionMatrix();
 		const pr = this.renderer.getPixelRatio();
 		this.post.setSize( w * pr, h * pr, this.renderScale );
@@ -229,6 +270,9 @@ export class App {
 		this.scene.remove( this.meadow.group );
 		this.meadow = new Meadow( q );
 		this.scene.add( this.meadow.group );
+		this.scene.remove( this.groundCover.group );
+		this.groundCover = new GroundCover( q );
+		this.scene.add( this.groundCover.group );
 		this.forest.setNearDistance( q.treeNear );
 		this.terrain.uniforms.uGrassFar.value = q.grassFar;
 		this.renderScale = 1;
@@ -375,6 +419,10 @@ export class App {
 		this.eagles.update( dt, t, sunEl > 1 && this.weather.state.overcast < 0.6 );
 		this.waterfowl.update( dt, t );
 		this.fish.update( dt, this.camera, true );
+		this.shallows.update( dt, this.camera );
+		// (the debug follow camera must not spook what it films)
+		this.mammals.update( dt, t, this.options.follow ? { position: new THREE.Vector3( 1e4, 0, 1e4 ) } : this.camera, 1 - Math.min( 1, Math.abs( sunEl + 1 ) / 7 ) );
+		if ( this.options.follow ) this._debugFollow();
 		this._updateStones( dt );
 
 		// leaves fall from nearby larches and birches
@@ -439,7 +487,8 @@ export class App {
 
 		// post parameters
 		const post = this.post;
-		post.exposure = this.exposureFor( this.sky.sunDir.y ) * ( 1 + this.weather.state.overcast * 1.1 );
+		post.exposure = this.exposureBias ?? 1;
+		post.dt = dt;
 		post.night = U.uNight.value;
 		_v.copy( this.sky.sunDir ).multiplyScalar( 1000 ).add( this.camera.position ).project( this.camera );
 		const onScreen = _v.z < 1 && Math.abs( _v.x ) < 1.4 && Math.abs( _v.y ) < 1.4;

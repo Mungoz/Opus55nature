@@ -29,6 +29,8 @@ export class Controls {
 		this.dragMoved = 0;
 		this.onClick = null;
 		this.touchMove = new THREE.Vector2();
+		this.touchVertical = 0;
+		this.onStick = null; // ( active, baseX, baseY, dx, dy ) for the on-screen joystick
 		this.eyeHeight = 1.7;
 
 		this._bind();
@@ -116,8 +118,10 @@ export class Controls {
 
 			for ( const t of e.changedTouches ) {
 
-				const side = t.clientX < window.innerWidth * 0.45 ? 'move' : 'look';
+				const side = t.clientX < window.innerWidth * 0.42 ? 'move' : 'look';
+				if ( side === 'move' && [ ...this._touches.values() ].some( ( s ) => s.side === 'move' ) ) continue;
 				this._touches.set( t.identifier, { side, x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY, t0: performance.now() } );
+				if ( side === 'move' ) this.onStick?.( true, t.clientX, t.clientY, 0, 0 );
 
 			}
 
@@ -133,7 +137,21 @@ export class Controls {
 				if ( s.side === 'look' ) look( ( t.clientX - s.x ) * 1.4, ( t.clientY - s.y ) * 1.4 );
 				s.x = t.clientX;
 				s.y = t.clientY;
-				if ( s.side === 'move' ) this.touchMove.set( THREE.MathUtils.clamp( ( s.x - s.x0 ) / 60, - 1, 1 ), THREE.MathUtils.clamp( ( s.y - s.y0 ) / 60, - 1, 1 ) );
+				if ( s.side === 'move' ) {
+
+					let dx = s.x - s.x0, dy = s.y - s.y0;
+					const len = Math.hypot( dx, dy ), max = 52;
+					if ( len > max ) {
+
+						dx *= max / len;
+						dy *= max / len;
+
+					}
+
+					this.touchMove.set( dx / max, dy / max );
+					this.onStick?.( true, s.x0, s.y0, dx, dy );
+
+				}
 
 			}
 
@@ -145,7 +163,12 @@ export class Controls {
 			for ( const t of e.changedTouches ) {
 
 				const s = this._touches.get( t.identifier );
-				if ( s && s.side === 'move' ) this.touchMove.set( 0, 0 );
+				if ( s && s.side === 'move' ) {
+
+					this.touchMove.set( 0, 0 );
+					this.onStick?.( false );
+
+				}
 				if ( s && s.side === 'look' && performance.now() - s.t0 < 250 && Math.hypot( t.clientX - s.x0, t.clientY - s.y0 ) < 10 && this.onClick ) this.onClick( { clientX: t.clientX, clientY: t.clientY } );
 				this._touches.delete( t.identifier );
 
@@ -195,6 +218,7 @@ export class Controls {
 		if ( k.has( 'ControlLeft' ) || k.has( 'KeyC' ) || k.has( 'KeyQ' ) ) u -= 1;
 		f -= this.touchMove.y;
 		s += this.touchMove.x;
+		u += this.touchVertical;
 
 		if ( this.walk ) {
 

@@ -22,6 +22,9 @@ const options = {
 	showcase: params.has( 'showcase' ),
 	weather: params.get( 'weather' ) || ( shotMode ? undefined : stored.weather ),
 	shot: shotMode,
+	hide: params.get( 'hide' ) || '',
+	follow: params.get( 'follow' ) || '',
+	angle: params.has( 'angle' ) ? num( 'angle' ) * Math.PI / 180 : 0,
 };
 
 const bar = document.getElementById( 'load-bar' );

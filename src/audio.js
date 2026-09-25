@@ -343,6 +343,105 @@ export class Soundscape {
 
 	}
 
+	// Red deer stag in the rut: a run of deep, rough groans that echo round the valley.
+	roar( pos ) {
+
+		if ( ! this.enabled ) return;
+		const ctx = this.ctx;
+		const dest = this._panner( pos );
+		const wet = ctx.createGain();
+		wet.gain.value = 0.8;
+		dest.connect( wet ).connect( this.reverbSend );
+		let t = ctx.currentTime + 0.05;
+		const n = 3 + Math.floor( Math.random() * 3 );
+		for ( let i = 0; i < n; i ++ ) {
+
+			const dur = i === 0 ? 1.4 : 0.55 + Math.random() * 0.35;
+			const o = ctx.createOscillator();
+			o.type = 'sawtooth';
+			const f0 = 95 + Math.random() * 25;
+			o.frequency.setValueAtTime( f0 * 0.8, t );
+			o.frequency.linearRampToValueAtTime( f0 * 1.25, t + dur * 0.35 );
+			o.frequency.linearRampToValueAtTime( f0 * 0.75, t + dur );
+			// rasp: fast jitter on the pitch
+			const jit = ctx.createOscillator();
+			jit.frequency.value = 31;
+			const jg = ctx.createGain();
+			jg.gain.value = 9;
+			jit.connect( jg ).connect( o.frequency );
+			const g = ctx.createGain();
+			g.gain.setValueAtTime( 0.0001, t );
+			g.gain.exponentialRampToValueAtTime( 0.5, t + 0.08 );
+			g.gain.setValueAtTime( 0.45, t + dur * 0.7 );
+			g.gain.exponentialRampToValueAtTime( 0.0001, t + dur );
+			// vocal-tract formants
+			for ( const [ f, q, k ] of [ [ 420, 4, 1 ], [ 950, 6, 0.6 ], [ 2300, 8, 0.25 ] ] ) {
+
+				const bp = ctx.createBiquadFilter();
+				bp.type = 'bandpass';
+				bp.frequency.value = f;
+				bp.Q.value = q;
+				const fg = ctx.createGain();
+				fg.gain.value = k;
+				o.connect( bp ).connect( fg ).connect( g );
+
+			}
+
+			g.connect( dest );
+			o.start( t );
+			jit.start( t );
+			o.stop( t + dur + 0.05 );
+			jit.stop( t + dur + 0.05 );
+			t += dur + 0.12 + Math.random() * 0.2;
+
+		}
+
+	}
+
+	bark( pos ) {
+
+		if ( ! this.enabled ) return;
+		const dest = this._panner( pos );
+		const t = this.ctx.currentTime + 0.02;
+		const bp = this.ctx.createBiquadFilter();
+		bp.type = 'bandpass';
+		bp.frequency.value = 700;
+		bp.Q.value = 2;
+		bp.connect( dest );
+		this._tone( bp, t, 0.22, 320, 210, 0.9, 'sawtooth' );
+
+	}
+
+	// Alpine marmot alarm: a piercing, falling whistle, sometimes repeated.
+	whistle( pos ) {
+
+		if ( ! this.enabled ) return;
+		const dest = this._panner( pos );
+		let t = this.ctx.currentTime + 0.03;
+		const n = 1 + Math.floor( Math.random() * 3 );
+		for ( let i = 0; i < n; i ++ ) {
+
+			this._tone( dest, t, 0.28, 3300, 2500, 0.4 );
+			t += 0.45 + Math.random() * 0.2;
+
+		}
+
+	}
+
+	chatter( pos ) {
+
+		if ( ! this.enabled ) return;
+		const dest = this._panner( pos );
+		let t = this.ctx.currentTime + 0.02;
+		for ( let i = 0; i < 10; i ++ ) {
+
+			this._tone( dest, t, 0.035, 4200 + Math.random() * 800, 3000, 0.12, 'square' );
+			t += 0.055 + Math.random() * 0.03;
+
+		}
+
+	}
+
 	// Thunder arrives after the flash at the speed of sound: a crack, then a long rumble.
 	thunder( pos, dist ) {
 

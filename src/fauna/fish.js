@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { creatureMaterial, PartBuilder } from './creature.js';
+import { creatureMaterial, PartBuilder, MAT } from './creature.js';
 import { RNG } from '../core/rng.js';
 
 // Rainbow trout: lathe body along +z with tail and fins.
-function troutGeometry() {
+// Rainbow trout (or, with minnow = true, a silvery minnow).
+export function troutGeometry( minnow = false ) {
 
 	const b = new PartBuilder();
 	const prof = [];
@@ -23,18 +24,18 @@ function troutGeometry() {
 	const nb = body.toNonIndexed();
 	const pos = nb.getAttribute( 'position' );
 	const colors = [];
-	const back = new THREE.Color( '#3b4a2c' ), band = new THREE.Color( '#b86a6a' ), belly = new THREE.Color( '#d8d8cf' );
+	const back = new THREE.Color( minnow ? '#4a4f3c' : '#3b4a2c' ), band = new THREE.Color( minnow ? '#b9bcb4' : '#b86a6a' ), belly = new THREE.Color( minnow ? '#e6e6de' : '#d8d8cf' );
 	for ( let i = 0; i < pos.count; i ++ ) {
 
 		const y = pos.getY( i ) / 0.063;
 		const c = y > 0.3 ? back.clone() : ( y > - 0.2 ? band.clone().lerp( back, ( y + 0.2 ) / 0.5 * 0.4 ) : belly.clone() );
-		if ( y > 0 && Math.sin( pos.getZ( i ) * 180 ) * Math.sin( pos.getX( i ) * 150 ) > 0.85 ) c.multiplyScalar( 0.3 ); // spots
+		if ( ! minnow && y > 0 && Math.sin( pos.getZ( i ) * 180 ) * Math.sin( pos.getX( i ) * 150 ) > 0.85 ) c.multiplyScalar( 0.3 ); // spots
 		c.convertSRGBToLinear();
 		colors.push( c.r, c.g, c.b );
 
 	}
 
-	b.add( nb, '#ffffff' );
+	b.add( nb, '#ffffff', null, 0, MAT.SCALES );
 	b.parts[ b.parts.length - 1 ].setAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
 	// tail, dorsal and pectoral fins
 	b.tris( [ [ 0, 0, - 0.2 ], [ 0, 0.06, - 0.31 ], [ 0, - 0.06, - 0.31 ] ], '#4a4f35' );
@@ -54,7 +55,7 @@ export class LeapingFish {
 		this.particles = particles;
 		this.onSplash = onSplash;
 		this.rng = new RNG( 314 );
-		this.material = creatureMaterial();
+		this.material = creatureMaterial( { wag: 0.025, wagSpeed: 22 } );
 		this.mesh = new THREE.Mesh( troutGeometry(), this.material );
 		this.mesh.visible = false;
 		this.mesh.castShadow = true;

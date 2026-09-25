@@ -130,7 +130,9 @@ float cloudShadow( vec3 wp ) {
 float cascadeShadow( vec3 wp, vec3 n ) {
 	float s = 1.0;
 	#if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
-		vec4 c0 = directionalShadowMatrix[ 0 ] * vec4( wp + n * directionalLightShadows[ 0 ].shadowNormalBias, 1.0 );
+		// slope-scaled normal offset: grazing light needs more to avoid banding
+		float slopeK = 1.0 + 2.5 * ( 1.0 - saturate( dot( n, uSunDir ) ) );
+		vec4 c0 = directionalShadowMatrix[ 0 ] * vec4( wp + n * directionalLightShadows[ 0 ].shadowNormalBias * slopeK, 1.0 );
 		vec3 p0 = c0.xyz / c0.w;
 		p0.z += directionalLightShadows[ 0 ].shadowBias;
 		vec2 e0 = min( p0.xy, 1.0 - p0.xy );
@@ -142,7 +144,7 @@ float cascadeShadow( vec3 wp, vec3 n ) {
 		#if NUM_DIR_LIGHT_SHADOWS > 1
 			float s1 = 1.0;
 			if ( w0 < 1.0 ) {
-				vec4 c1 = directionalShadowMatrix[ 1 ] * vec4( wp + n * directionalLightShadows[ 1 ].shadowNormalBias, 1.0 );
+				vec4 c1 = directionalShadowMatrix[ 1 ] * vec4( wp + n * directionalLightShadows[ 1 ].shadowNormalBias * slopeK, 1.0 );
 				vec3 p1 = c1.xyz / c1.w;
 				p1.z += directionalLightShadows[ 1 ].shadowBias;
 				vec2 e1 = min( p1.xy, 1.0 - p1.xy );

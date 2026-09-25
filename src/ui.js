@@ -150,12 +150,51 @@ export function initUI( app ) {
 
 	} );
 	const speedBtns = document.querySelectorAll( '#time-speed button' );
+	const tbPlay = $( '#tb-play' );
 	const setSpeed = ( s ) => {
 
 		app.timeSpeed = s;
 		settings.speed = s;
+		if ( s > 0 ) settings.lastSpeed = s;
 		for ( const b of speedBtns ) b.classList.toggle( 'on', parseFloat( b.dataset.s ) === s );
+		tbPlay.classList.toggle( 'running', s > 0 );
 		persist();
+
+	};
+
+	// ---------- dock: time of day ----------
+	const tbSlider = $( '#tb-slider' );
+	const tbClock = $( '#tb-clock' );
+	const tbPhase = $( '#tb-phase' );
+	let tbDragging = false;
+	tbSlider.addEventListener( 'input', () => {
+
+		tbDragging = true;
+		app.hours = parseFloat( tbSlider.value );
+
+	} );
+	const tbEnd = () => ( tbDragging = false );
+	tbSlider.addEventListener( 'change', tbEnd );
+	tbSlider.addEventListener( 'pointerup', tbEnd );
+	tbSlider.addEventListener( 'pointerdown', ( e ) => e.stopPropagation() );
+	tbPlay.addEventListener( 'click', ( e ) => {
+
+		e.stopPropagation();
+		const s = app.timeSpeed > 0 ? 0 : ( settings.lastSpeed || 10 );
+		setSpeed( s );
+		toast( s > 0 ? 'Time flows' : 'Time holds still' );
+
+	} );
+	const phaseName = () => {
+
+		const el = app.sky.sunElevation;
+		const morning = app.hours < 12;
+		if ( el < - 12 ) return 'Night';
+		if ( el < - 4 ) return morning ? 'First light' : 'Blue hour';
+		if ( el < 1 ) return morning ? 'Dawn' : 'Sunset';
+		if ( el < 10 ) return morning ? 'Early morning' : 'Golden hour';
+		if ( el < 22 ) return morning ? 'Morning' : 'Afternoon';
+		return 'Midday';
 
 	};
 
@@ -163,24 +202,110 @@ export function initUI( app ) {
 	setSpeed( settings.speed );
 
 	// ---------- weather ----------
-	const wBtns = document.querySelectorAll( '#weather button' );
+	const wBtns = document.querySelectorAll( '#weatherbar button' );
 	const markWeather = () => {
 
-		for ( const b of wBtns ) b.classList.toggle( 'on', b.dataset.w === app.weather.name );
+		for ( const b of wBtns ) {
+
+			if ( b.dataset.w === 'auto' ) b.classList.toggle( 'on', app.weather.dynamic );
+			else b.classList.toggle( 'on', b.dataset.w === app.weather.name );
+
+		}
 
 	};
 
-	for ( const b of wBtns ) b.addEventListener( 'click', () => {
+	app.weather.dynamic = settings.dynweather;
+	for ( const b of wBtns ) b.addEventListener( 'click', ( e ) => {
 
-		app.setWeather( b.dataset.w );
-		settings.weather = b.dataset.w;
+		e.stopPropagation();
+		if ( b.dataset.w === 'auto' ) {
+
+			app.weather.dynamic = ! app.weather.dynamic;
+			settings.dynweather = app.weather.dynamic;
+			toast( app.weather.dynamic ? 'The weather will change by itself' : 'The weather holds' );
+
+		} else {
+
+			app.setWeather( b.dataset.w );
+			settings.weather = b.dataset.w;
+			toast( b.title );
+
+		}
+
 		markWeather();
 		persist();
-		toast( b.textContent );
 
 	} );
 	markWeather();
-	setInterval( markWeather, 2000 );
+	setInterval( markWeather, 1000 );
+
+	// ---------- touch controls ----------
+	const touchUI = () => {
+
+		if ( document.body.classList.contains( 'touch' ) ) return;
+		document.body.classList.add( 'touch' );
+		$( '#hint' ).classList.add( 'gone' );
+
+	};
+
+	if ( window.matchMedia?.( '(pointer: coarse)' ).matches ) touchUI();
+	window.addEventListener( 'touchstart', touchUI, { once: true, passive: true } );
+	const stick = $( '#stick' ), knob = $( '#knob' );
+	app.controls.onStick = ( active, x, y, dx = 0, dy = 0 ) => {
+
+		stick.classList.toggle( 'active', active );
+		if ( active ) {
+
+			stick.style.left = ( x - stick.offsetWidth / 2 ) + 'px';
+			stick.style.top = ( y - stick.offsetHeight / 2 ) + 'px';
+			stick.style.bottom = 'auto';
+
+		} else {
+
+			stick.style.left = '';
+			stick.style.top = '';
+			stick.style.bottom = '';
+
+		}
+
+		knob.style.transform = `translate(${dx}px, ${dy}px)`;
+
+	};
+
+	for ( const b of document.querySelectorAll( '#touch-buttons button' ) ) {
+
+		const kind = b.dataset.touch;
+		const press = ( e ) => {
+
+			e.preventDefault();
+			e.stopPropagation();
+			if ( kind === 'walk' ) {
+
+				actions.walk();
+				b.classList.toggle( 'on', app.controls.walk );
+				return;
+
+			}
+
+			app.controls.touchVertical = kind === 'up' ? 1 : - 1;
+			b.classList.add( 'held' );
+
+		};
+
+		const release = () => {
+
+			if ( kind === 'walk' ) return;
+			app.controls.touchVertical = 0;
+			b.classList.remove( 'held' );
+
+		};
+
+		b.addEventListener( 'pointerdown', press );
+		b.addEventListener( 'pointerup', release );
+		b.addEventListener( 'pointercancel', release );
+		b.addEventListener( 'pointerleave', release );
+
+	}
 
 	// ---------- settings ----------
 	const qBtns = document.querySelectorAll( '#quality button' );
@@ -239,7 +364,6 @@ export function initUI( app ) {
 	} );
 	bindRange( 'sens', 'sens', ( v ) => ( app.controls.sensitivity = v ) );
 	bindCheck( 'aurora', 'aurora', ( v ) => ( app.sky.auroraEnabled = v ) );
-	bindCheck( 'dynweather', 'dynweather', ( v ) => ( app.weather.dynamic = v ) );
 	bindCheck( 'invert', 'invert', ( v ) => ( app.controls.invertY = v ) );
 	bindCheck( 'autores', 'autores', ( v ) => {
 
@@ -318,6 +442,13 @@ export function initUI( app ) {
 			}
 
 			if ( ! dragging && ! panels.time.hidden ) slider.value = app.hours;
+			if ( ! tbDragging ) tbSlider.value = app.hours;
+			if ( c !== tbClock.textContent ) {
+
+				tbClock.textContent = c;
+				tbPhase.textContent = phaseName();
+
+			}
 
 		},
 		settings,

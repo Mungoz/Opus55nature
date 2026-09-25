@@ -449,7 +449,7 @@ export class Forest {
 		const c1 = 6.2;
 		for ( let z = nz0; z < nz1; z += c1 ) for ( let x = nx0; x < nx1; x += c1 ) consider( x + rng.next() * c1, z + rng.next() * c1, c1 * c1, true );
 		// the wider valley
-		const c2 = 10.5;
+		const c2 = 8.5;
 		for ( let z = - R; z < R; z += c2 ) {
 
 			for ( let x = - R; x < R; x += c2 ) {

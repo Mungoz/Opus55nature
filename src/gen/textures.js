@@ -68,33 +68,137 @@ void main() {
 }
 `;
 
-const pebbleFrag = header + /* glsl */ `
+// Beach stone field: overlapping rounded stones of several sizes lying in
+// coarse grit (deliberately NOT a tessellation, so no mosaic look).
+const stoneFieldGLSL = /* glsl */ `
+// One layer of stones on a jittered grid; returns (height, stone id, rim darkness).
+vec3 stoneLayer( vec2 uv, float cells, float seed, float fill ) {
+	vec2 p = uv * cells;
+	vec2 cell = floor( p );
+	float best = 0.0, id = 0.0, rim = 1.0;
+	for ( int j = -1; j <= 1; j ++ )
+	for ( int i = -1; i <= 1; i ++ ) {
+		vec2 c = cell + vec2( float( i ), float( j ) );
+		vec2 cm = mod( c, vec2( cells ) );
+		vec3 h = hash32( cm * 1.37 + seed );
+		if ( h.z > fill ) continue;
+		vec2 ctr = c + 0.15 + 0.7 * h.xy;
+		float r = 0.38 + 0.42 * hash12( cm + seed + 3.1 );
+		float ang = hash12( cm + seed + 7.7 ) * 6.2832;
+		float asp = 0.55 + 0.45 * hash12( cm + seed + 5.3 );
+		vec2 d = p - ctr;
+		d = mat2( cos( ang ), -sin( ang ), sin( ang ), cos( ang ) ) * d;
+		d.y /= asp;
+		// slightly irregular outline
+		float wob = 1.0 + 0.08 * sin( atan( d.y, d.x ) * 3.0 + h.x * 20.0 ) + 0.05 * sin( atan( d.y, d.x ) * 5.0 + h.y * 30.0 );
+		float q = length( d ) / ( r * wob );
+		if ( q < 1.0 ) {
+			float flat_ = 0.35 + 0.65 * hash12( cm + seed + 9.1 );
+			float hh = pow( 1.0 - q * q, 0.35 + flat_ * 0.4 ) * ( 0.55 + 0.45 * r ) + 0.02;
+			if ( hh > best ) { best = hh; id = hash12( cm + seed + 11.3 ); rim = q; }
+		}
+	}
+	return vec3( best, id, rim );
+}
+vec3 stoneColor( float id, vec2 uv ) {
+	vec3 c = mix( vec3( 0.36, 0.35, 0.33 ), vec3( 0.62, 0.6, 0.56 ), fract( id * 3.7 ) );
+	c = mix( c, vec3( 0.5, 0.4, 0.31 ), step( 0.72, fract( id * 7.13 ) ) * 0.8 );   // rusty
+	c = mix( c, vec3( 0.8, 0.78, 0.74 ), step( 0.9, fract( id * 13.7 ) ) );         // quartz
+	c = mix( c, vec3( 0.2, 0.21, 0.22 ), step( 0.84, fract( id * 3.31 ) ) * 0.85 );  // dark schist
+	// granite speckle and faint banding
+	float sp = tgnoise( uv * 520.0, vec2( 520.0 ) );
+	c *= 0.86 + 0.2 * smoothstep( -0.2, 0.6, sp );
+	return c;
+}
+`;
+
+const pebbleFrag = header + stoneFieldGLSL + /* glsl */ `
 void main() {
 	vec2 uv = gl_FragCoord.xy / uRes;
-	vec2 warp = vec2( tfbm( uv * 6.0, vec2( 6.0 ), 3 ), tfbm( uv * 6.0 + 4.0, vec2( 6.0 ), 3 ) ) * 0.25;
-	vec3 v = tvoronoi( uv * 14.0 + warp, vec2( 14.0 ) );
-	vec3 v2 = tvoronoi( uv * 37.0 + warp * 2.0, vec2( 37.0 ) );
-	float edge = v.y - v.x;
-	float stone = smoothstep( 0.02, 0.18, edge );
-	float dome = sqrt( stone );
-	float edge2 = v2.y - v2.x;
-	float small = smoothstep( 0.03, 0.15, edge2 ) * ( 1.0 - stone );
-	float sand = tgnoise( uv * 400.0, vec2( 400.0 ) ) * 0.5 + 0.5;
-	float h = dome * 0.75 + sqrt( small ) * 0.25 + sand * 0.05;
+	vec3 big = stoneLayer( uv, 7.0, 1.0, 0.55 );
+	vec3 mid = stoneLayer( uv, 15.0, 2.0, 0.75 );
+	vec3 sml = stoneLayer( uv, 34.0, 3.0, 0.85 );
+	vec3 gra = stoneLayer( uv, 80.0, 4.0, 0.9 );
+	// grit and sand in the gaps
+	float g1 = tgnoise( uv * 260.0, vec2( 260.0 ) ) * 0.5 + 0.5;
+	float g2 = tgnoise( uv * 90.0, vec2( 90.0 ) ) * 0.5 + 0.5;
+	vec3 col = mix( vec3( 0.22, 0.2, 0.16 ), vec3( 0.42, 0.38, 0.31 ), g1 * 0.6 + g2 * 0.4 );
+	float h = 0.05 + g1 * 0.05;
+	float ao = 0.6;
+	// composite from small to big, taller stones win
+	vec3 layers[ 4 ];
+	layers[ 0 ] = gra; layers[ 1 ] = sml; layers[ 2 ] = mid; layers[ 3 ] = big;
+	float scales[ 4 ];
+	scales[ 0 ] = 0.18; scales[ 1 ] = 0.4; scales[ 2 ] = 0.7; scales[ 3 ] = 1.0;
+	for ( int k = 0; k < 4; k ++ ) {
+		vec3 L = layers[ k ];
+		float lh = L.x * scales[ k ];
+		if ( L.x > 0.0 && lh > h ) {
+			float edgeShade = smoothstep( 1.0, 0.7, L.z );
+			col = stoneColor( L.y + float( k ) * 0.31, uv ) * ( 0.62 + 0.38 * edgeShade );
+			// cast contact shadow of bigger stones onto what lies around them
+			h = lh;
+			ao = 0.55 + 0.45 * edgeShade;
+		}
+	}
+	col *= ao + 0.3;
+	gl_FragColor = vec4( clamp( col, 0.0, 1.0 ), clamp( h, 0.0, 1.0 ) );
+}
+`;
 
-	vec3 sandCol = mix( vec3( 0.46, 0.42, 0.34 ), vec3( 0.56, 0.52, 0.43 ), sand );
-	float id = v.z;
-	vec3 sc = mix( vec3( 0.40, 0.39, 0.37 ), vec3( 0.66, 0.64, 0.60 ), id );
-	sc = mix( sc, vec3( 0.52, 0.42, 0.33 ), step( 0.75, fract( id * 7.13 ) ) * 0.7 );
-	sc = mix( sc, vec3( 0.78, 0.77, 0.74 ), step( 0.92, fract( id * 13.7 ) ) );
-	sc = mix( sc, vec3( 0.26, 0.27, 0.28 ), step( 0.85, fract( id * 3.31 ) ) * 0.8 );
-	sc *= 0.9 + 0.12 * tgnoise( uv * 120.0, vec2( 120.0 ) );
-	vec3 sc2 = mix( vec3( 0.42, 0.40, 0.37 ), vec3( 0.6, 0.57, 0.52 ), v2.z );
-	vec3 col = mix( sandCol, sc2, smoothstep( 0.0, 0.3, small ) );
-	col = mix( col, sc, smoothstep( 0.0, 0.25, stone ) );
-	// rounded stones: shade by height so gaps read as deep, damp crevices
-	col *= mix( 0.35, 1.0, smoothstep( 0.0, 0.22, edge ) ) * ( 0.7 + 0.35 * dome );
-	gl_FragColor = vec4( col, h );
+// Meadow turf seen between and beyond the blades: short living and dead
+// blades, moss, clover and fallen larch needles over dark humus.
+const turfFrag = header + /* glsl */ `
+float segDist( vec2 p, vec2 a, vec2 b, out float t ) {
+	vec2 pa = p - a, ba = b - a;
+	t = clamp( dot( pa, ba ) / dot( ba, ba ), 0.0, 1.0 );
+	return length( pa - ba * t );
+}
+void main() {
+	vec2 uv = gl_FragCoord.xy / uRes;
+	float n = tfbm( uv * 5.0, vec2( 5.0 ), 5 );
+	vec3 col = mix( vec3( 0.07, 0.06, 0.04 ), vec3( 0.14, 0.11, 0.07 ), smoothstep( -0.5, 0.5, n ) );
+	float h = 0.1;
+	// moss cushions
+	float moss = smoothstep( 0.1, 0.45, tfbm( uv * 9.0 + 3.0, vec2( 9.0 ), 4 ) );
+	col = mix( col, vec3( 0.16, 0.2, 0.06 ) * ( 0.8 + 0.4 * tgnoise( uv * 200.0, vec2( 200.0 ) ) ), moss * 0.7 );
+	h += moss * 0.12;
+	// layers of short blades lying in all directions
+	for ( int k = 0; k < 5; k ++ ) {
+		float sc = 36.0 + float( k ) * 13.0;
+		vec2 p = uv * sc;
+		vec2 cell = floor( p );
+		for ( int j = -1; j <= 1; j ++ )
+		for ( int i = -1; i <= 1; i ++ ) {
+			vec2 c = cell + vec2( float( i ), float( j ) );
+			vec2 cm = mod( c, vec2( sc ) );
+			vec3 r = hash32( cm + float( k ) * 17.0 );
+			for ( int b = 0; b < 2; b ++ ) {
+				vec2 rb = hash22( cm + float( b ) * 7.3 + float( k ) );
+				vec2 a = c + rb;
+				float ang = ( r.x + float( b ) * 0.37 ) * 6.2832;
+				float len = 0.7 + 1.0 * r.y;
+				vec2 e = a + vec2( cos( ang ), sin( ang ) ) * len;
+				float t;
+				float d = segDist( p, a, e, t );
+				float w = 0.075 * ( 1.0 - t * 0.8 );
+				if ( d < w ) {
+					float kind = fract( r.z * 7.0 + float( b ) * 0.5 );
+					vec3 bc = kind < 0.45 ? vec3( 0.22, 0.3, 0.09 ) : ( kind < 0.75 ? vec3( 0.52, 0.44, 0.22 ) : ( kind < 0.9 ? vec3( 0.36, 0.25, 0.12 ) : vec3( 0.3, 0.34, 0.12 ) ) );
+					bc *= 0.75 + 0.5 * t * r.z;
+					float bh = 0.25 + float( k ) * 0.12 + t * 0.2;
+					if ( bh > h ) { col = bc * ( 0.8 + 0.4 * ( 1.0 - d / w ) ); h = bh; }
+				}
+			}
+		}
+	}
+	// three-lobed clover here and there
+	vec3 cv = tvoronoi( uv * 30.0 + 1.3, vec2( 30.0 ) );
+	if ( cv.z > 0.82 && cv.x < 0.28 ) { col = vec3( 0.14, 0.24, 0.07 ) * ( 0.8 + cv.x ); h = max( h, 0.6 ); }
+	// fallen golden larch needles
+	vec3 lv = tvoronoi( uv * 55.0 + 7.1, vec2( 55.0 ) );
+	if ( lv.z > 0.93 && lv.y - lv.x < 0.05 ) { col = vec3( 0.72, 0.52, 0.18 ); h = max( h, 0.7 ); }
+	gl_FragColor = vec4( clamp( col, 0.0, 1.0 ), clamp( h, 0.0, 1.0 ) );
 }
 `;
 
@@ -219,10 +323,10 @@ export class TextureBank {
 	}
 
 	// Material stacks as texture arrays (keeps the terrain under 16 sampler units).
-	// Layers: 0 rock, 1 pebbles, 2 soil. Albedo+height in one array, normals in another.
+	// Layers: 0 rock, 1 beach stones, 2 soil, 3 meadow turf. Albedo+height in one array, normals in another.
 	_bakeMaterials( size ) {
 
-		const layers = [ [ rockFrag, 9.0 ], [ pebbleFrag, 22.0 ], [ soilFrag, 7.0 ] ];
+		const layers = [ [ rockFrag, 9.0 ], [ pebbleFrag, 16.0 ], [ soilFrag, 7.0 ], [ turfFrag, 6.0 ] ];
 		const alb = this._arrayTarget( size, layers.length );
 		const nrm = this._arrayTarget( size, layers.length );
 		const res = new THREE.Vector2( size, size );

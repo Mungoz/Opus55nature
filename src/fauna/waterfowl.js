@@ -1,68 +1,7 @@
 import * as THREE from 'three';
-import { creatureMaterial, PartBuilder } from './creature.js';
+import { creatureMaterial } from './creature.js';
+import { swanGeometry, swanEyes, mallardGeometry, mallardEyes } from './swanModel.js';
 import { RNG } from '../core/rng.js';
-
-const M = ( fn ) => fn( new THREE.Matrix4() );
-
-function swanGeometry() {
-
-	const b = new PartBuilder();
-	// body: an ellipsoid with a raised, tapering stern
-	const body = new THREE.SphereGeometry( 1, 20, 14 );
-	const p = body.getAttribute( 'position' );
-	for ( let i = 0; i < p.count; i ++ ) {
-
-		let x = p.getX( i ), y = p.getY( i ), z = p.getZ( i );
-		x *= 0.34; y *= 0.25; z *= 0.66;
-		if ( z < - 0.25 ) y += ( - z - 0.25 ) * 0.55; // stern sweeps upward
-		if ( y > 0.05 && Math.abs( z ) < 0.4 ) y += 0.05 * ( 1 - Math.abs( z ) / 0.4 ); // folded wings arch
-		if ( y < - 0.12 ) y = - 0.12 + ( y + 0.12 ) * 0.4;
-		p.setXYZ( i, x, y + 0.12, z );
-
-	}
-
-	body.computeVertexNormals();
-	b.add( body, '#e9e7e1' );
-	// S-curved neck
-	const curve = new THREE.CatmullRomCurve3( [
-		new THREE.Vector3( 0, 0.2, 0.44 ), new THREE.Vector3( 0, 0.46, 0.56 ), new THREE.Vector3( 0, 0.72, 0.46 ), new THREE.Vector3( 0, 0.9, 0.5 ),
-	] );
-	b.add( new THREE.TubeGeometry( curve, 16, 0.052, 8 ), '#ebe9e3' );
-	b.add( new THREE.SphereGeometry( 1, 12, 10 ), '#ecebe6', M( ( m ) => m.makeScale( 0.065, 0.065, 0.11 ).setPosition( 0, 0.92, 0.55 ) ) );
-	// orange bill with black knob
-	b.add( new THREE.ConeGeometry( 0.032, 0.13, 8 ), '#d5611c', M( ( m ) => m.makeRotationX( Math.PI / 2 + 0.35 ).setPosition( 0, 0.895, 0.66 ) ) );
-	b.add( new THREE.SphereGeometry( 0.03, 8, 6 ), '#111111', M( ( m ) => m.makeTranslation( 0, 0.935, 0.615 ) ) );
-	for ( const s of [ - 1, 1 ] ) b.add( new THREE.SphereGeometry( 0.012, 6, 4 ), '#050505', M( ( m ) => m.makeTranslation( 0.05 * s, 0.93, 0.59 ) ) );
-	return b.build();
-
-}
-
-function mallardGeometry( drake ) {
-
-	const b = new PartBuilder();
-	const body = new THREE.SphereGeometry( 1, 16, 12 );
-	const p = body.getAttribute( 'position' );
-	for ( let i = 0; i < p.count; i ++ ) {
-
-		let x = p.getX( i ) * 0.15, y = p.getY( i ) * 0.11, z = p.getZ( i ) * 0.27;
-		if ( z < - 0.12 ) y += ( - z - 0.12 ) * 0.5;
-		if ( y < - 0.05 ) y = - 0.05 + ( y + 0.05 ) * 0.4;
-		p.setXYZ( i, x, y + 0.05, z );
-
-	}
-
-	body.computeVertexNormals();
-	b.add( body, drake ? '#8f8d86' : '#7a5b3c' );
-	// chest
-	b.add( new THREE.SphereGeometry( 1, 10, 8 ), drake ? '#5a3322' : '#6e5034', M( ( m ) => m.makeScale( 0.12, 0.1, 0.1 ).setPosition( 0, 0.07, 0.17 ) ) );
-	// head & neck
-	b.add( new THREE.SphereGeometry( 1, 10, 8 ), drake ? '#12402a' : '#6a4e33', M( ( m ) => m.makeScale( 0.065, 0.07, 0.085 ).setPosition( 0, 0.2, 0.22 ) ) );
-	if ( drake ) b.add( new THREE.CylinderGeometry( 0.05, 0.05, 0.012, 10 ), '#f0f0f0', M( ( m ) => m.makeTranslation( 0, 0.14, 0.215 ) ) );
-	b.add( new THREE.BoxGeometry( 0.045, 0.014, 0.075 ), drake ? '#c9b43a' : '#c07a2a', M( ( m ) => m.makeTranslation( 0, 0.19, 0.3 ) ) );
-	b.add( new THREE.ConeGeometry( 0.05, 0.08, 6 ), drake ? '#1a1a1a' : '#5d432a', M( ( m ) => m.makeRotationX( - Math.PI / 2 - 0.5 ).setPosition( 0, 0.11, - 0.3 ) ) );
-	return b.build();
-
-}
 
 // A bird paddling about the lake, wandering between deep-water waypoints.
 class Paddler {
@@ -110,15 +49,31 @@ export class Waterfowl {
 		};
 
 		const rng = this.rng;
-		const swanA = new Paddler( mk( swanGeo, 1.35 ), - 40, 260, 0.45, rng );
-		const swanB = new Paddler( mk( swanGeo, 1.25 ), - 44, 265, 0.45, rng, swanA, new THREE.Vector3( - 2.4, 0, - 2.2 ) );
+		const swanMesh = ( s ) => {
+
+			const m = mk( swanGeo, s );
+			m.add( swanEyes( this.material ) );
+			return m;
+
+		};
+
+		const swanA = new Paddler( swanMesh( 1.0 ), - 40, 260, 0.45, rng );
+		const swanB = new Paddler( swanMesh( 0.93 ), - 44, 265, 0.45, rng, swanA, new THREE.Vector3( - 2.4, 0, - 2.2 ) );
 		this.birds.push( swanA, swanB );
-		const lead = new Paddler( mk( drakeGeo, 1 ), 90, 330, 0.55, rng );
+		const duck = ( g ) => {
+
+			const m = mk( g, 1 );
+			m.add( mallardEyes( this.material ) );
+			return m;
+
+		};
+
+		const lead = new Paddler( duck( drakeGeo ), 90, 330, 0.55, rng );
 		this.birds.push( lead );
 		for ( let i = 0; i < 4; i ++ ) {
 
 			const off = new THREE.Vector3( rng.range( - 3, 3 ), 0, - 1.5 - i * 1.3 );
-			this.birds.push( new Paddler( mk( i % 2 ? drakeGeo : henGeo, 1 ), 90 + off.x, 330 + off.z, 0.55, rng, lead, off ) );
+			this.birds.push( new Paddler( duck( i % 2 ? drakeGeo : henGeo ), 90 + off.x, 330 + off.z, 0.55, rng, lead, off ) );
 
 		}
 

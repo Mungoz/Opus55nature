@@ -92,10 +92,35 @@ void main() {
 }
 `;
 
+// Eye adaptation: centre-weighted log-average luminance of the (tiny) last bloom
+// mip, eased toward over time. Stored in a 1x1 target and read by the composite.
+const adaptFrag = /* glsl */ `
+uniform sampler2D tSrc;
+uniform sampler2D tPrev;
+uniform float uBlend;
+varying vec2 vUv;
+void main() {
+	float acc = 0.0, wsum = 0.0;
+	for ( int j = 0; j < 9; j ++ ) for ( int i = 0; i < 16; i ++ ) {
+		vec2 uv = ( vec2( float( i ), float( j ) ) + 0.5 ) / vec2( 16.0, 9.0 );
+		vec3 c = texture2D( tSrc, uv ).rgb;
+		float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+		vec2 d = uv - vec2( 0.5, 0.45 );
+		float w = exp( -dot( d, d ) * 3.0 );
+		acc += log2( l + 1e-5 ) * w;
+		wsum += w;
+	}
+	float avg = acc / wsum;
+	float prev = texture2D( tPrev, vec2( 0.5 ) ).r;
+	gl_FragColor = vec4( mix( prev, avg, uBlend ), 0.0, 0.0, 1.0 );
+}
+`;
+
 const compositeFrag = /* glsl */ `
 uniform sampler2D tScene;
 uniform sampler2D tBloom;
 uniform sampler2D tRays;
+uniform sampler2D tAdapt;
 uniform float uExposure;
 uniform float uBloom;
 uniform float uRays;
@@ -150,7 +175,12 @@ void main() {
 	vec3 bloom = texture2D( tBloom, uv ).rgb;
 	c = mix( c, bloom, uBloom );
 	c += texture2D( tRays, uv ).rgb * uRays * uRaysTint;
-	c *= uExposure;
+	// auto exposure: map the adapted average to a key that sinks in the dark,
+	// so dusk and night stay dim and moody rather than being lifted to grey
+	float logL = texture2D( tAdapt, vec2( 0.5 ) ).r;
+	float key = mix( 0.03, 0.165, smoothstep( -12.5, -2.5, logL ) );
+	float ev = clamp( log2( key ) - logL, -2.0, 7.5 );
+	c *= exp2( ev ) * uExposure;
 
 	// night vision: rods lose colour and shift blue
 	float L = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
@@ -194,7 +224,13 @@ export class Post {
 		this.upPass = new FullscreenPass( passMaterial( upFrag, { tLow: { value: null }, tHigh: { value: null }, uTexel: { value: new THREE.Vector2() }, uRadius: { value: 1 } } ) );
 		this.raysPre = new FullscreenPass( passMaterial( raysPreFrag, { tScene: { value: null }, uSun: { value: this.sunScreen }, uAspect: { value: 1 } } ) );
 		this.raysBlur = new FullscreenPass( passMaterial( raysBlurFrag, { tSrc: { value: null }, uSun: { value: this.sunScreen }, uStep: { value: 1 } } ) );
+		this.adapt = [ 0, 1 ].map( () => makeTarget( 1, 1, { type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter } ) );
+		this.adaptPass = new FullscreenPass( passMaterial( adaptFrag, { tSrc: { value: null }, tPrev: { value: null }, uBlend: { value: 1 } } ) );
+		this._adaptIndex = 0;
+		this._adaptFrames = 0;
+		this.dt = 1 / 60;
 		this.composite = new FullscreenPass( passMaterial( compositeFrag, {
+			tAdapt: { value: null },
 			tScene: { value: null },
 			tBloom: { value: null },
 			tRays: { value: null },
@@ -303,6 +339,16 @@ export class Post {
 
 		}
 
+		// eye adaptation (a quick start, then a gentle ~2 s adaptation)
+		const prev = this.adapt[ this._adaptIndex ], next = this.adapt[ 1 - this._adaptIndex ];
+		const au = this.adaptPass.material.uniforms;
+		au.tSrc.value = this.down[ this.down.length - 1 ].texture;
+		au.tPrev.value = prev.texture;
+		au.uBlend.value = this._adaptFrames < 3 ? 1 : 1 - Math.exp( - this.dt * 1.6 );
+		this.adaptPass.render( r, next );
+		this._adaptIndex = 1 - this._adaptIndex;
+		this._adaptFrames ++;
+
 		// god rays
 		const raysOn = this.sunVisible > 0.001 && this.raysStrength > 0;
 		if ( raysOn ) {
@@ -323,6 +369,7 @@ export class Post {
 		cu.tScene.value = src;
 		cu.tBloom.value = low;
 		cu.tRays.value = this.raysA.texture;
+		cu.tAdapt.value = next.texture;
 		cu.uRays.value = raysOn ? this.raysStrength * this.sunVisible : 0;
 		cu.uExposure.value = this.exposure;
 		cu.uBloom.value = this.bloomStrength;

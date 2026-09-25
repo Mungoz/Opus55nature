@@ -105,11 +105,14 @@ uniform sampler2DArray tMatN;
 #define ROCK 0.0
 #define PEBBLE 1.0
 #define SOIL 2.0
+#define TURF 3.0
 uniform float uGrassFar;
 varying vec3 vWorldPos;
 
 vec3 decode( vec3 c ) { return pow( c, vec3( 2.2 ) ); }
 vec3 unpackN( vec4 t ) { vec2 xy = t.xy * 2.0 - 1.0; return vec3( xy, sqrt( max( 0.0, 1.0 - dot( xy, xy ) ) ) ); }
+// tangent-space slope of an xz-projected texture -> world-space perturbation
+vec3 tn2w( vec3 t ) { return vec3( t.x, 0.0, t.y ); }
 
 void main() {
 	vec3 wp = vWorldPos;
@@ -149,37 +152,45 @@ void main() {
 	float streak = smoothstep( 0.3, 0.85, gnoise( vec2( ( wp.x + wp.z ) * 0.05, h * 0.0025 ) ) );
 	rockAlb *= 1.0 - streak * 0.35 * smoothstep( 0.25, 0.5, steep );
 
-	// macro relief for distant faces: ribs and gullies the heightmap is too coarse to hold
+	// macro relief for distant faces: ribs, gullies and boulder fields the heightmap
+	// is too coarse to hold. Triplanar so steep faces don't stretch.
 	vec3 macroDN;
 	{
-		float e = 0.012;
-		vec2 a = wp.xz / 150.0, b = vec2( ( wp.x + wp.z ) * 0.7, wp.y * 1.6 ) / 150.0;
-		float a0 = texture2D( uNoiseTex, a ).r, ax = texture2D( uNoiseTex, a + vec2( e, 0.0 ) ).r, az = texture2D( uNoiseTex, a + vec2( 0.0, e ) ).r;
-		float b0 = texture2D( uNoiseTex, b ).g, bx = texture2D( uNoiseTex, b + vec2( e, 0.0 ) ).g, by = texture2D( uNoiseTex, b + vec2( 0.0, e ) ).g;
-		vec3 flat_ = vec3( a0 - ax, 0.0, a0 - az );
-		vec2 hz = normalize( vec2( N.x, N.z ) + 1e-4 );
-		vec3 wall_ = vec3( vec2( -hz.y, hz.x ) * ( b0 - bx ), b0 - by ).xzy;
-		macroDN = mix( flat_, wall_, smoothstep( 0.15, 0.45, steep ) ) * 9.0;
+		float e = 4.0;
+		#define MH( uv ) ( texture2D( uNoiseTex, ( uv ) / 170.0 ).r * 0.75 + texture2D( uNoiseTex, ( uv ) / 60.0 + 0.3 ).g * 0.25 )
+		float x0 = MH( wp.zy ), xz = MH( wp.zy + vec2( e, 0.0 ) ), xy = MH( wp.zy + vec2( 0.0, e ) );
+		float y0 = MH( wp.xz ), yx = MH( wp.xz + vec2( e, 0.0 ) ), yz = MH( wp.xz + vec2( 0.0, e ) );
+		float z0 = MH( wp.xy ), zx = MH( wp.xy + vec2( e, 0.0 ) ), zy = MH( wp.xy + vec2( 0.0, e ) );
+		#undef MH
+		vec3 g = vec3( 0.0, xy - x0, xz - x0 ) * bw.x + vec3( yx - y0, 0.0, yz - y0 ) * bw.y + vec3( zx - z0, zy - z0, 0.0 ) * bw.z;
+		g /= e;
+		macroDN = -( g - N * dot( g, N ) ) * 11.0;
 	}
 
-	// ---------- pebbles / shore ----------
-	vec2 puv = wp.xz / 1.5;
+	// ---------- beach stones ----------
+	vec2 puv = wp.xz / 2.4;
 	vec4 pebT = texture( tMat, vec3( puv, PEBBLE ) );
-	vec3 pebDN = unpackN( texture( tMatN, vec3( puv, PEBBLE ) ) );
-	vec3 pebAlb = decode( pebT.rgb ) * ( 0.62 + 0.3 * gnoise( wp.xz * 0.15 ) );
+	vec3 pebDN = tn2w( unpackN( texture( tMatN, vec3( puv, PEBBLE ) ) ) );
+	vec3 pebAlb = decode( pebT.rgb ) * ( 0.8 + 0.35 * gnoise( wp.xz * 0.11 ) );
 
 	// ---------- soil / forest floor ----------
 	vec2 suv = wp.xz / 3.2;
 	vec4 soilT = texture( tMat, vec3( suv, SOIL ) );
-	vec3 soilDN = unpackN( texture( tMatN, vec3( suv, SOIL ) ) );
+	vec3 soilDN = tn2w( unpackN( texture( tMatN, vec3( suv, SOIL ) ) ) );
 	vec3 soilAlb = decode( soilT.rgb );
 
-	// ---------- grass ground ----------
+	// ---------- meadow turf ----------
+	vec2 tuv = wp.xz / 2.2;
+	vec4 turfT = texture( tMat, vec3( tuv, TURF ) );
+	vec4 turfT2 = texture( tMat, vec3( wp.xz / 8.7 + 0.41, TURF ) );
+	vec3 turfDN = tn2w( unpackN( texture( tMatN, vec3( tuv, TURF ) ) ) );
+	vec3 turf = decode( mix( turfT.rgb, turfT2.rgb, 0.35 ) );
 	vec3 gcol = grassColor( wp.xz, h );
+	// tint the turf toward the local grass palette (patches of green, straw and rust)
+	vec3 tinted = mix( turf, gcol * ( luma( turf ) / max( luma( gcol ), 1e-3 ) ), 0.45 );
 	float nearG = 1.0 - smoothstep( 8.0, uGrassFar, dist );
-	// under the blades: dark matted thatch rather than bare soil
-	vec3 thatch = gcol * ( 0.38 + 0.25 * soilT.a ) + vec3( 0.012, 0.008, 0.003 );
-	vec3 grassGround = mix( gcol * 0.85, thatch, nearG );
+	// near: turf glimpsed between blades; far: turf blended with the blades' average colour
+	vec3 grassGround = mix( mix( tinted, gcol, 0.5 ), tinted * 0.85, nearG );
 
 	// ---------- layer weights ----------
 	float wGrass = bio.r;
@@ -190,26 +201,36 @@ void main() {
 	wRock = smoothstep( 0.0, 1.0, wRock * 1.5 - 0.25 + ( rockT.a - 0.5 ) * 0.9 );
 
 	vec3 alb = grassGround;
-	vec3 dn = soilDN * 0.3 * nearG;
+	vec3 dn = turfDN * 0.6;
 	float rough = 0.92;
+	float cav = turfT.a;
 	// forest floor
 	float fW = smoothstep( 0.15, 0.7, wForest ) * ( 1.0 - wGrass * 0.6 );
 	alb = mix( alb, soilAlb * vec3( 0.95, 0.9, 0.85 ), fW );
 	dn = mix( dn, soilDN, fW );
-	// bare ground where nothing grows (neither grass nor forest)
+	cav = mix( cav, soilT.a, fW );
+	// distant forest: the ground between far trees reads as continuous canopy
+	float canopyW = smoothstep( 0.06, 0.4, wForest ) * smoothstep( 120.0, 600.0, dist );
+	float larchK = saturate( 0.18 + smoothstep( 120.0, 520.0, h ) * 0.5 + gnoise( wp.xz * 0.012 + vec2( 11.0, -3.0 ) ) * 0.35 );
+	vec3 canopy = mix( decode( vec3( 0.1, 0.16, 0.1 ) ), decode( vec3( 0.62, 0.46, 0.16 ) ), smoothstep( 0.35, 0.8, larchK + gnoise( wp.xz * 0.05 ) * 0.25 ) );
+	canopy *= 0.75 + 0.5 * texture2D( uNoiseTex, wp.xz / 90.0 ).b;
+	alb = mix( alb, canopy, canopyW );
 	// scree and gravel where nothing grows (neither grass nor forest)
 	float bare = ( 1.0 - smoothstep( 0.05, 0.4, wGrass + wForest ) ) * ( 1.0 - wShore );
-	vec3 scree = mix( decode( texture( tMat, vec3( wp.xz / 3.0, PEBBLE ) ).rgb ) * 0.8, rockAlb, 0.55 );
+	vec3 scree = mix( decode( texture( tMat, vec3( wp.xz / 4.0, PEBBLE ) ).rgb ) * 0.8, rockAlb, 0.55 );
 	scree = mix( soilAlb, scree, smoothstep( 80.0, 300.0, h ) );
 	alb = mix( alb, scree, bare * 0.85 );
-	// shore
-	float sW = smoothstep( 0.2, 0.8, wShore + ( pebT.a - 0.5 ) * 0.4 );
+	// shore: a strand of stones with a ragged, natural edge into the turf
+	float edgeN = gnoise( wp.xz * 0.9 ) * 0.22 + gnoise( wp.xz * 0.21 ) * 0.25;
+	float sW = smoothstep( 0.3, 0.7, wShore + edgeN + ( pebT.a - 0.5 ) * 0.6 );
 	alb = mix( alb, pebAlb, sW );
-	dn = mix( dn, pebDN, sW );
+	dn = mix( dn, pebDN * 1.3, sW );
+	cav = mix( cav, pebT.a, sW );
 	// rock
 	alb = mix( alb, rockAlb, wRock );
 	dn = mix( dn, rockDN, wRock );
 	rough = mix( rough, 0.75, wRock );
+	cav = mix( cav, rockT.a, wRock );
 
 	// ---------- snow ----------
 	float snowline = 1020.0 + macro * 160.0 + gnoise( wp.xz * 0.02 ) * 25.0;
@@ -224,26 +245,34 @@ void main() {
 
 	// ---------- underwater & wet margin ----------
 	float depth = uWaterLevel - h;
-	float under = smoothstep( -0.05, 0.25, depth );
-	vec3 silt = decode( vec3( 0.33, 0.31, 0.22 ) ) * ( 0.8 + 0.2 * pebT.a );
-	alb = mix( alb, mix( pebAlb, silt, smoothstep( 0.4, 5.0, depth ) ), under );
-	float wet = 1.0 - smoothstep( 0.0, 0.45 + 0.15 * sin( uTime * 0.6 + wp.x * 0.05 ), h - uWaterLevel );
+	float under = smoothstep( -0.05, 0.2, depth );
+	// submerged stones grow a film of algae, then settle into silt with depth
+	vec3 algae = pebAlb * vec3( 0.5, 0.6, 0.36 ) + vec3( 0.006, 0.012, 0.0 );
+	vec3 silt = decode( vec3( 0.3, 0.29, 0.21 ) ) * ( 0.8 + 0.3 * pebT.a );
+	vec3 bed = mix( pebAlb * 0.85, algae, smoothstep( 0.1, 1.2, depth ) );
+	bed = mix( bed, silt, smoothstep( 1.5, 6.0, depth ) * ( 1.0 - smoothstep( 0.55, 0.8, pebT.a ) * 0.6 ) );
+	alb = mix( alb, bed, under );
+	dn = mix( dn, pebDN, under * ( 1.0 - smoothstep( 2.0, 8.0, depth ) ) );
+	cav = mix( cav, pebT.a, under );
+	// soaked band that breathes with the lapping water (same phase as the water shader)
+	float lap = 0.12 * sin( uTime * 1.1 + wp.x * 0.35 + wp.z * 0.27 );
+	float wet = 1.0 - smoothstep( 0.0, 0.5 + lap, h - uWaterLevel );
 	wet *= 1.0 - under;
-	alb *= 1.0 - wet * 0.45;
+	alb *= 1.0 - wet * 0.5;
 	rough = mix( rough, mix( 0.22, 0.6, smoothstep( 60.0, 400.0, dist ) ), wet );
 
 	// ---------- normal ----------
 	float detailFade = 1.0 - smoothstep( 60.0, 400.0, dist );
-	vec3 Nd = normalize( N + dn * vec3( 1.0, 0.0, 1.0 ) * 0.9 * detailFade + vec3( 0.0, dn.y * 0.0, 0.0 ) );
+	vec3 Nd = normalize( N + dn * 0.9 * detailFade );
 	if ( wRock > 0.0 ) Nd = normalize( mix( Nd, normalize( N + rockDN * 0.8 * detailFade ), wRock ) );
 	Nd = normalize( Nd + macroDN * smoothstep( 80.0, 350.0, dist ) * ( 0.35 + 0.65 * max( wRock, bare ) ) * ( 1.0 - snow * 0.5 ) );
 
 	// ---------- lighting ----------
-	float cavity = mix( 1.0, 0.65 + 0.35 * mix( soilT.a, rockT.a, wRock ), detailFade );
+	float cavity = mix( 1.0, 0.55 + 0.45 * cav, detailFade );
 	float occl = ao * cavity * ( 1.0 - wForest * 0.45 );
 	float sh = sunShadow( wp, N );
 	// canopy shade inside dense stands (trees far away are not in the shadow cascades)
-	sh *= 1.0 - wForest * 0.55 * smoothstep( 80.0, 400.0, dist );
+	sh *= 1.0 - wForest * 0.55 * smoothstep( 80.0, 400.0, dist ) * ( 1.0 - canopyW * 0.7 );
 	vec3 col = shadeSurface( alb, Nd, V, wp, occl, sh, rough, mix( 0.03, 0.02, wet ) );
 
 	// snow sparkle

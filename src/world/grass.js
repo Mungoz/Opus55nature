@@ -35,8 +35,16 @@ varying float vAO;
 void main() {
 	vec2 cam = cameraPosition.xz;
 	vec2 p = aOff.xy + uTile * floor( ( cam - aOff.xy ) / uTile + 0.5 );
-	float dist = length( p - cam );
 	float r1 = aOff.z, r2 = aOff.w;
+	float r3 = fract( r1 * 13.71 + r2 * 7.13 );
+	float r4 = fract( r1 * 3.17 + r2 * 11.3 + 0.37 );
+	if ( uType < 0.5 ) {
+		// gather blades into tufts rather than an even lawn
+		vec2 cc = floor( p / 0.42 );
+		vec2 ctr = ( cc + hash22( cc + 3.7 ) ) * 0.42;
+		p = mix( p, ctr, 0.6 * r4 );
+	}
+	float dist = length( p - cam );
 
 	float fade = 1.0 - smoothstep( uRadius * 0.7, uRadius, dist );
 	fade *= smoothstep( uFadeIn * 0.75, uFadeIn, dist );
@@ -48,8 +56,8 @@ void main() {
 	float patchN = textureLod( uNoiseTex, p / 23.0, 0.0 ).g;
 	float dens;
 	if ( uType < 0.5 ) {
-		dens = bio.r * ( 1.0 - smoothstep( 0.3, 0.55, bio.b ) );
-		dens *= smoothstep( 0.2, 0.45, patchN + bio.r * 0.3 );
+		dens = pow( bio.r, 0.6 ) * ( 1.0 - smoothstep( 0.3, 0.55, bio.b ) );
+		dens *= smoothstep( 0.1, 0.4, patchN + bio.r * 0.4 );
 	} else {
 		// reeds: in the shallows and on the wet margin, in clumps
 		float depth = uWaterLevel - h;
@@ -62,6 +70,37 @@ void main() {
 
 	float height = mix( uHeightRange.x, uHeightRange.y, r2 ) * ( 0.45 + 0.55 * dens ) * ( 0.6 + 0.6 * patchN );
 	height *= mix( 0.35, 1.0, fade );
+	// patches cropped short by grazing deer and marmots
+	float graze = smoothstep( 0.45, 0.7, textureLod( uNoiseTex, p / 57.0 + 0.7, 0.0 ).b );
+	height *= mix( 1.0, 0.45, graze * step( uType, 0.5 ) );
+
+	// grass species: fine blades, broad leaves, flowering stems, dry lodged blades
+	float width = uWidth;
+	float kBase = 0.3 + r2 * 0.5;
+	float headFrac = 0.0;
+	vec3 c = grassColor( p, h );
+	if ( uType < 0.5 ) {
+		if ( r3 < 0.5 ) {
+			width *= 0.5 + 0.3 * r1;
+			c *= vec3( 0.85, 1.04, 0.8 );
+		} else if ( r3 < 0.7 ) {
+			width *= 1.0 + 0.35 * r1;
+			height *= 0.62;
+			kBase = 0.6 + r2 * 0.6;
+			c *= vec3( 0.7, 1.0, 0.62 );
+		} else if ( r3 < 0.85 ) {
+			width *= 0.3;
+			height *= 1.45 + r2 * 0.45;
+			kBase = 0.14 + r2 * 0.2;
+			headFrac = 0.26;
+			c = mix( c, srgbToLinear( vec3( 0.6, 0.52, 0.3 ) ), 0.55 );
+		} else {
+			width *= 0.65;
+			height *= 0.8;
+			kBase = 1.1 + r2 * 0.9;
+			c = srgbToLinear( mix( vec3( 0.58, 0.47, 0.28 ), vec3( 0.42, 0.31, 0.19 ), r1 ) );
+		}
+	}
 	float ang = r1 * 57.0 + r2 * 11.0;
 	vec2 facing = vec2( cos( ang ), sin( ang ) );
 
@@ -71,13 +110,16 @@ void main() {
 	gust = smoothstep( 0.3, 0.85, gust );
 	float windBend = uWind.z * ( 0.15 + 1.1 * gust ) + 0.12 * uWind.z * sin( uTime * 2.6 + r2 * 6.28 + dot( p, vec2( 0.7, 0.5 ) ) );
 	vec2 bendDir = normalize( facing * 0.55 + wdir * windBend );
-	float k = max( 0.3 + r2 * 0.5 + windBend * 0.9, 0.001 );
+	float k = max( kBase + windBend * 0.9, 0.001 );
 	if ( uType > 0.5 ) k *= 0.35;
 
 	float y = position.y;
 	float horiz = height * ( 1.0 - cos( k * y ) ) / k;
 	float up = height * sin( k * y ) / k;
-	float w = uWidth * ( 0.7 + 0.6 * r1 ) * ( 1.0 - y * 0.82 ) * ( 1.0 + dist * 0.03 );
+	float w = width * ( 0.7 + 0.6 * r1 ) * ( 1.0 - y * 0.82 ) * ( 1.0 + dist * 0.03 );
+	// seed heads: a loose, feathery panicle on flowering stems
+	float headT = headFrac > 0.0 ? smoothstep( 1.0 - headFrac, 1.0 - headFrac + 0.04, y ) : 0.0;
+	w = mix( w, uWidth * ( 0.28 + 0.22 * r4 ) * sin( clamp( ( y - ( 1.0 - headFrac ) ) / headFrac, 0.0, 1.0 ) * 3.1416 ) + 0.0015, headT );
 	vec2 side = vec2( -bendDir.y, bendDir.x );
 	vec3 base = vec3( p.x, h - 0.03, p.y );
 	vec3 wp = base + vec3( bendDir.x * horiz, up, bendDir.y * horiz ) + vec3( side.x, 0.0, side.y ) * position.x * w;
@@ -89,19 +131,19 @@ void main() {
 	n = normalize( n + across * position.x * 0.9 );
 	vNormal = normalize( mix( n, hnNormal( hn ), 0.4 ) );
 
-	vec3 c = grassColor( p, h );
 	if ( uType > 0.5 ) {
 		c = mix( vec3( 0.16, 0.2, 0.07 ), vec3( 0.42, 0.34, 0.16 ), r2 );
 		// a few cattail heads
 		float head = step( 0.72, r1 ) * smoothstep( 0.72, 0.76, y ) * ( 1.0 - smoothstep( 0.88, 0.9, y ) );
 		c = mix( c, vec3( 0.12, 0.06, 0.03 ), head );
 	}
-	// individual blade variety: some dry straw, tips paler
-	c *= 0.8 + 0.4 * r2;
-	c = mix( c, c * vec3( 1.25, 1.12, 0.8 ), smoothstep( 0.5, 1.0, y ) * 0.6 );
+	// individual blade variety; autumn yellowing creeps down from the tips
+	c *= 0.72 + 0.56 * r2;
+	c = mix( c, c * vec3( 1.35, 1.12, 0.62 ), smoothstep( 0.45, 1.0, y ) * ( 0.35 + 0.4 * r4 ) * ( 1.0 - headT ) );
+	c = mix( c, srgbToLinear( mix( vec3( 0.7, 0.62, 0.44 ), vec3( 0.56, 0.47, 0.36 ), r4 ) ), headT );
 	vColor = c;
 	vY = y;
-	vAO = mix( 0.4, 1.0, y ) * hn.w;
+	vAO = mix( 0.25, 1.0, smoothstep( 0.0, 0.7, y ) ) * hn.w;
 	vWorldPos = wp;
 	gl_Position = projectionMatrix * viewMatrix * vec4( wp, 1.0 );
 }
@@ -223,8 +265,8 @@ export class Meadow {
 		this.group = new THREE.Group();
 		const d = quality.grassDensity;
 		const near = quality.grassNear, far = quality.grassFar;
-		this.near = new GrassLayer( { tile: near * 2, spacing: 0.15 / Math.sqrt( d ), segs: 4, radius: near, heightRange: [ 0.28, 0.75 ], width: 0.05, seed: 3 } );
-		this.far = new GrassLayer( { tile: far * 2, spacing: 0.42 / Math.sqrt( d ), segs: 2, radius: far, fadeIn: near * 0.85, heightRange: [ 0.3, 0.7 ], width: 0.11, seed: 5 } );
+		this.near = new GrassLayer( { tile: near * 2, spacing: 0.1 / Math.sqrt( d ), segs: 5, radius: near, heightRange: [ 0.25, 0.7 ], width: 0.05, seed: 3 } );
+		this.far = new GrassLayer( { tile: far * 2, spacing: 0.34 / Math.sqrt( d ), segs: 3, radius: far, fadeIn: near * 0.85, heightRange: [ 0.28, 0.65 ], width: 0.1, seed: 5 } );
 		this.reeds = new GrassLayer( { tile: 90, spacing: 0.3, segs: 4, radius: 45, heightRange: [ 1.1, 2.1 ], width: 0.035, type: 1, seed: 9 } );
 		this.group.add( this.near.mesh, this.far.mesh, this.reeds.mesh );
 

@@ -214,9 +214,8 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
 
 #hint {
 	position: absolute;
-	left: 50%;
-	bottom: 26px;
-	transform: translateX(-50%);
+	left: 22px;
+	bottom: 24px;
 	font-size: 12px;
 	letter-spacing: 0.08em;
 	color: var(--ink-dim);
@@ -247,10 +246,219 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
 
 #toast.show { opacity: 1; transform: translateX(-50%); }
 
+/* ---------- dock: time of day + weather (always visible) ---------- */
+#dock {
+	position: absolute;
+	right: 18px;
+	bottom: 18px;
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+	pointer-events: auto;
+}
+
+#timebar, #weatherbar {
+	display: flex;
+	align-items: stretch;
+	padding: 5px;
+	background: var(--glass);
+	border: 1px solid var(--line);
+	border-radius: 16px;
+	backdrop-filter: blur(14px) saturate(1.2);
+	-webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+
+#weatherbar { gap: 2px; }
+
+#timebar {
+	align-items: center;
+	gap: 10px;
+	padding: 5px 16px 5px 6px;
+	width: 380px;
+}
+
+#tb-play {
+	flex: 0 0 auto;
+	width: 42px;
+	height: 42px;
+	display: grid;
+	place-items: center;
+	border: 0;
+	border-radius: 11px;
+	background: transparent;
+	color: var(--ink);
+	cursor: pointer;
+	transition: background 0.2s;
+}
+
+#tb-play:hover, #tb-play:focus-visible { background: rgba(255, 255, 255, 0.08); outline: none; }
+#tb-play svg { width: 20px; height: 20px; fill: currentColor; stroke: none; }
+#tb-play .pause { display: none; }
+#tb-play.running .play { display: none; }
+#tb-play.running .pause { display: block; }
+
+.tb-read { display: flex; flex-direction: column; align-items: flex-start; min-width: 50px; line-height: 1.1; }
+#tb-clock { font-size: 17px; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; color: var(--ink); }
+#tb-phase { font-size: 10px; letter-spacing: 0.08em; color: var(--ink-faint); text-transform: uppercase; white-space: nowrap; }
+
+/* the track shows the day: night, dawn, day, dusk, night */
+#tb-slider {
+	flex: 1;
+	height: 34px;
+	margin: 0;
+	background: transparent;
+	cursor: pointer;
+	touch-action: none;
+}
+
+#tb-slider::-webkit-slider-runnable-track {
+	height: 6px;
+	border-radius: 6px;
+	background: linear-gradient(90deg, #121a33 0%, #1c2547 22%, #d77b4a 27%, #8fb3dd 34%, #9cc3ea 50%, #8fb3dd 64%, #e68a45 70%, #4a3055 74%, #1c2547 80%, #121a33 100%);
+}
+
+#tb-slider::-moz-range-track {
+	height: 6px;
+	border-radius: 6px;
+	background: linear-gradient(90deg, #121a33 0%, #1c2547 22%, #d77b4a 27%, #8fb3dd 34%, #9cc3ea 50%, #8fb3dd 64%, #e68a45 70%, #4a3055 74%, #1c2547 80%, #121a33 100%);
+}
+
+#tb-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 50%; background: #fff6e6; border: 2px solid rgba(0, 0, 0, 0.25); box-shadow: 0 0 0 5px rgba(233, 184, 106, 0.28); }
+#tb-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff6e6; border: 2px solid rgba(0, 0, 0, 0.25); box-shadow: 0 0 0 5px rgba(233, 184, 106, 0.28); }
+
+#weatherbar button {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 3px;
+	min-width: 54px;
+	padding: 6px 6px 5px;
+	border: 0;
+	border-radius: 11px;
+	background: transparent;
+	color: var(--ink-dim);
+	font: inherit;
+	font-size: 10px;
+	letter-spacing: 0.06em;
+	cursor: pointer;
+	transition: background 0.2s, color 0.2s;
+}
+
+#weatherbar button:hover, #weatherbar button:focus-visible { background: rgba(255, 255, 255, 0.08); color: var(--ink); outline: none; }
+#weatherbar button.on { background: rgba(233, 184, 106, 0.2); color: #fff3dc; }
+#weatherbar svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+#weatherbar .sep { width: 1px; margin: 6px 3px; background: var(--line); }
+
+/* narrower desktop windows: stack the two bars */
+@media (max-width: 1060px) and (min-width: 641px) {
+	#dock { flex-direction: column; align-items: flex-end; }
+}
+
+/* ---------- touch controls ---------- */
+#touch { display: none; }
+body.touch #touch { display: block; }
+body.touch #hint { display: none; }
+
+#stick {
+	position: absolute;
+	left: 28px;
+	bottom: 34px;
+	width: 132px;
+	height: 132px;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.12));
+	border: 1px solid rgba(255, 255, 255, 0.22);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	pointer-events: none;
+	transition: opacity 0.3s;
+	opacity: 0.75;
+}
+
+#stick.active { opacity: 1; }
+
+#knob {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 54px;
+	height: 54px;
+	margin: -27px 0 0 -27px;
+	border-radius: 50%;
+	background: rgba(244, 238, 227, 0.78);
+	box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+}
+
+#touch-buttons {
+	position: absolute;
+	right: 22px;
+	bottom: 120px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	pointer-events: auto;
+}
+
+#touch-buttons button {
+	width: 54px;
+	height: 54px;
+	border-radius: 50%;
+	border: 1px solid rgba(255, 255, 255, 0.22);
+	background: rgba(16, 17, 20, 0.42);
+	color: var(--ink);
+	display: grid;
+	place-items: center;
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	touch-action: none;
+}
+
+#touch-buttons button.held, #touch-buttons button.on { background: rgba(233, 184, 106, 0.3); }
+#touch-buttons svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
 @media (max-width: 640px) {
 	#brand { top: 14px; left: 16px; }
 	.brand-name { font-size: 15px; letter-spacing: 0.3em; }
 	#toolbar { top: auto; bottom: 14px; right: 50%; transform: translateX(50%); }
 	.panel { top: auto; bottom: 70px; right: 16px; }
 	#hint { display: none; }
+	/* dock spans the width under the toolbar: big time slider on top, weather below */
+	#dock { left: 10px; right: 10px; bottom: auto; top: 58px; flex-direction: column; gap: 6px; }
+	#timebar { width: auto; padding: 6px 16px 6px 6px; gap: 12px; }
+	#tb-play { width: 48px; height: 48px; }
+	#tb-play svg { width: 24px; height: 24px; }
+	#tb-clock { font-size: 20px; }
+	#tb-slider { height: 48px; }
+	#tb-slider::-webkit-slider-runnable-track { height: 8px; }
+	#tb-slider::-moz-range-track { height: 8px; }
+	#tb-slider::-webkit-slider-thumb { width: 30px; height: 30px; margin-top: -11px; }
+	#tb-slider::-moz-range-thumb { width: 30px; height: 30px; }
+	#weatherbar { padding: 4px; justify-content: space-between; }
+	#weatherbar button { flex: 1; min-width: 0; min-height: 52px; padding: 6px 2px 5px; font-size: 10px; }
+	#weatherbar svg { width: 22px; height: 22px; }
+	#weatherbar .sep { margin: 6px 2px; }
+	body.touch #toolbar { bottom: auto; top: 10px; right: 10px; transform: none; padding: 3px; }
+	body.touch #toolbar button { width: 36px; height: 36px; }
+	body.touch #brand { display: none; }
+	#stick { left: 22px; bottom: 28px; width: 118px; height: 118px; }
+	#touch-buttons { bottom: 34px; }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+	body.touch #brand { display: none; }
+	body.touch #toolbar { top: 8px; }
+	/* phone on its side: one row along the bottom, between the stick and the buttons */
+	#dock { left: 50%; right: auto; transform: translateX(-50%); top: auto; bottom: 10px; flex-direction: row; gap: 6px; }
+	#timebar { width: 290px; padding: 4px 12px 4px 4px; }
+	#tb-play { width: 44px; height: 44px; }
+	#tb-phase { display: none; }
+	#tb-slider { height: 44px; }
+	#tb-slider::-webkit-slider-thumb { width: 28px; height: 28px; margin-top: -11px; }
+	#tb-slider::-moz-range-thumb { width: 28px; height: 28px; }
+	#weatherbar button span { display: none; }
+	#weatherbar button { min-width: 44px; min-height: 44px; flex: 0 0 auto; }
+	#touch-buttons { bottom: 20px; right: 16px; flex-direction: column; gap: 8px; }
+	#touch-buttons button { width: 48px; height: 48px; }
+	#stick { bottom: 18px; left: 18px; width: 108px; height: 108px; }
 }

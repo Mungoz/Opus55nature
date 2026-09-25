@@ -353,7 +353,7 @@ void main() {
 	if ( uCloudBase.y > 0.0 ) {
 		float k = saturate( uCloudBase.y * 350.0 ) * smoothstep( -0.05, 0.08, rd.y );
 		float tex = texture2D( uNoiseTex, rd.xz / max( rd.y + 0.15, 0.1 ) * 0.25 + uCloud.yz * 0.00003 ).r;
-		col = mix( col, lowCloudColor() * ( 0.8 + 0.4 * tex ) + uWeather.w * vec3( 2.0, 2.2, 2.6 ), k );
+		col = mix( col, lowCloudColor() * ( 0.85 + 0.3 * tex ), k );
 	}
 
 	gl_FragColor = vec4( max( col, 0.0 ), 0.0 );
@@ -502,7 +502,7 @@ export class Sky {
 
 		}
 
-		du.uStars.value = THREE.MathUtils.smoothstep( - this.sunDir.y, 0.08, 0.26 );
+		du.uStars.value = THREE.MathUtils.smoothstep( - this.sunDir.y, 0.1, 0.28 );
 		du.uAurora.value = this.auroraEnabled ? 1 : 0;
 
 		// star sphere turns about the celestial pole (sidereal ~ solar here)
