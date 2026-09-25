@@ -28,6 +28,8 @@ void main() {
 const flowFrag = /* glsl */ `
 ${commonParsGLSL}
 uniform sampler2D tWaterN;
+uniform sampler2D tReflect; // the lake's mirror image
+uniform mat4 uTexMatrix;
 varying vec3 vWorldPos;
 varying vec4 vFlow;
 varying vec2 vDir;
@@ -74,6 +76,13 @@ void main() {
 	vec3 bankCol = ( amb * 0.5 + uSunColor * sh * max( uSunDir.y, 0.0 ) * 0.4 ) * vec3( 0.075, 0.085, 0.035 );
 	float horizon = clamp( 1.1 / vHalfW, 0.05, 0.36 );
 	vec3 refl = mix( bankCol, sky, smoothstep( horizon * 0.35, horizon, R.y + 0.16 * ( texture2D( uNoiseTex, wp.xz * 0.03 ).r - 0.5 ) ) );
+	if ( speed < 0.01 ) {
+		// still pools mirror the mountains and woods: look up the lake's reflection along this
+		// pixel's own reflected ray (exact for anything more than a few tens of metres away)
+		vec4 rc = uTexMatrix * vec4( wp + R * 400.0, 1.0 );
+		vec2 ruv = rc.xy / rc.w + s * 0.25;
+		if ( rc.w > 0.0 && all( greaterThan( ruv, vec2( 0.001 ) ) ) && all( lessThan( ruv, vec2( 0.999 ) ) ) ) refl = texture2D( tReflect, ruv ).rgb;
+	}
 	vec3 spec = uSunColor * sh * specGGX( N, V, uSunDir, mix( 0.08, 0.2, turb ), 0.02 );
 	// clear peaty water: the stony bed shows through where it is shallow or seen
 	// from above, the colour builds with the path length through the water
@@ -203,14 +212,14 @@ const blend = {
 
 export class Streams {
 
-	constructor( terrain, textures ) {
+	constructor( terrain, textures, water ) {
 
 		this.terrain = terrain;
 		this.group = new THREE.Group();
 		this.group.name = 'streams';
 		this.flowMat = new THREE.ShaderMaterial( {
 			vertexShader: flowVert, fragmentShader: flowFrag, lights: true, ...blend,
-			uniforms: { ...lightsU(), tWaterN: { value: textures.waterN } },
+			uniforms: { ...lightsU(), tWaterN: { value: textures.waterN }, tReflect: { value: water.rt.texture }, uTexMatrix: { value: water.texMatrix } },
 		} );
 		this._buildRiver();
 		this._buildPonds();

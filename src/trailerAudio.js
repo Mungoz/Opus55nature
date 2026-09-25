@@ -6,12 +6,16 @@ import { Soundscape } from './audio.js';
 const midi = ( n ) => 440 * Math.pow( 2, ( n - 69 ) / 12 );
 // one chord per shot (MIDI notes), in D major
 const CHORDS = [
-	[ 38, 50, 57, 62, 66, 73 ], // Dmaj9
-	[ 35, 47, 54, 62, 66, 69 ], // Bm9
-	[ 31, 43, 50, 59, 62, 66 ], // Gmaj7
-	[ 33, 45, 52, 57, 62, 64 ], // Asus
-	[ 30, 42, 50, 57, 61, 66 ], // D/F#
-	[ 28, 40, 47, 55, 62, 66 ], // Em9
+	[ 38, 50, 57, 62, 66, 73 ], // Dmaj9 (open)
+	[ 31, 43, 50, 59, 62, 66 ], // Gmaj7 (the falls)
+	[ 33, 45, 52, 57, 61, 64 ], // A (stream)
+	[ 35, 47, 54, 62, 66, 69 ], // Bm9 (larch woods)
+	[ 31, 43, 50, 57, 62, 66 ], // Gmaj9 (tarn)
+	[ 38, 50, 57, 62, 64, 69 ], // Dadd9 (squirrel)
+	[ 30, 42, 50, 57, 61, 66 ], // D/F# (marmot)
+	[ 28, 40, 47, 55, 62, 66 ], // Em9 (deer)
+	[ 33, 45, 52, 57, 62, 64 ], // Asus (swans)
+	[ 35, 47, 54, 59, 62, 66 ], // Bm (trout)
 	[ 31, 43, 50, 57, 62, 69 ], // Gmaj9 (sundown swell)
 	[ 35, 47, 50, 54, 59, 62 ], // Bm7 (rain)
 	[ 26, 38, 45, 52, 55, 59 ], // Em/D pedal (storm)
@@ -132,18 +136,22 @@ export async function renderTrailerAudio( durations ) {
 	// ---- ambience loops: levels set per shot, switched with the cut ----
 	const set = ( loop, t, v ) => loop.g.gain.setTargetAtTime( v, t, 0.04 );
 	const LEVELS = [
-		// wind, windHi, lap, rustle, rainHiss, rainRoar
-		[ 0.05, 0.005, 0.12, 0.012, 0, 0 ],
-		[ 0.14, 0.03, 0, 0.0, 0, 0 ],
-		[ 0.04, 0.0, 0.22, 0.0, 0, 0 ],
-		[ 0.06, 0.008, 0.0, 0.02, 0, 0 ],
-		[ 0.05, 0.006, 0.0, 0.01, 0, 0 ],
-		[ 0.03, 0.0, 0.2, 0.0, 0, 0 ],
-		[ 0.09, 0.02, 0.0, 0.0, 0, 0 ],
-		[ 0.08, 0.015, 0.12, 0.02, 0.09, 0.07 ],
-		[ 0.2, 0.05, 0.1, 0.05, 0.12, 0.14 ],
-		[ 0.02, 0.0, 0.1, 0.0, 0, 0 ],
-		[ 0.03, 0.0, 0.05, 0.0, 0, 0 ],
+		// wind, windHi, lap, rustle, rainHiss, rainRoar, brook, fall
+		[ 0.05, 0.005, 0.12, 0.012, 0, 0, 0, 0 ],
+		[ 0.04, 0.0, 0.0, 0.018, 0, 0, 0.3, 1.0 ],
+		[ 0.04, 0.005, 0.0, 0.01, 0, 0, 1.0, 0.08 ],
+		[ 0.14, 0.03, 0, 0.0, 0, 0, 0, 0 ],
+		[ 0.04, 0.0, 0.03, 0.015, 0, 0, 0, 0 ],
+		[ 0.03, 0.0, 0.0, 0.02, 0, 0, 0, 0 ],
+		[ 0.05, 0.006, 0.0, 0.01, 0, 0, 0, 0 ],
+		[ 0.06, 0.008, 0.0, 0.02, 0, 0, 0, 0 ],
+		[ 0.04, 0.0, 0.22, 0.0, 0, 0, 0, 0 ],
+		[ 0.03, 0.0, 0.2, 0.0, 0, 0, 0, 0 ],
+		[ 0.09, 0.02, 0.0, 0.0, 0, 0, 0, 0 ],
+		[ 0.08, 0.015, 0.12, 0.02, 0.09, 0.07, 0, 0 ],
+		[ 0.2, 0.05, 0.1, 0.05, 0.12, 0.14, 0, 0 ],
+		[ 0.02, 0.0, 0.1, 0.0, 0, 0, 0, 0 ],
+		[ 0.03, 0.0, 0.05, 0.0, 0, 0, 0, 0 ],
 	];
 	durations.forEach( ( d, i ) => {
 
@@ -155,10 +163,13 @@ export async function renderTrailerAudio( durations ) {
 		set( s.rustle, t, L[ 3 ] );
 		set( s.rainHiss, t, L[ 4 ] );
 		set( s.rainRoar, t, L[ 5 ] );
+		set( s.brook, t, 0.05 * L[ 6 ] );
+		set( s.brookLo, t, 0.08 * L[ 6 ] );
+		set( s.fallLoop, t, 0.22 * L[ 7 ] );
 
 	} );
 
-	for ( const loop of [ s.wind, s.windHi, s.lap, s.lapHi, s.rustle, s.rainHiss, s.rainRoar ] ) set( loop, total - 1.2, 0 );
+	for ( const loop of [ s.wind, s.windHi, s.lap, s.lapHi, s.rustle, s.rainHiss, s.rainRoar, s.brook, s.brookLo, s.fallLoop ] ) set( loop, total - 1.2, 0 );
 
 	// ---- one-shot cues ----
 	const at = ( shot, t, fn ) => {
@@ -171,21 +182,23 @@ export async function renderTrailerAudio( durations ) {
 	const P = ( x, y, z ) => ( { x, y, z } );
 	at( 0, 1.4, () => s.birdSong( P( - 20, 8, - 25 ) ) );
 	at( 0, 3.9, () => s.birdSong( P( 25, 10, - 18 ) ) );
-	at( 2, 1.6, () => s.birdSong( P( - 30, 6, - 40 ) ) );
-	at( 3, 1.2, () => s.roar( P( 0, 1, - 12 ) ) );
-	at( 4, 0.7, () => s.whistle( P( 0, 0, - 3 ) ) );
-	at( 4, 2.8, () => s.whistle( P( 18, 0, - 10 ) ) );
-	at( 5, 1.0, () => s.splash( P( 0, 0, - 8 ), 0.6 ) );
-	at( 5, 1.95, () => s.splash( P( 0, 0, - 8 ), 1.2 ) );
-	at( 8, 1.3, () => s.thunder( P( 0, 200, - 400 ), 600, 0.32, 0.5 ) );
-	at( 8, 3.6, () => s.thunder( P( 200, 200, - 600 ), 1400, 0.3, 0.9 ) );
-	at( 9, 0.5, () => s.loon( P( - 60, 1, - 150 ) ) );
-	at( 10, 2.2, () => s.owl( P( 40, 12, - 60 ) ) );
+	at( 2, 2.0, () => s.birdSong( P( 15, 5, - 20 ) ) );
+	at( 4, 1.6, () => s.birdSong( P( - 30, 6, - 40 ) ) );
+	at( 5, 1.0, () => s.chatter( P( 2, 0, - 8 ) ) );
+	at( 6, 0.7, () => s.whistle( P( 0, 0, - 3 ) ) );
+	at( 6, 2.8, () => s.whistle( P( 18, 0, - 10 ) ) );
+	at( 7, 1.2, () => s.roar( P( 0, 1, - 12 ) ) );
+	at( 9, 1.0, () => s.splash( P( 0, 0, - 8 ), 0.6 ) );
+	at( 9, 1.95, () => s.splash( P( 0, 0, - 8 ), 1.2 ) );
+	at( 12, 1.3, () => s.thunder( P( 0, 200, - 400 ), 600, 0.32, 0.5 ) );
+	at( 12, 3.6, () => s.thunder( P( 200, 200, - 600 ), 1400, 0.3, 0.9 ) );
+	at( 13, 0.5, () => s.loon( P( - 60, 1, - 150 ) ) );
+	at( 14, 2.2, () => s.owl( P( 40, 12, - 60 ) ) );
 
 	// the rush of the starling flock passing overhead
 	{
 
-		const t = starts[ 6 ] + 0.8;
+		const t = starts[ 10 ] + 0.8;
 		const src = ctx.createBufferSource();
 		src.buffer = s.noise;
 		src.loop = true;

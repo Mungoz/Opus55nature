@@ -127,7 +127,7 @@ export class App {
 		await step( 0.45, 'Filling the lake' );
 		this.water = new Water( this.textures, this.quality );
 		this.scene.add( this.water.mesh );
-		this.streams = new Streams( td, this.textures );
+		this.streams = new Streams( td, this.textures, this.water );
 		this.scene.add( this.streams.group );
 		this.waterPlants = new WaterPlants( td );
 		this.scene.add( this.waterPlants.group );
