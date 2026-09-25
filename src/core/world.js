@@ -13,6 +13,11 @@ export const WORLD = {
 	maxAltitude: 1600,
 };
 
+// Render layers: 0 is everything mirrors see; 1 main-view only (grass, detailed terrain);
+// 2 mirror-only (the cheap terrain); water is drawn after the rest of the frame (its
+// refraction is a copy of it), and effects (rain, spray, motes) after the water.
+export const LAYERS = { MAIN: 1, MIRROR: 2, WATER: 3, FX: 4 };
+
 export function regionOrigin( r ) {
 
 	return [ r.cx - r.size / 2, r.cz - r.size / 2 ];

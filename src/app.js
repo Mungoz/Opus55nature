@@ -11,6 +11,8 @@ import { SunShadows } from './world/shadows.js';
 import { Water } from './world/water.js';
 import { Streams } from './world/stream.js';
 import { buildDeadwood } from './world/deadwood.js';
+import { LAYERS } from './core/world.js';
+import { FullscreenPass, passMaterial } from './gen/gpu.js';
 import { WaterPlants } from './world/waterplants.js';
 import { Forest } from './world/trees.js';
 import { Meadow, CROP } from './world/grass.js';
@@ -73,7 +75,9 @@ export class App {
 
 		this.scene = new THREE.Scene();
 		this.camera = new THREE.PerspectiveCamera( 55, 1, 0.25, 16000 );
-		this.camera.layers.enable( 1 );
+		this.camera.layers.enable( LAYERS.MAIN );
+		this.camera.layers.enable( LAYERS.WATER );
+		this.camera.layers.enable( LAYERS.FX );
 		this.scene.add( this.camera );
 		this.audio = new Soundscape();
 
@@ -119,6 +123,8 @@ export class App {
 		this.sky = new Sky( r );
 		this.scene.add( this.sky.mesh );
 		this.sky.mesh.layers.enableAll();
+		this.sky.mesh.layers.disable( LAYERS.WATER );
+		this.sky.mesh.layers.disable( LAYERS.FX );
 
 		await step( 0.38, 'Carving the valley' );
 		this.terrain = new Terrain( td, this.textures, this.quality );
@@ -129,7 +135,7 @@ export class App {
 		this.water.mainCamera = this.camera;
 		this.water.reflectOnly.push( this.terrain.reflectMesh );
 		this.scene.add( this.water.mesh );
-		this.streams = new Streams( td, this.textures, this.water );
+		this.streams = new Streams( td, this.textures, this.water, this.quality, this.terrain.mesh, this.terrain.reflectMesh );
 		this.scene.add( this.streams.group );
 		this.waterPlants = new WaterPlants( td );
 		this.scene.add( this.waterPlants.group );
@@ -301,6 +307,11 @@ export class App {
 		const pr = this.renderer.getPixelRatio();
 		this.post.setSize( w * pr, h * pr, this.renderScale );
 		this.water.setSize( w * pr * this.renderScale, h * pr * this.renderScale );
+		this.streams?.setSize( w * pr * this.renderScale, h * pr * this.renderScale );
+		const rw = Math.max( 2, Math.round( w * pr * this.renderScale ) ), rh = Math.max( 2, Math.round( h * pr * this.renderScale ) );
+		if ( ! this.refractRT ) this.refractRT = new THREE.WebGLRenderTarget( rw, rh, { type: THREE.HalfFloatType, depthBuffer: false } );
+		else this.refractRT.setSize( rw, rh );
+		if ( this.streams ) this.streams.refraction.value = this.refractRT.texture;
 
 	}
 
@@ -513,6 +524,8 @@ export class App {
 
 		this.particles.update( dt, t, this.camera, wind, this.water );
 		this.water.update( dt );
+		for ( const p of this.streams.ponds ) p.update( dt );
+		this.streams.update( this.camera, dt );
 
 		// soundscape
 		const cp = this.camera.position;
@@ -570,16 +583,48 @@ export class App {
 
 	}
 
+	// copy a texture into a render target (a single full-screen triangle)
+	_copy( tex, target ) {
+
+		if ( ! this._copyPass ) this._copyPass = new FullscreenPass( passMaterial( /* glsl */ `
+			uniform sampler2D uSrc;
+			varying vec2 vUv;
+			void main() { gl_FragColor = texture2D( uSrc, vUv ); }
+		`, { uSrc: { value: null } } ) );
+		this._copyPass.material.uniforms.uSrc.value = tex;
+		this._copyPass.render( this.renderer, target );
+
+	}
+
 	render() {
 
 		const r = this.renderer;
 		r.info.reset();
 		r.shadowMap.needsUpdate = true;
 
+		// the stream's mirror (three.js Reflector)
+		this.streams.renderReflection( r, this.scene, this.camera );
+
+		// 1. everything but the water
+		const cam = this.camera, mask = cam.layers.mask;
 		r.setRenderTarget( this.post.sceneRT );
 		r.setClearColor( 0x000000, 1 );
 		r.clear( true, true, false );
-		r.render( this.scene, this.camera );
+		cam.layers.disable( LAYERS.WATER );
+		cam.layers.disable( LAYERS.FX );
+		r.render( this.scene, cam );
+		// 2. that frame becomes the refraction seen through the stream and the falls
+		this._copy( this.post.sceneRT.texture, this.refractRT );
+		// 3. the water, then the effects in front of it, over the same frame and depth
+		const autoClear = r.autoClear;
+		r.autoClear = false;
+		r.setRenderTarget( this.post.sceneRT );
+		cam.layers.set( LAYERS.WATER );
+		r.render( this.scene, cam );
+		cam.layers.set( LAYERS.FX );
+		r.render( this.scene, cam );
+		cam.layers.mask = mask;
+		r.autoClear = autoClear;
 		r.setRenderTarget( null );
 		this.post.render( this.elapsed );
 		this.frame ++;

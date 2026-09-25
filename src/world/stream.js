@@ -1,190 +1,42 @@
 import * as THREE from 'three';
+import { Water as Water2 } from 'three/addons/objects/Water2.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 import { commonParsGLSL } from '../shaders/common.glsl.js';
-import { sharedUniforms } from '../core/uniforms.js';
+import { skyMappingGLSL } from '../shaders/atmosphere.glsl.js';
+import { sharedUniforms, U } from '../core/uniforms.js';
 import { FALL } from '../core/features.js';
+import { LAYERS } from '../core/world.js';
+import { Water } from './water.js';
 
 const lightsU = () => ( { ...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ), ...sharedUniforms() } );
 
-// Water that is not the lake: the stream (flowing, along a ribbon) and ponds
-// (still). No planar mirror here, so reflections come from the sky model.
-const flowVert = /* glsl */ `
-attribute vec4 aFlow; // across (-1..1), along (m), speed (m/s), turbulence
-attribute vec2 aDir;  // flow direction (xz)
-attribute float aHalfW;
-attribute float aFade;
-varying vec3 vWorldPos;
-varying vec4 vFlow;
-varying vec2 vDir;
-varying float vHalfW;
-varying float vFade;
-void main() {
-	vFade = aFade;
-	vec4 wp = modelMatrix * vec4( position, 1.0 );
-	vWorldPos = wp.xyz;
-	vFlow = aFlow;
-	vDir = aDir;
-	vHalfW = aHalfW;
-	gl_Position = projectionMatrix * viewMatrix * wp;
-}
-`;
+// Water that is not the lake, built from three.js's water library:
+//  - the stream and the waterfall use three.js Water2's shader and water normal maps
+//    (flow-mapped normals, Fresnel mix of reflection and refraction). Their UVs run
+//    downstream, so the current follows every bend. Reflections come from one
+//    three.js Reflector kept level with the water nearest the camera; refraction is
+//    the frame itself, drawn before the water - so every reach of the stream gets the
+//    full effect for the cost of a single extra pass
+//  - the ponds: three.js Water mirrors, shaded like the lake
+// Only the spray drifting off the falls is drawn here by hand.
 
-const flowFrag = /* glsl */ `
-${commonParsGLSL}
-uniform sampler2D tWaterN;
-uniform sampler2D tReflect; // the lake's mirror image
-uniform mat4 uTexMatrix;
-varying vec3 vWorldPos;
-varying vec4 vFlow;
-varying vec2 vDir;
-varying float vHalfW;
-varying float vFade;
-vec2 wn( vec2 uv ) { return texture2D( tWaterN, uv ).xy * 2.0 - 1.0; }
-void main() {
-	vec3 wp = vWorldPos;
-	vec3 V = cameraPosition - wp;
-	float dist = length( V );
-	V /= dist;
-	float across = vFlow.x, along = vFlow.y, speed = vFlow.z, turb = vFlow.w;
-	vec2 dir = normalize( vDir + 1e-4 );
-	vec2 side = vec2( -dir.y, dir.x );
-	float t = uTime;
-	float edge = abs( across );
-	float mid = 1.0 - edge * edge;
-	vec2 s;
-	if ( speed > 0.01 ) {
-		// ripples drawn out along the current and carried downstream; the fastest,
-		// choppiest water runs down the middle, the margins are glassy
-		vec2 q = vec2( across * vHalfW, along );
-		float v = speed * ( 0.35 + 0.65 * mid );
-		vec2 a = wn( vec2( q.x / 1.5, ( q.y - t * v ) / 4.2 ) );
-		vec2 b = wn( vec2( q.x / 0.6 + 0.37, ( q.y - t * v * 1.15 ) / 1.4 ) );
-		vec2 c = wn( vec2( q.x / 3.1 + 0.71, ( q.y - t * v * 0.8 ) / 7.0 ) );
-		vec2 ts = a * 0.45 + b * 0.3 + c * 0.35;
-		s = ( side * ts.x + dir * ts.y ) * ( 0.05 + ( 0.12 + 0.3 * turb ) * mid );
-	} else {
-		// still pond: only the breeze
-		vec2 w = normalize( uWind.xy + 1e-4 );
-		s = ( wn( wp.xz / 4.0 + w * t * 0.02 ) * 0.6 + wn( wp.xz / 1.3 - w * t * 0.035 ) * 0.4 ) * ( 0.012 + 0.07 * uWind.z );
-	}
-	// ripples too fine to resolve average out to a smoother, glossier surface
-	s /= 1.0 + dist * 0.006;
-	vec3 N = normalize( vec3( -s.x, 1.0, -s.y ) );
-	float NoV = max( dot( N, V ), 0.0 );
-	float F = 0.02 + 0.98 * pow( 1.0 - NoV, 5.0 );
-	vec3 R = reflect( -V, N );
-	vec3 sky = skyRadiance( normalize( vec3( R.x, max( R.y, 0.03 ), R.z ) ) );
-	vec3 amb = skyIrradiance( vec3( 0.0, 1.0, 0.0 ) );
-	float sh = sunShadow( wp, vec3( 0.0, 1.0, 0.0 ) );
-	// a narrow stream mostly mirrors its own banks - turf, grass and trees - and
-	// only sees open sky in steeper reflections; ponds see more of the sky
-	vec3 bankCol = ( amb * 0.5 + uSunColor * sh * max( uSunDir.y, 0.0 ) * 0.4 ) * vec3( 0.075, 0.085, 0.035 );
-	float horizon = clamp( 1.1 / vHalfW, 0.05, 0.36 );
-	vec3 refl = mix( bankCol, sky, smoothstep( horizon * 0.35, horizon, R.y + 0.16 * ( texture2D( uNoiseTex, wp.xz * 0.03 ).r - 0.5 ) ) );
-	if ( speed < 0.01 ) {
-		// still pools mirror the mountains and woods: look up the lake's reflection along this
-		// pixel's own reflected ray (exact for anything more than a few tens of metres away)
-		vec4 rc = uTexMatrix * vec4( wp + R * 400.0, 1.0 );
-		vec2 ruv = rc.xy / rc.w + s * 0.25;
-		if ( rc.w > 0.0 && all( greaterThan( ruv, vec2( 0.001 ) ) ) && all( lessThan( ruv, vec2( 0.999 ) ) ) ) refl = texture2D( tReflect, ruv ).rgb;
-	}
-	vec3 spec = uSunColor * sh * specGGX( N, V, uSunDir, mix( 0.08, 0.2, turb ), 0.02 );
-	// clear peaty water: the stony bed shows through where it is shallow or seen
-	// from above, the colour builds with the path length through the water
-	float depthM = speed > 0.01 ? ( 0.4 + vHalfW * 0.1 ) * pow( mid, 0.8 ) + 0.02 : along;
-	float path = depthM / max( V.y, 0.12 );
-	vec3 tint = speed > 0.01 ? vec3( 0.2, 0.36, 0.3 ) : vec3( 0.2, 0.17, 0.08 );
-	vec3 body = ( amb * 0.07 + uSunColor * sh * max( uSunDir.y, 0.0 ) * 0.04 ) * tint;
-	float bodyA = 1.0 - exp( -path * ( speed > 0.01 ? 1.3 : 2.4 ) );
-	// a scum of pollen and leaf litter drifts into the lee of pond margins
-	if ( speed < 0.01 ) {
-		float drift = smoothstep( 0.55, 0.8, texture2D( uNoiseTex, wp.xz / 9.0 ).g ) * ( 1.0 - smoothstep( 0.1, 0.7, along ) );
-		body = mix( body, ( amb * 0.3 + uSunColor * sh * 0.25 ) * vec3( 0.2, 0.15, 0.07 ), drift * 0.7 );
-		bodyA = max( bodyA, drift * 0.8 );
-	}
-	// white water in the riffles and a thin fringe where the current meets the banks
-	float n = texture2D( uNoiseTex, vec2( across * vHalfW * 0.4, ( along - t * speed ) * 0.22 ) ).b;
-	float n2 = texture2D( uNoiseTex, vec2( across * vHalfW * 1.3 + 0.5, ( along - t * speed * 1.2 ) * 0.9 ) ).g;
-	float foam = smoothstep( 0.62, 0.9, n * 0.75 + n2 * 0.35 + turb * 0.35 - 0.2 ) * smoothstep( 0.15, 0.6, turb ) * mid;
-	foam = max( foam, smoothstep( 0.72, 0.95, edge ) * smoothstep( 0.5, 0.8, n2 ) * 0.45 * step( 0.01, speed ) );
-	vec3 foamCol = ( uSunColor * sh * max( uSunDir.y, 0.1 ) + amb ) * 0.8 / PI;
-	vec3 col = mix( body, refl, F ) + spec;
-	float alpha = max( bodyA, F );
-	col = mix( col, foamCol, foam );
-	alpha = mix( alpha, 0.9, foam );
-	col = applyAtmosphere( col, wp );
-	gl_FragColor = vec4( col, alpha * vFade );
-}
-`;
-
-// The waterfall: a cascade that hugs the rock, streaked and broken into spray.
-const fallVert = /* glsl */ `
-attribute vec2 aFall; // across (-1..1), down (0 top .. 1 foot)
-varying vec3 vWorldPos;
-varying vec2 vFall;
-varying vec3 vNormal;
-void main() {
-	vec4 wp = modelMatrix * vec4( position, 1.0 );
-	vWorldPos = wp.xyz;
-	vFall = aFall;
-	vNormal = normalize( mat3( modelMatrix ) * normal );
-	gl_Position = projectionMatrix * viewMatrix * wp;
-}
-`;
-
-const fallFrag = /* glsl */ `
-${commonParsGLSL}
-uniform float uLayer;
-varying vec3 vWorldPos;
-varying vec2 vFall;
-varying vec3 vNormal;
-void main() {
-	vec3 wp = vWorldPos;
-	vec3 V = normalize( cameraPosition - wp );
-	float t = uTime;
-	float x = vFall.x, y = vFall.y;
-	// the water accelerates down the face: a remapped coordinate that scrolls at a
-	// constant rate but is stretched toward the foot, so streaks speed up as they fall
-	float g = sqrt( y + 0.02 ) * 7.0;
-	float lumps = texture2D( uNoiseTex, vec2( x * 0.8 + uLayer * 0.5, g * 0.18 - t * 0.16 ) ).r;
-	float streak = texture2D( uNoiseTex, vec2( x * 1.9 + uLayer * 0.37, g * 0.07 - t * 0.12 ) ).g;
-	float fine = texture2D( uNoiseTex, vec2( x * 6.5 + uLayer * 0.61, g * 0.35 - t * 0.5 ) ).b;
-	float streaks = smoothstep( 0.2, 0.85, streak * 0.7 + fine * 0.45 + ( lumps - 0.5 ) * 0.3 );
-	// a dense core with frayed, translucent edges that spread over the lower tiers
-	float edgeN = abs( x ) + ( lumps - 0.5 ) * ( 0.25 + 0.35 * y ) + ( fine - 0.5 ) * 0.15;
-	float core = 1.0 - smoothstep( 0.3 + 0.1 * y, 0.95, edgeN );
-	float alpha = core * mix( 0.5, 0.97, streaks );
-	// the outer veil is broken spray
-	alpha *= mix( 1.0, 0.55 * smoothstep( 0.35, 0.8, streaks + ( lumps - 0.5 ) * 0.4 ), uLayer );
-	alpha *= smoothstep( 0.0, 0.04, y );
-	if ( alpha < 0.02 ) discard;
-	float body = streaks;
-	vec3 N = normalize( vNormal );
-	float sh = sunShadowFast( wp );
-	vec3 amb = skyIrradiance( N ) + skyIrradiance( vec3( 0.0, 1.0, 0.0 ) );
-	// aerated water scatters light: bright, with a glow when back-lit
-	vec3 col = ( amb * 0.5 + uSunColor * sh * ( 0.5 + 0.5 * max( dot( N, uSunDir ), 0.0 ) ) ) * 0.85 / PI;
-	col += uSunColor * sh * pow( max( dot( -V, uSunDir ), 0.0 ), 5.0 ) * 0.25;
-	col = mix( col * vec3( 0.8, 0.9, 0.92 ), col, body );
-	col = applyAtmosphere( col, wp );
-	gl_FragColor = vec4( col, alpha );
-}
-`;
-
-// Spray drifting off the foot of the fall.
+// Spray and mist: a billowing cloud over the plunge pool, and drift off the curtain.
 const mistVert = /* glsl */ `
 uniform float uTime;
-attribute vec4 aSeed;
+uniform vec4 uWind;
+attribute vec4 aSeed; // size, alpha, phase, rate
+attribute vec3 aVel;
 varying float vAlpha;
 varying vec3 vWorldPos;
 void main() {
-	float life = fract( uTime * ( 0.08 + aSeed.w * 0.06 ) + aSeed.z );
-	vec3 p = position + vec3( ( aSeed.x - 0.5 ) * 14.0 * ( 0.3 + life ), life * 22.0 * ( 0.4 + aSeed.y ), ( aSeed.y - 0.5 ) * 14.0 * ( 0.3 + life ) );
-	vAlpha = sin( life * 3.14159 ) * ( 0.5 + 0.5 * aSeed.w );
+	float life = fract( uTime * aSeed.w + aSeed.z );
+	vec3 p = position + aVel * life * ( 1.0 + life ) + vec3( uWind.x, 0.0, uWind.y ) * life * life * ( 2.0 + 6.0 * uWind.z );
+	vAlpha = sin( life * 3.14159 ) * ( 0.5 + 0.5 * aSeed.y );
 	vec4 wp = modelMatrix * vec4( p, 1.0 );
 	vWorldPos = wp.xyz;
 	vec4 mv = viewMatrix * wp;
 	gl_Position = projectionMatrix * mv;
-	gl_PointSize = clamp( ( 5.0 + life * 10.0 ) * 700.0 / max( -mv.z, 1.0 ), 2.0, 380.0 );
+	gl_PointSize = clamp( aSeed.x * ( 0.4 + 1.6 * life ) * 900.0 / max( -mv.z, 1.0 ), 1.5, 520.0 );
 }
 `;
 
@@ -196,13 +48,47 @@ void main() {
 	vec2 c = gl_PointCoord * 2.0 - 1.0;
 	float r2 = dot( c, c );
 	if ( r2 > 1.0 ) discard;
-	float a = ( 1.0 - r2 ) * ( 1.0 - r2 ) * vAlpha * 0.16;
+	float a = pow( 1.0 - r2, 1.5 ) * vAlpha * 0.11;
 	vec3 V = normalize( cameraPosition - vWorldPos );
-	vec3 col = ( skyIrradiance( vec3( 0.0, 1.0, 0.0 ) ) * 0.4 + uSunColor * sunShadowFast( vWorldPos ) * ( 0.25 + pow( max( dot( -V, uSunDir ), 0.0 ), 4.0 ) ) ) / PI;
+	float sh = sunShadowFast( vWorldPos );
+	vec3 col = ( skyIrradiance( vec3( 0.0, 1.0, 0.0 ) ) * 0.55 + uSunColor * sh * ( 0.3 + 1.2 * pow( max( dot( -V, uSunDir ), 0.0 ), 5.0 ) ) ) / PI;
 	col = applyAtmosphere( col, vWorldPos );
 	gl_FragColor = vec4( col, a );
 }
 `;
+
+// Water2's own shader (flow-mapped normals, reflection, refraction), with the falling
+// water aerated: where the flowing normal maps churn, the sheet turns white, lit by the
+// same sky and sun as the rest of the valley; it frays to spray at its edges and foot.
+function whiteWaterShader( length ) {
+
+	const base = Water2.WaterShader;
+	const frag = base.fragmentShader
+		.replace( 'uniform vec4 config;', 'uniform vec4 config;\nuniform float uLength;\nuniform sampler2D uIrrLUT;\nuniform vec3 uSunC;\nuniform vec3 uSunD;\nuniform vec3 uFaceN;\n' + skyMappingGLSL )
+		.replace( 'gl_FragColor = vec4( color, 1.0 ) * mix( refractColor, reflectColor, reflectance );', `
+			vec4 water = vec4( color, 1.0 ) * mix( refractColor, reflectColor, reflectance );
+			float v = clamp( vUv.y / uLength, 0.0, 1.0 );
+			float halfW = 2.4 + 5.5 * pow( v, 1.2 );
+			float across = abs( vUv.x ) / halfW;
+			// aeration from the churn of the two flowing normal maps
+			float churn = abs( normalColor0.r - normalColor1.r ) + abs( normalColor0.g - normalColor1.g ) + ( 1.0 - normalColor.b ) * 1.2;
+			float foam = smoothstep( 0.1, 0.5, churn + v * 0.45 ) * smoothstep( 0.0, 0.08, v );
+			vec3 N = normalize( uFaceN + vec3( normal.x, 0.0, normal.z ) * 0.6 );
+			vec3 V = normalize( vToEye );
+			vec3 light = texture2D( uIrrLUT, dirToSkyUV( N ) ).rgb * 0.8 + texture2D( uIrrLUT, dirToSkyUV( vec3( 0.0, 1.0, 0.0 ) ) ).rgb * 0.35
+				+ uSunC * ( max( dot( N, uSunD ), 0.0 ) * 0.8 + pow( max( dot( -V, uSunD ), 0.0 ), 4.0 ) * 0.6 );
+			vec3 white = color * 0.85 * light / PI;
+			vec3 col = mix( water.rgb, white, 0.35 + 0.6 * foam );
+			float alpha = ( 1.0 - smoothstep( 0.5 - 0.1 * v, 1.0, across + ( normalColor.r - 0.5 ) * 0.6 ) ) * mix( 0.97, 0.7, v * v );
+			gl_FragColor = vec4( col, alpha );` );
+	return {
+		name: 'WhiteWaterShader',
+		uniforms: { ...THREE.UniformsUtils.clone( base.uniforms ), uLength: { value: length }, uIrrLUT: { value: null }, uSunC: { value: new THREE.Vector3() }, uSunD: { value: new THREE.Vector3() }, uFaceN: { value: new THREE.Vector3() } },
+		vertexShader: base.vertexShader,
+		fragmentShader: frag,
+	};
+
+}
 
 const blend = {
 	transparent: true,
@@ -214,28 +100,78 @@ const blend = {
 	blendDstAlpha: THREE.OneFactor,
 };
 
+// three's water objects face local +z; make sure the triangles do too
+function faceUp( g ) {
+
+	const p = g.getAttribute( 'position' ), idx = g.index.array;
+	const a = new THREE.Vector3().fromBufferAttribute( p, idx[ 0 ] ), b = new THREE.Vector3().fromBufferAttribute( p, idx[ 1 ] ), c = new THREE.Vector3().fromBufferAttribute( p, idx[ 2 ] );
+	const nz = new THREE.Vector3().crossVectors( b.sub( a ), c.sub( a ) ).z;
+	if ( nz < 0 ) for ( let i = 0; i < idx.length; i += 3 ) [ idx[ i + 1 ], idx[ i + 2 ] ] = [ idx[ i + 2 ], idx[ i + 1 ] ];
+	return g;
+
+}
+
+
+const _v = new THREE.Vector3();
+const _frustum = new THREE.Frustum(), _m4 = new THREE.Matrix4(), _sphere = new THREE.Sphere();
+
 export class Streams {
 
-	constructor( terrain, textures, water ) {
+	// lake: the lake Water (its mirror is shared with far ponds); terrainMesh joins the
+	// mirrors' passes so the banks are reflected
+	constructor( terrain, textures, lake, quality, terrainMesh, reflectMesh ) {
 
 		this.terrain = terrain;
+		this.quality = quality;
+		this.lake = lake;
+		this.terrainMesh = terrainMesh;
+		this.reflectMesh = reflectMesh;
 		this.group = new THREE.Group();
 		this.group.name = 'streams';
-		this.flowMat = new THREE.ShaderMaterial( {
-			vertexShader: flowVert, fragmentShader: flowFrag, lights: true, ...blend,
-			uniforms: { ...lightsU(), tWaterN: { value: textures.waterN }, tReflect: { value: water.rt.texture }, uTexMatrix: { value: water.texMatrix } },
-		} );
+		const tl = new THREE.TextureLoader();
+		this.normalMap0 = tl.load( './textures/Water_1_M_Normal.jpg' );
+		this.normalMap1 = tl.load( './textures/Water_2_M_Normal.jpg' );
+		for ( const t of [ this.normalMap0, this.normalMap1 ] ) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+		this.mainCamera = null;
+		this.ponds = [];
+		this.flowing = []; // materials driven by Water2's flow cycle
+		// three.js Reflector for the stream: a level mirror at the height of the water nearest you
+		this.reflector = new Reflector( new THREE.PlaneGeometry( 10, 10 ), { textureWidth: 512, textureHeight: 512, multisample: quality.msaa ? 4 : 0 } );
+		this.reflector.rotation.x = - Math.PI / 2;
+		this.refraction = { value: null };
 		this._buildRiver();
 		this._buildPonds();
 		this._buildFall();
 
 	}
 
+	// Water2's shader on any mesh: shared reflection and refraction, its own flow cycle
+	_flowMaterial( shader, { color, reflectivity, scale, flowSpeed } ) {
+
+		const uniforms = THREE.UniformsUtils.merge( [ THREE.UniformsLib.fog, shader.uniforms ] );
+		uniforms.color.value = new THREE.Color( color );
+		uniforms.reflectivity.value = reflectivity;
+		uniforms.tReflectionMap.value = this.reflector.getRenderTarget().texture;
+		uniforms.tRefractionMap = this.refraction;
+		uniforms.tNormalMap0.value = this.normalMap0;
+		uniforms.tNormalMap1.value = this.normalMap1;
+		uniforms.textureMatrix.value = new THREE.Matrix4();
+		uniforms.flowDirection = { value: new THREE.Vector2( 0, - 1 ) };
+		// three.js Water2's flow cycle: two normal-map phases half a cycle apart
+		const cycle = 0.15, half = cycle * 0.5;
+		uniforms.config.value.set( 0, half, half, scale );
+		const m = new THREE.ShaderMaterial( { name: shader.name, uniforms, vertexShader: shader.vertexShader, fragmentShader: shader.fragmentShader, transparent: true } );
+		m.userData.flow = { speed: flowSpeed, cycle, half };
+		this.flowing.push( m );
+		return m;
+
+	}
+
 	_buildRiver() {
 
 		const smp = this.terrain.river;
-		const pos = [], flow = [], dir = [], halfW = [], idx = [], fadeA = [];
-		// densify the samples for a smooth ribbon
+		const td = this.terrain;
+		// densify the samples for a smooth channel
 		const pts = [];
 		for ( let i = 0; i < smp.length - 1; i ++ ) {
 
@@ -256,7 +192,6 @@ export class Streams {
 		const last = smp[ smp.length - 1 ];
 		pts.push( { p: last.p.clone(), w: last.width, surf: last.surf, s: last.s } );
 		// where both banks are under the lake, the stream has become the lake
-		const td = this.terrain;
 		let end = pts.length;
 		for ( let i = 0; i < pts.length; i ++ ) {
 
@@ -266,7 +201,7 @@ export class Streams {
 			const o = pts[ i ].w + 3;
 			if ( td.heightAt( pts[ i ].p.x + n.x * o, pts[ i ].p.y + n.y * o ) < 0.02 && td.heightAt( pts[ i ].p.x - n.x * o, pts[ i ].p.y - n.y * o ) < 0.02 ) {
 
-				end = Math.min( pts.length, i + 4 );
+				end = Math.min( pts.length, i + 3 );
 				break;
 
 			}
@@ -274,27 +209,19 @@ export class Streams {
 		}
 
 		pts.length = end;
-		const sEnd = pts[ pts.length - 1 ].s;
 		this.path = pts;
+		// one ribbon along the whole stream on its true surface; u across, v downstream (m)
+		const pos = [], uv = [], idx = [];
 		pts.forEach( ( pt, i ) => {
 
 			const a = pts[ Math.max( 0, i - 1 ) ], b = pts[ Math.min( pts.length - 1, i + 1 ) ];
 			const d = b.p.clone().sub( a.p ).normalize();
 			const n = new THREE.Vector2( - d.y, d.x );
-			const ds = Math.max( b.s - a.s, 1e-3 );
-			const slope = Math.max( 0, ( a.surf - b.surf ) / ds );
-			const speed = 0.35 + Math.min( slope * 40, 1.8 );
-			const turb = THREE.MathUtils.clamp( slope * 25, 0, 1 ) + ( pt.s < 25 ? 1 - pt.s / 25 : 0 );
-			const w = pt.w + 0.5;
-			const fade = THREE.MathUtils.smoothstep( sEnd - pt.s, 0, 9 );
+			const w = pt.w + 0.7 + ( pt.s < 12 ? 5 * ( 1 - pt.s / 12 ) : 0 ); // wider where the fall lands
 			for ( const side of [ - 1, 1 ] ) {
 
-				fadeA.push( fade );
-
 				pos.push( pt.p.x + n.x * w * side, pt.surf, pt.p.y + n.y * w * side );
-				flow.push( side, pt.s, speed, Math.min( turb, 1 ) );
-				dir.push( d.x, d.y );
-				halfW.push( w );
+				uv.push( w * side, pt.s );
 
 			}
 
@@ -308,17 +235,18 @@ export class Streams {
 		} );
 		const g = new THREE.BufferGeometry();
 		g.setAttribute( 'position', new THREE.Float32BufferAttribute( pos, 3 ) );
-		g.setAttribute( 'aFlow', new THREE.Float32BufferAttribute( flow, 4 ) );
-		g.setAttribute( 'aDir', new THREE.Float32BufferAttribute( dir, 2 ) );
-		g.setAttribute( 'aHalfW', new THREE.Float32BufferAttribute( halfW, 1 ) );
-		g.setAttribute( 'aFade', new THREE.Float32BufferAttribute( fadeA, 1 ) );
+		g.setAttribute( 'uv', new THREE.Float32BufferAttribute( uv, 2 ) );
 		g.setIndex( idx );
 		g.computeBoundingSphere();
-		const m = new THREE.Mesh( g, this.flowMat );
+		const scale = 0.33; // the normal maps repeat every 3 m
+		const m = new THREE.Mesh( g, this._flowMaterial( Water2.WaterShader, { color: 0xd4e6dc, reflectivity: 0.03, scale, flowSpeed: 0.9 * scale * 0.5 } ) );
+		m.material.side = THREE.DoubleSide;
+		m.layers.set( LAYERS.WATER );
 		m.renderOrder = 11;
-		m.layers.set( 1 );
+		m.frustumCulled = false;
 		m.name = 'river';
 		this.group.add( m );
+		this.river = m;
 
 	}
 
@@ -340,57 +268,51 @@ export class Streams {
 
 			}
 
-			const pos = [], flow = [], dir = [], hw = [], idx = [];
-			const vert = ( x, z ) => {
-
-				const depth = Math.max( 0, pd.surf - td.heightAt( pd.c.x + x, pd.c.y + z ) );
-				pos.push( x, 0, z );
-				flow.push( 0, depth, 0, 0 );
-				dir.push( 1, 0 );
-				hw.push( pd.r );
-				return pos.length / 3 - 1;
-
-			};
-
-			const c = vert( 0, 0 );
-			const grid = [];
+			pd.edge = edge;
+			// a disc following the shoreline, in three's XY plane (local +y = world -z)
+			const pos = [ 0, 0, 0 ], idx = [];
 			for ( let j = 1; j <= rings; j ++ ) {
 
-				const row = [];
 				for ( let k = 0; k < N; k ++ ) {
 
 					const a = k / N * Math.PI * 2, r = edge[ k ] * j / rings;
-					row.push( vert( Math.cos( a ) * r, Math.sin( a ) * r ) );
+					pos.push( Math.cos( a ) * r, - Math.sin( a ) * r, 0 );
 
 				}
-
-				grid.push( row );
 
 			}
 
 			for ( let k = 0; k < N; k ++ ) {
 
 				const k1 = ( k + 1 ) % N;
-				idx.push( c, grid[ 0 ][ k1 ], grid[ 0 ][ k ] );
-				for ( let j = 0; j < rings - 1; j ++ ) idx.push( grid[ j ][ k ], grid[ j ][ k1 ], grid[ j + 1 ][ k ], grid[ j ][ k1 ], grid[ j + 1 ][ k1 ], grid[ j + 1 ][ k ] );
+				idx.push( 0, 1 + k, 1 + k1 );
+				for ( let j = 0; j < rings - 1; j ++ ) {
+
+					const a = 1 + j * N + k, b = 1 + j * N + k1, c = 1 + ( j + 1 ) * N + k, d = 1 + ( j + 1 ) * N + k1;
+					idx.push( a, c, b, b, c, d );
+
+				}
 
 			}
 
 			const g = new THREE.BufferGeometry();
 			g.setAttribute( 'position', new THREE.Float32BufferAttribute( pos, 3 ) );
-			g.setAttribute( 'aFlow', new THREE.Float32BufferAttribute( flow, 4 ) );
-			g.setAttribute( 'aDir', new THREE.Float32BufferAttribute( dir, 2 ) );
-			g.setAttribute( 'aHalfW', new THREE.Float32BufferAttribute( hw, 1 ) );
-			g.setAttribute( 'aFade', new THREE.Float32BufferAttribute( new Float32Array( hw.length ).fill( 1 ), 1 ) );
 			g.setIndex( idx );
+			faceUp( g );
 			g.computeBoundingSphere();
-			const m = new THREE.Mesh( g, this.flowMat );
-			m.position.set( pd.c.x, pd.surf, pd.c.y );
-			m.renderOrder = 11;
-			m.layers.set( 1 );
-			m.name = 'pond';
-			this.group.add( m );
-			pd.edge = edge;
+			const w = new Water( null, this.quality, {
+				geometry: g,
+				position: new THREE.Vector3( pd.c.x, pd.surf, pd.c.y ),
+				reflectScale: 0.6,
+				ripples: this.lake.ripples,
+				fallback: this.lake,
+				farDist: 220,
+				name: 'pond',
+			} );
+			w.uniforms.size.value = 3.5;
+			w.reflectOnly.push( this.terrainMesh );
+			this.ponds.push( w );
+			this.group.add( w.mesh );
 
 		}
 
@@ -402,84 +324,208 @@ export class Streams {
 		const out = FALL.out, base = FALL.base;
 		const side = new THREE.Vector2( - out.y, out.x );
 		const pool = this.terrain.river[ 0 ];
-		// walk up the fall line from the pool to the lip, hugging the rock
-		const rows = 48, cols = 8;
-		const pos = [], uv = [], idx = [];
-		const lipBehind = 40;
-		for ( let j = 0; j <= rows; j ++ ) {
+		// the lip: along the fall line, where the ground drops away most steeply
+		const H = ( b ) => td.heightAt( base.x - out.x * b, base.y - out.y * b );
+		let lipB = 0, steepest = 0;
+		for ( let b = 40; b > - 25; b -= 0.25 ) {
 
-			const v = j / rows; // 0 top .. 1 foot
-			const behind = THREE.MathUtils.lerp( lipBehind, - 7, Math.pow( v, 0.85 ) );
-			const c = base.clone().addScaledVector( out, - behind );
-			const halfW = THREE.MathUtils.lerp( 2.4, 7.5, Math.pow( v, 0.8 ) );
-			for ( let i = 0; i <= cols; i ++ ) {
+			const drop = H( b ) - H( b - 2 );
+			if ( drop > steepest ) {
 
-				const u = i / cols * 2 - 1;
-				const q = c.clone().addScaledVector( side, u * halfW );
-				let y = td.heightAt( q.x, q.y ) + 0.7;
-				if ( v > 0.93 ) y = Math.max( y, pool.surf + 0.05 );
-				pos.push( q.x, y, q.y );
-				uv.push( u, v );
+				steepest = drop;
+				lipB = b;
 
 			}
 
 		}
 
-		for ( let j = 0; j < rows; j ++ ) for ( let i = 0; i < cols; i ++ ) {
+		// step back to the top of the edge
+		while ( H( lipB + 0.25 ) > H( lipB ) + 0.05 && lipB < 60 ) lipB += 0.25;
 
-			const a = j * ( cols + 1 ) + i, b = a + cols + 1;
-			idx.push( a, b, a + 1, a + 1, b, b + 1 );
+		const lip = base.clone().addScaledVector( out, - lipB );
+		const lipY = td.heightAt( lip.x, lip.y ) + 0.3;
+		const floorY = pool.surf;
+		// it falls free a little way out from the rock
+		let reach = 4;
+		while ( reach < 30 ) {
+
+			let clear = true;
+			for ( let v = 0.08; v <= 1; v += 0.04 ) {
+
+				const q = lip.clone().addScaledVector( out, reach * v + 0.5 );
+				if ( td.heightAt( q.x, q.y ) > lipY - ( lipY - floorY ) * v - 0.8 ) clear = false;
+
+			}
+
+			if ( clear ) break;
+			reach += 1;
+
+		}
+
+		const foot = lip.clone().addScaledVector( out, reach );
+		const top3 = new THREE.Vector3( lip.x, lipY, lip.y ), foot3 = new THREE.Vector3( foot.x, floorY, foot.y );
+		const X = new THREE.Vector3( side.x, 0, side.y ).normalize();
+		const Y = top3.clone().sub( foot3 ).normalize(); // up the curtain
+		let Z = new THREE.Vector3().crossVectors( X, Y ).normalize();
+		if ( Z.x * out.x + Z.z * out.y < 0 ) {
+
+			X.negate();
+			Z = new THREE.Vector3().crossVectors( X, Y ).normalize();
+
+		}
+
+		const L = top3.distanceTo( foot3 );
+		const worldPts = [], uvs = [], idx = [];
+		const rows = 16;
+		for ( let j = 0; j <= rows; j ++ ) {
+
+			const v = j / rows;
+			const c = top3.clone().lerp( foot3, v );
+			const halfW = 2.4 + 5.5 * Math.pow( v, 1.2 );
+			for ( const sd of [ - 1, 1 ] ) {
+
+				worldPts.push( c.clone().addScaledVector( X, halfW * sd ) );
+				uvs.push( halfW * sd, v * L );
+
+			}
+
+			if ( j < rows ) {
+
+				const k = j * 2;
+				idx.push( k, k + 2, k + 1, k + 1, k + 2, k + 3 );
+
+			}
 
 		}
 
 		const g = new THREE.BufferGeometry();
-		g.setAttribute( 'position', new THREE.Float32BufferAttribute( pos, 3 ) );
-		g.setAttribute( 'aFall', new THREE.Float32BufferAttribute( uv, 2 ) );
+		g.setAttribute( 'position', new THREE.Float32BufferAttribute( worldPts.flatMap( ( p ) => [ p.x, p.y, p.z ] ), 3 ) );
+		g.setAttribute( 'uv', new THREE.Float32BufferAttribute( uvs, 2 ) );
 		g.setIndex( idx );
-		g.computeVertexNormals();
-		// two layers: the sheet, and a looser veil of spray just in front
-		for ( const layer of [ 0, 1 ] ) {
+		g.computeBoundingSphere();
+		const scale = 0.18;
+		const fall = new THREE.Mesh( g, this._flowMaterial( whiteWaterShader( L ), { color: 0xe8f0f2, reflectivity: 0.05, scale, flowSpeed: 1.6 } ) );
+		fall.material.side = THREE.DoubleSide;
+		fall.material.uniforms.uFaceN.value.copy( Z );
+		fall.layers.set( LAYERS.WATER );
+		fall.renderOrder = 12;
+		fall.frustumCulled = false;
+		fall.name = 'waterfall';
+		this.group.add( fall );
+		this.fall = fall;
 
-			const mat = new THREE.ShaderMaterial( {
-				vertexShader: fallVert, fragmentShader: fallFrag, lights: true, side: THREE.DoubleSide, ...blend,
-				uniforms: { ...lightsU(), uLayer: { value: layer } },
-			} );
-			const m = new THREE.Mesh( g, mat );
-			if ( layer ) {
-
-				m.position.set( out.x * 0.6, 0.3, out.y * 0.6 );
-				m.scale.set( 1, 1, 1 );
-
-			}
-
-			m.renderOrder = 12 + layer;
-			m.layers.enableAll();
-			m.name = 'waterfall';
-			this.group.add( m );
-
-		}
-
-		// mist rising from the plunge pool
-		const n = 70;
+		// mist and spray
+		const n = 320;
 		const mg = new THREE.BufferGeometry();
-		const mp = new Float32Array( n * 3 ), seed = new Float32Array( n * 4 );
+		const mp = new Float32Array( n * 3 ), seed = new Float32Array( n * 4 ), vel = new Float32Array( n * 3 );
+		const R = Math.random;
 		for ( let i = 0; i < n; i ++ ) {
 
-			mp.set( [ pool.p.x + ( Math.random() - 0.5 ) * 8, pool.surf + 0.5, pool.p.y + ( Math.random() - 0.5 ) * 8 ], i * 3 );
-			seed.set( [ Math.random(), Math.random(), Math.random(), Math.random() ], i * 4 );
+			if ( i < n * 0.6 ) {
+
+				// the cloud boiling up from where the water lands
+				const a = R() * Math.PI * 2, r = R() * 4;
+				mp.set( [ foot.x + Math.cos( a ) * r, floorY + 0.5, foot.y + Math.sin( a ) * r ], i * 3 );
+				const sp = 2 + R() * 5;
+				vel.set( [ Math.cos( a ) * sp + out.x * 3, 2 + R() * 6, Math.sin( a ) * sp + out.y * 3 ], i * 3 );
+				seed.set( [ 5 + R() * 9, R(), R(), 0.1 + R() * 0.08 ], i * 4 );
+
+			} else {
+
+				// spray peeling off the lower half of the curtain
+				const v = 0.45 + 0.55 * R();
+				const q = top3.clone().lerp( foot3, v ).addScaledVector( X, ( R() - 0.5 ) * 10 );
+				mp.set( [ q.x, q.y, q.z ], i * 3 );
+				vel.set( [ out.x * ( 1 + R() * 3 ), - 1 - R() * 3, out.y * ( 1 + R() * 3 ) ], i * 3 );
+				seed.set( [ 2 + R() * 4, R(), R(), 0.15 + R() * 0.1 ], i * 4 );
+
+			}
 
 		}
 
 		mg.setAttribute( 'position', new THREE.BufferAttribute( mp, 3 ) );
 		mg.setAttribute( 'aSeed', new THREE.BufferAttribute( seed, 4 ) );
+		mg.setAttribute( 'aVel', new THREE.BufferAttribute( vel, 3 ) );
 		const mist = new THREE.Points( mg, new THREE.ShaderMaterial( {
 			vertexShader: mistVert, fragmentShader: mistFrag, lights: true, ...blend, uniforms: lightsU(),
 		} ) );
 		mist.frustumCulled = false;
-		mist.renderOrder = 14;
-		mist.layers.set( 1 );
+		mist.renderOrder = 15;
+		mist.layers.set( LAYERS.FX );
 		this.group.add( mist );
-		this.poolPos = new THREE.Vector3( pool.p.x, pool.surf, pool.p.y );
+		this.poolPos = new THREE.Vector3( foot.x, floorY, foot.y );
+
+	}
+
+	setSize( width, height ) {
+
+		const s = this.quality.reflectScale;
+		this.reflector.getRenderTarget().setSize( Math.max( 2, Math.round( width * s ) ), Math.max( 2, Math.round( height * s ) ) );
+		for ( const p of this.ponds ) p.setSize( width, height );
+
+	}
+
+	update( camera, dt ) {
+
+		this.mainCamera = camera;
+		for ( const p of this.ponds ) p.mainCamera = camera;
+		// Water2's flow cycle, and the projection that maps each vertex to the screen
+		const bias = new THREE.Matrix4().set( 0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1 );
+		const proj = bias.multiply( camera.projectionMatrix ).multiply( camera.matrixWorldInverse );
+		for ( const m of this.flowing ) {
+
+			const c = m.uniforms.config.value, f = m.userData.flow;
+			c.x += f.speed * dt;
+			c.y = c.x + f.half;
+			if ( c.x >= f.cycle ) {
+
+				c.x = 0;
+				c.y = f.half;
+
+			} else if ( c.y >= f.cycle ) c.y -= f.cycle;
+
+			m.uniforms.textureMatrix.value.copy( proj );
+
+		}
+
+		// the white water is lit by the valley's own sky and sun
+		const fu = this.fall.material.uniforms;
+		fu.uIrrLUT.value = U.uIrrLUT.value;
+		fu.uSunC.value.copy( U.uSunColor.value );
+		fu.uSunD.value.copy( U.uSunDir.value );
+		this.fall.visible = camera.position.distanceTo( this.poolPos ) < 900;
+
+	}
+
+	// The stream's mirror: level with the water nearest the camera. Called before the frame.
+	renderReflection( renderer, scene, camera ) {
+
+		// only when some of the stream (or the falls) is on screen
+		_frustum.setFromProjectionMatrix( _m4.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse ) );
+		let best = Infinity, level = 0, seen = this.fall.visible && _frustum.intersectsObject( this.fall );
+		const c = camera.position;
+		for ( let i = 0; i < this.path.length; i += 2 ) {
+
+			const q = this.path[ i ];
+			const d = ( q.p.x - c.x ) ** 2 + ( q.p.y - c.z ) ** 2;
+			if ( d < best ) {
+
+				best = d;
+				level = q.surf;
+
+			}
+
+			if ( ! seen && d < 600 * 600 ) seen = _frustum.intersectsSphere( _sphere.set( _v.set( q.p.x, q.surf, q.p.y ), q.w + 2 ) );
+
+		}
+
+		if ( ! seen ) return;
+		this.reflector.position.y = Math.min( level, c.y - 0.3 );
+		this.reflector.updateMatrixWorld();
+		this.reflectMesh.layers.enable( 0 );
+		renderer.setClearColor( 0x000000, 1 );
+		this.reflector.onBeforeRender( renderer, scene, camera );
+		this.reflectMesh.layers.disable( 0 );
 
 	}
 

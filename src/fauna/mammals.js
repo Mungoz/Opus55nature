@@ -52,7 +52,8 @@ export class Mammals {
 		const squirrelProto = buildSquirrel( this.material );
 		// fur: shells drawn over the skin, only near the camera
 		const shells = quality.fur ?? 12;
-		for ( const [ p, far ] of [ [ stagProto, 90 ], [ hindProto, 90 ], [ marmotProto, 45 ], [ squirrelProto, 30 ] ] ) {
+		// (hairs a centimetre or two long are sub-pixel beyond these distances at 55 degrees)
+		for ( const [ p, far ] of [ [ stagProto, 28 ], [ hindProto, 28 ], [ marmotProto, 16 ], [ squirrelProto, 10 ] ] ) {
 
 			if ( ! p.fur || ! shells ) continue;
 			p.furGeo = furGeometry( p.mesh.geometry, shells );

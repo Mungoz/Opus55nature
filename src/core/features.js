@@ -158,12 +158,17 @@ float applyFallStep( vec2 p, float h ) {
 		+ 0.2 * smoothstep( 13.5 - j, 17.0 - j, behind )
 		+ 0.17 * smoothstep( 21.0 + j, 24.5 + j, behind )
 		+ 0.15 * smoothstep( 28.5, 32.0, behind );
+	// where the stream goes over, the ice cut one sheer face (Staubbach-like)
+	float sheer = 1.0 - smoothstep( 14.0, 32.0, abs( along ) + 7.0 * gnoise( vec2( along * 0.05, 3.0 ) ) );
+	float single = smoothstep( -3.0, 3.0, behind + 1.5 * gnoise( vec2( along * 0.2, 9.0 ) ) );
+	tiers = mix( tiers, single, sheer );
 	// broken blocks and a scree apron at the foot
 	tiers += 0.03 * gnoise( p * 0.09 ) * smoothstep( -4.0, 2.0, behind );
 	tiers += 0.05 * smoothstep( -16.0, -4.0, behind ) * ( 1.0 - smoothstep( -4.0, 0.0, behind ) );
 	float step_ = hv * tiers * ( 1.0 - smoothstep( 380.0, 700.0, behind ) );
 	// a notch in the lip where the stream pours over
-	step_ -= 6.0 * exp( -along * along / 60.0 ) * smoothstep( 26.0, 34.0, behind ) * ( 1.0 - smoothstep( 60.0, 160.0, behind ) );
+	float lipB = mix( 30.0, 3.0, sheer );
+	step_ -= 6.0 * exp( -along * along / 60.0 ) * smoothstep( lipB - 4.0, lipB + 4.0, behind ) * ( 1.0 - smoothstep( 60.0, 160.0, behind ) );
 	return h + step_ * span;
 }
 

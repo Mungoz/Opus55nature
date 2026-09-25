@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Water as ThreeWater } from 'three/addons/objects/Water.js';
 import { commonParsGLSL } from '../shaders/common.glsl.js';
 import { sharedUniforms, U } from '../core/uniforms.js';
+import { LAYERS } from '../core/world.js';
 
 export const MAX_RIPPLES = 48;
 
@@ -32,7 +33,7 @@ uniform float time;
 uniform float size;
 uniform float distortionScale;
 uniform vec3 waterColor;
-uniform vec3 eye;
+uniform float uLevel;
 uniform vec4 uRipples[ ${MAX_RIPPLES} ];
 uniform float uCalm;
 varying vec4 mirrorCoord;
@@ -83,9 +84,9 @@ vec2 rainRings( vec2 p, float t ) {
 
 void main() {
 	vec3 wp = worldPosition;
-	float depth = uWaterLevel - terrainH( wp.xz );
+	float depth = uLevel - terrainH( wp.xz );
 	if ( depth < -0.4 ) discard;
-	vec3 worldToEye = eye - wp;
+	vec3 worldToEye = cameraPosition - wp;
 	float dist = length( worldToEye );
 	vec3 eyeDirection = worldToEye / dist;
 	float t = uTime;
@@ -165,16 +166,25 @@ void main() {
 
 export class Water {
 
-	constructor( textures, quality ) {
+	// opts: geometry (in the XY plane; laid flat, local +y points to world -z), position
+	// (the water level is its y), reflectScale, ripples (shared array), name
+	constructor( textures, quality, opts = {} ) {
 
 		this.quality = quality;
-		const normals = new THREE.TextureLoader().load( './textures/waternormals.jpg' );
+		this.reflectScale = opts.reflectScale ?? 1;
+		const normals = Water.normals || ( Water.normals = new THREE.TextureLoader().load( './textures/waternormals.jpg' ) );
 		normals.wrapS = normals.wrapT = THREE.RepeatWrapping;
 		normals.anisotropy = 4;
 
-		// the lake surface: a plane in XY, laid flat as three's Water expects
-		const geo = new THREE.PlaneGeometry( 1500, 2300, 1, 1 );
-		geo.translate( 0, 300, 0 );
+		// the lake surface by default: a plane in XY, laid flat as three's Water expects
+		let geo = opts.geometry;
+		if ( ! geo ) {
+
+			geo = new THREE.PlaneGeometry( 1500, 2300, 1, 1 );
+			geo.translate( 0, 300, 0 );
+
+		}
+
 		this.mesh = new ThreeWater( geo, {
 			textureWidth: 512,
 			textureHeight: 512,
@@ -183,10 +193,11 @@ export class Water {
 			fog: false,
 		} );
 		this.mesh.rotation.x = - Math.PI / 2;
-		this.mesh.position.y = U.uWaterLevel.value;
-		this.mesh.name = 'water';
-		this.mesh.layers.set( 1 );
-		this.mesh.frustumCulled = false;
+		this.mesh.position.copy( opts.position || new THREE.Vector3( 0, U.uWaterLevel.value, 0 ) );
+		this.mesh.name = opts.name || 'water';
+		this.mesh.layers.set( LAYERS.WATER );
+		// the mirror pass runs only when the water itself is drawn
+		this.mesh.frustumCulled = true;
 		this.mesh.renderOrder = 10;
 
 		// three's mirror rig: reflection texture, texture matrix and eye, updated in place
@@ -195,14 +206,14 @@ export class Water {
 		this.rt = this.reflectTarget;
 		this.texMatrix = rig.textureMatrix.value;
 
-		this.ripples = Array.from( { length: MAX_RIPPLES }, () => new THREE.Vector4( 0, 0, - 100, 0 ) );
+		this.ripples = opts.ripples || Array.from( { length: MAX_RIPPLES }, () => new THREE.Vector4( 0, 0, - 100, 0 ) );
 		this._rippleIndex = 0;
 		this.uniforms = {
 			...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ),
 			...sharedUniforms(),
-			mirrorSampler: rig.mirrorSampler,
-			textureMatrix: rig.textureMatrix,
-			eye: rig.eye,
+			mirrorSampler: { value: rig.mirrorSampler.value },
+			textureMatrix: { value: rig.textureMatrix.value },
+			uLevel: { value: this.mesh.position.y },
 			normalSampler: rig.normalSampler,
 			time: { value: 0 },
 			size: { value: 2.2 },
@@ -232,10 +243,20 @@ export class Water {
 		// mirror camera sees layer 0, so they join layer 0 for the mirror pass alone.
 		this.reflectOnly = [];
 		this.mainCamera = null;
+		// small waters far away borrow the lake's mirror image instead of rendering their own
+		this.fallback = opts.fallback || null;
+		this.farDist = opts.farDist ?? Infinity;
+		const own = { tex: rig.mirrorSampler.value, mat: rig.textureMatrix.value };
+		const centre = new THREE.Vector3();
 		const mirror = this.mesh.onBeforeRender;
 		this.mesh.onBeforeRender = ( renderer, scene, camera, ...rest ) => {
 
 			if ( this.mainCamera && camera !== this.mainCamera ) return;
+			this.mesh.geometry.boundingSphere && centre.copy( this.mesh.geometry.boundingSphere.center ).applyMatrix4( this.mesh.matrixWorld );
+			const far = this.fallback && camera.position.distanceTo( centre ) > this.farDist;
+			this.uniforms.mirrorSampler.value = far ? this.fallback.uniforms.mirrorSampler.value : own.tex;
+			this.uniforms.textureMatrix.value = far ? this.fallback.uniforms.textureMatrix.value : own.mat;
+			if ( far ) return;
 			for ( const o of this.reflectOnly ) o.layers.enable( 0 );
 			renderer.setClearColor( 0x000000, 1 );
 			mirror( renderer, scene, camera, ...rest );
@@ -255,7 +276,7 @@ export class Water {
 
 	setSize( width, height ) {
 
-		const s = this.quality.reflectScale;
+		const s = this.quality.reflectScale * this.reflectScale;
 		this.reflectTarget.setSize( Math.max( 2, Math.round( width * s ) ), Math.max( 2, Math.round( height * s ) ) );
 
 	}

@@ -155,6 +155,7 @@ export class Particles {
 		this.dropVel = new Float32Array( 1200 * 3 );
 		this.dropLife = new Float32Array( 1200 );
 		this.dropNext = 0;
+		this.drops.points.layers.set( 4 );
 		this.group.add( this.drops.points );
 
 		// drifting motes around the viewer
@@ -169,7 +170,7 @@ export class Particles {
 
 		}
 
-		this.motes.points.layers.set( 1 );
+		this.motes.points.layers.set( 4 ); // effects: drawn after the water
 		this.group.add( this.motes.points );
 
 		// leaves
@@ -200,7 +201,7 @@ export class Particles {
 			vertexShader: leafVert, fragmentShader: leafFrag, uniforms: lightsU(), lights: true, side: THREE.DoubleSide,
 		} ) );
 		this.leaves.frustumCulled = false;
-		this.leaves.layers.set( 1 );
+		this.leaves.layers.set( 4 );
 		this.group.add( this.leaves );
 		this.trees = null; // set by the app: forest instance list for leaf spawning
 

@@ -48,6 +48,7 @@ uniform float uTile;
 uniform float uRadius;
 uniform float uWaterLevel;
 uniform sampler2D uNoiseTex;
+uniform vec2 uSizeBand; // this mesh draws the stones whose size seed falls in this band
 attribute vec4 aOff;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
@@ -66,7 +67,7 @@ void main() {
 	float dens = bio.a * 0.55 * beds * ( 1.0 - smoothstep( -0.02, 0.1, depth ) );
 	dens += ( 1.0 - smoothstep( 0.5, 0.9, h ) ) * 0.03 + bio.b * 0.2;
 	float r1 = aOff.z, r2 = aOff.w;
-	if ( r1 > dens || fade <= 0.0 ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
+	if ( r1 > dens || fade <= 0.0 || r2 < uSizeBand.x || r2 >= uSizeBand.y ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
 	float r3 = fract( r1 * 17.3 + r2 * 5.1 );
 	// mostly pebbles, an occasional cobble
 	float size = ( 0.02 + 0.035 * r3 + 0.13 * pow( r2, 4.0 ) + 0.12 * pow( r2, 14.0 ) ) * fade;
@@ -117,9 +118,9 @@ void main() {
 }
 `;
 
-function stoneGeometry() {
+function stoneGeometry( detail = 2 ) {
 
-	let g = new THREE.IcosahedronGeometry( 1, 3 );
+	let g = new THREE.IcosahedronGeometry( 1, detail );
 	g.deleteAttribute( 'uv' );
 	g = mergeVertices( g );
 	const p = g.getAttribute( 'position' );
@@ -300,15 +301,35 @@ export class GroundCover {
 		const lights = () => ( { ...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ), ...sharedUniforms() } );
 		const k = Math.sqrt( quality.grassDensity );
 
-		const stoneTile = 56;
-		this.stones = new THREE.Mesh( instanced( stoneGeometry(), stoneTile, 0.3 / k, 11 ), new THREE.ShaderMaterial( {
+		// pebbles (most of them, a few cm across) on a light mesh; the larger cobbles, a fifth
+		// of the stones, on a finer one - and that mesh only carries their instances
+		const stoneTile = 56, cut = 0.78;
+		const all = instanced( stoneGeometry( 1 ), stoneTile, 0.3 / k, 11 );
+		const big = instanced( stoneGeometry( 2 ), stoneTile, 0.3 / k, 11 );
+		{
+
+			const src = big.getAttribute( 'aOff' ).array, keep = [];
+			for ( let i = 0; i < src.length; i += 4 ) if ( src[ i + 3 ] >= cut ) keep.push( src[ i ], src[ i + 1 ], src[ i + 2 ], src[ i + 3 ] );
+			big.setAttribute( 'aOff', new THREE.InstancedBufferAttribute( new Float32Array( keep ), 4 ) );
+			big.instanceCount = keep.length / 4;
+
+		}
+
+		const stoneMat = ( band ) => new THREE.ShaderMaterial( {
 			vertexShader: stoneVert,
 			fragmentShader: stoneFrag,
-			uniforms: { ...lights(), uTile: { value: stoneTile }, uRadius: { value: stoneTile * 0.5 } },
+			uniforms: { ...lights(), uTile: { value: stoneTile }, uRadius: { value: stoneTile * 0.5 }, uSizeBand: { value: new THREE.Vector2( ...band ) } },
 			lights: true,
-		} ) );
-		this.stones.frustumCulled = false;
-		this.stones.layers.set( 1 );
+		} );
+		this.stones = new THREE.Group();
+		for ( const [ geo, band ] of [ [ all, [ 0, cut ] ], [ big, [ cut, 2 ] ] ] ) {
+
+			const m = new THREE.Mesh( geo, stoneMat( band ) );
+			m.frustumCulled = false;
+			m.layers.set( 1 );
+			this.stones.add( m );
+
+		}
 
 		const flowerTile = 64;
 		this.flowers = new THREE.Mesh( instanced( flowerGeometry(), flowerTile, 0.42 / k, 13 ), new THREE.ShaderMaterial( {

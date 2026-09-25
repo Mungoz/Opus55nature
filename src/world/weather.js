@@ -144,7 +144,7 @@ export class Weather {
 			blendDstAlpha: THREE.OneFactor,
 		} ) );
 		this.rain.frustumCulled = false;
-		this.rain.layers.set( 1 );
+		this.rain.layers.set( 4 ); // effects: drawn after the water
 		this.rain.visible = false;
 		this.group.add( this.rain );
 

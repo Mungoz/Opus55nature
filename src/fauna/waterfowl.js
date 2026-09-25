@@ -2,6 +2,27 @@ import * as THREE from 'three';
 import { creatureMaterial } from './creature.js';
 import { swanGeometry, swanEyes, mallardGeometry, mallardEyes } from './swanModel.js';
 import { RNG } from '../core/rng.js';
+import { U } from '../core/uniforms.js';
+
+// Swell on the lake: a few travelling waves, so birds near each other rise and fall
+// together. Returns [ height, dh/dx, dh/dz ].
+const WAVES = [ [ 0.9, 0.32, 1.9, 0.0 ], [ 1.7, - 0.55, 2.6, 1.3 ], [ 0.4, 1.3, 3.3, 2.1 ], [ - 1.2, 0.8, 2.2, 4.0 ] ];
+function swell( x, z, t, amp ) {
+
+	let h = 0, dx = 0, dz = 0;
+	for ( const [ kx, kz, w, ph ] of WAVES ) {
+
+		const a = amp / Math.hypot( kx, kz );
+		const arg = kx * x + kz * z - w * t + ph;
+		h += a * Math.sin( arg );
+		dx += a * kx * Math.cos( arg );
+		dz += a * kz * Math.cos( arg );
+
+	}
+
+	return [ h, dx, dz ];
+
+}
 
 // A bird paddling about the lake, wandering between deep-water waypoints.
 class Paddler {
@@ -20,6 +41,12 @@ class Paddler {
 		this.dabble = 0;
 		this.pause = 0;
 		this.phase = rng.next() * 10;
+		// buoyancy: the body is a damped spring riding the swell, so it lags and overshoots
+		this.y = 0; this.vy = 0;
+		this.pitch = 0; this.vp = 0;
+		this.roll = 0; this.vr = 0;
+		this.turn = 0;
+		this.stroke = rng.next();
 
 	}
 
@@ -130,8 +157,16 @@ export class Waterfowl {
 
 			let dh = desired - b.heading;
 			dh = Math.atan2( Math.sin( dh ), Math.cos( dh ) );
-			b.heading += THREE.MathUtils.clamp( dh, - 0.5 * dt, 0.5 * dt );
-			const spd = b.leader ? b.speed : ( b.pause > 0 ? 0.05 : b.speed );
+			const turnRate = THREE.MathUtils.clamp( dh, - 0.5 * dt, 0.5 * dt );
+			b.heading += turnRate;
+			b.turn += ( turnRate / Math.max( dt, 1e-4 ) - b.turn ) * Math.min( 1, dt * 3 );
+			let spd = b.leader ? b.speed : ( b.pause > 0 ? 0.05 : b.speed );
+			// paddling comes in strokes: the bird surges forward and settles back each one
+			const big = b.mesh.scale.x > 1.1 || b.mesh.scale.x > 0.9 && b.speed < 0.5;
+			const rate = big ? 0.9 : 1.8;
+			b.stroke += dt * rate * ( 0.3 + Math.min( 1, spd / 0.4 ) );
+			const surge = Math.sin( b.stroke * Math.PI * 2 );
+			spd *= 1 + 0.35 * surge * Math.min( 1, spd / 0.2 );
 			b.pos.x += Math.sin( b.heading ) * spd * dt;
 			b.pos.z += Math.cos( b.heading ) * spd * dt;
 			// never beach: turn back if the water gets shallow
@@ -145,18 +180,49 @@ export class Waterfowl {
 			}
 
 			// ducks up-end to feed now and then
-			if ( b.dabble <= 0 && ! b.pause && b.mesh.scale.x < 1.1 && this.rng.next() < dt * 0.04 ) b.dabble = 2.5;
+			if ( b.dabble <= 0 && ! b.pause && b.mesh.scale.x < 1.1 && this.rng.next() < dt * 0.04 ) {
+
+				b.dabble = this.rng.range( 2.2, 4.5 );
+				b.dabbleLen = b.dabble;
+				this.water.addRipple( b.pos.x + Math.sin( b.heading ) * 0.25, b.pos.z + Math.cos( b.heading ) * 0.25, 0.35 );
+
+			}
+
 			let pitch = 0;
 			if ( b.dabble > 0 ) {
 
 				b.dabble -= dt;
-				pitch = Math.sin( Math.min( 1, ( 2.5 - b.dabble ) / 0.4 ) * Math.PI * 0.5 ) * 1.25 * Math.min( 1, b.dabble / 0.3 );
+				const into = Math.min( 1, ( b.dabbleLen - b.dabble ) / 0.35 ), out = Math.min( 1, b.dabble / 0.3 );
+				pitch = Math.sin( into * Math.PI * 0.5 ) * 1.55 * out;
+				if ( b.dabble <= 0 ) this.water.addRipple( b.pos.x, b.pos.z, 0.3 );
 
 			}
 
-			const bob = Math.sin( time * 1.4 + b.phase ) * 0.012;
-			b.mesh.position.set( b.pos.x, bob - 0.02, b.pos.z );
-			b.mesh.rotation.set( pitch + Math.sin( time * 1.1 + b.phase ) * 0.03, b.heading, Math.sin( time * 0.9 + b.phase ) * 0.03, 'YXZ' );
+			// ride the swell: the targets come from the wave surface under the bird, the
+			// body follows them on springs (heavier birds respond more slowly)
+			const wind = U.uWind.value.z;
+			const [ wh, wx, wz ] = swell( b.pos.x, b.pos.z, time, 0.008 + 0.02 * wind );
+			const fx = Math.sin( b.heading ), fz = Math.cos( b.heading );
+			const slopeFwd = wx * fx + wz * fz, slopeSide = wx * fz - wz * fx;
+			const k = big ? 14 : 30, c = big ? 5 : 7;
+			const spring = ( x, v, target ) => {
+
+				v += ( ( target - x ) * k - v * c ) * dt;
+				return [ x + v * dt, v ];
+
+			};
+
+			[ b.y, b.vy ] = spring( b.y, b.vy, wh + ( b.dabble > 0 ? - 0.03 : 0 ) + surge * 0.003 * Math.min( 1, spd / 0.2 ) );
+			// nose dips a touch on each stroke; leans into turns
+			[ b.pitch, b.vp ] = spring( b.pitch, b.vp, - Math.atan( slopeFwd ) + pitch - surge * 0.02 * Math.min( 1, spd / 0.2 ) );
+			[ b.roll, b.vr ] = spring( b.roll, b.vr, Math.atan( slopeSide ) - b.turn * ( big ? 0.4 : 0.2 ) );
+			// the tail wags while up-ended, and now and then a shake of the feathers
+			let wag = 0;
+			if ( pitch > 0.8 ) wag = Math.sin( time * 9 + b.phase ) * 0.06;
+			const shake = Math.max( 0, Math.sin( time * 0.13 + b.phase * 3 ) - 0.985 ) * 40;
+			wag += Math.sin( time * 38 ) * 0.05 * shake;
+			b.mesh.position.set( b.pos.x, b.y - 0.02, b.pos.z );
+			b.mesh.rotation.set( b.pitch, b.heading + wag * 0.5 + Math.sin( b.stroke * Math.PI * 2 ) * 0.015 * Math.min( 1, spd / 0.2 ), b.roll + wag, 'YXZ' );
 
 			// wake: rings shed from the stern while moving
 			b.wake -= dt;
@@ -168,7 +234,7 @@ export class Waterfowl {
 
 			}
 
-			if ( pitch > 0.6 && this.rng.next() < dt * 2 ) this.water.addRipple( b.pos.x + Math.sin( b.heading ) * 0.3, b.pos.z + Math.cos( b.heading ) * 0.3, 0.3 );
+			if ( pitch > 0.6 && this.rng.next() < dt * 1.2 ) this.water.addRipple( b.pos.x + Math.sin( b.heading ) * 0.3, b.pos.z + Math.cos( b.heading ) * 0.3, 0.3 );
 
 		}
 
