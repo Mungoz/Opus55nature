@@ -17,7 +17,7 @@ const page = await browser.newPage();
 await page.setViewport( { width: W, height: H } );
 page.on( 'pageerror', ( e ) => console.log( '[pageerror]', e.message ) );
 page.on( 'console', ( m ) => m.type() === 'error' && console.log( '[console]', m.text() ) );
-await page.goto( `http://localhost:5199/?shot=30&speed=0&t=${process.env.STUDIO_T || 13}&follow=studio-${animal}`, { waitUntil: 'load' } );
+await page.goto( `http://localhost:5199/?shot=30&speed=0&t=${process.env.STUDIO_T || 13}&follow=studio-${animal}&hide=${process.env.STUDIO_HIDE || ''}`, { waitUntil: 'load' } );
 await page.waitForFunction( 'window.__shotReady === true || window.__shotError', { timeout: 180000, polling: 250 } );
 const files = [];
 for ( const pose of poses ) for ( const a of angles ) {

@@ -23,6 +23,7 @@ import { Murmuration, GeeseFlight, Eagles } from './fauna/birds.js';
 import { Waterfowl } from './fauna/waterfowl.js';
 import { LeapingFish } from './fauna/fish.js';
 import { Shallows } from './fauna/fishSchool.js';
+import { RiverFish } from './fauna/riverFish.js';
 import { Mammals } from './fauna/mammals.js';
 import { creatureMaterial, PartBuilder } from './fauna/creature.js';
 import { Soundscape } from './audio.js';
@@ -170,12 +171,20 @@ export class App {
 		this.fish = new LeapingFish( td, this.water, this.particles, ( p, s ) => this.audio.splash( p, s ) );
 		this.shallows = new Shallows( td );
 		this.scene.add( this.shallows.group );
+		this.riverFish = new RiverFish( td, this.streams.path );
+		this.scene.add( this.riverFish.group );
 		this.mammals = new Mammals( td, this.forest, this.audio, this.quality );
 		this.scene.add( this.mammals.group );
 		// marmots crop the turf short around their burrows
-		this.mammals.marmots.forEach( ( m, i ) => CROP.value[ i ].set( m.burrow.x + ( i % 2 ? 1.5 : - 1.2 ), m.burrow.z + ( i % 3 ? 0.8 : - 1.4 ), 6 + ( i % 3 ), 0.6 ) );
+		// grazed turf round each burrow, and none growing through the spoil
+		this.mammals.burrows.forEach( ( b, i ) => {
+
+			CROP.value[ i * 2 ].set( b.pos.x + ( i % 2 ? 1.5 : - 1.2 ), b.pos.z + ( i % 3 ? 0.8 : - 1.4 ), 6 + ( i % 3 ), 0.6 );
+			CROP.value[ i * 2 + 1 ].set( b.pos.x + Math.sin( b.heading ) * 0.2, b.pos.z + Math.cos( b.heading ) * 0.2, 1.9, 1 );
+
+		} );
 		const sv = this.forest.spawnVignette;
-		if ( sv ) CROP.value[ 5 ].set( sv.perch.x, sv.perch.z, 3.2, 0.6 );
+		if ( sv ) CROP.value[ 11 ].set( sv.perch.x, sv.perch.z, 3.2, 0.6 );
 		this.scene.add( this.starlings.mesh, this.geese.mesh, this.eagles.mesh, this.waterfowl.group, this.fish.mesh );
 		this._buildStone();
 		this.weather = new Weather( td, this.quality, this.audio );
@@ -482,6 +491,7 @@ export class App {
 		this.waterfowl.update( dt, t );
 		this.fish.update( dt, this.camera, true );
 		this.shallows.update( dt, this.camera );
+		this.riverFish.update( dt, t, this.camera );
 		// (the debug follow camera must not spook what it films)
 		this.mammals.update( dt, t, this.options.follow || this.director ? { position: new THREE.Vector3( 1e4, 0, 1e4 ) } : this.camera, 1 - Math.min( 1, Math.abs( sunEl + 1 ) / 7 ) );
 		this.mammals.lod( this.camera );

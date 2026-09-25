@@ -26,7 +26,7 @@ uniform vec2 uHeightRange;
 uniform float uWidth;
 uniform float uType;
 uniform vec4 uFocus;
-uniform vec4 uCrop[ 6 ]; // (x, z, radius, strength): turf grazed short, e.g. around marmot burrows
+uniform vec4 uCrop[ 12 ]; // (x, z, radius, strength): turf grazed short, e.g. around marmot burrows
 attribute vec4 aOff;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
@@ -76,7 +76,7 @@ void main() {
 	float graze = smoothstep( 0.45, 0.7, textureLod( uNoiseTex, p / 57.0 + 0.7, 0.0 ).b );
 	height *= mix( 1.0, 0.45, graze * step( uType, 0.5 ) );
 	float cropK = 0.0;
-	for ( int i = 0; i < 6; i ++ ) {
+	for ( int i = 0; i < 12; i ++ ) {
 		vec4 cr = uCrop[ i ];
 		if ( cr.z <= 0.0 ) continue;
 		float k = 1.0 - smoothstep( cr.z * 0.45, cr.z, length( p - cr.xy ) + ( r3 - 0.5 ) * cr.z * 0.3 + ( patchN - 0.5 ) * cr.z * 0.8 );
@@ -217,7 +217,7 @@ function bladeGeometry( segs ) {
 }
 
 // shared by every grass layer
-export const CROP = { value: Array.from( { length: 6 }, () => new THREE.Vector4( 0, 0, 0, 0 ) ) };
+export const CROP = { value: Array.from( { length: 12 }, () => new THREE.Vector4( 0, 0, 0, 0 ) ) };
 
 export class GrassLayer {
 

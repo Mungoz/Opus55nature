@@ -57,6 +57,15 @@ void main() {
 }
 `;
 
+// Water2's shader for a shallow, clear stream: the same, with the ripples bending the
+// view through the water about as much as a few centimetres of water do
+function streamShader() {
+
+	const base = Water2.WaterShader;
+	return { ...base, name: 'StreamShader', uniforms: THREE.UniformsUtils.clone( base.uniforms ), fragmentShader: base.fragmentShader.replace( 'vec2 uv = coord.xy + coord.z * normal.xz * 0.05;', 'vec2 uv = coord.xy + coord.z * normal.xz * 0.012;' ) };
+
+}
+
 // Water2's own shader (flow-mapped normals, reflection, refraction), with the falling
 // water aerated: where the flowing normal maps churn, the sheet turns white, lit by the
 // same sky and sun as the rest of the valley; it frays to spray at its edges and foot.
@@ -239,7 +248,7 @@ export class Streams {
 		g.setIndex( idx );
 		g.computeBoundingSphere();
 		const scale = 0.33; // the normal maps repeat every 3 m
-		const m = new THREE.Mesh( g, this._flowMaterial( Water2.WaterShader, { color: 0xd4e6dc, reflectivity: 0.03, scale, flowSpeed: 0.9 * scale * 0.5 } ) );
+		const m = new THREE.Mesh( g, this._flowMaterial( streamShader(), { color: 0xd4e6dc, reflectivity: 0.03, scale, flowSpeed: 0.9 * scale * 0.5 } ) );
 		m.material.side = THREE.DoubleSide;
 		m.layers.set( LAYERS.WATER );
 		m.renderOrder = 11;

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { creatureMaterial, furMaterial, furGeometry, addFur } from './creature.js';
-import { buildMarmot, buildSquirrel } from './mammalModels.js';
+import { buildMarmot, buildSquirrel, buildHare, buildBear } from './mammalModels.js';
 import { buildDeer } from './deerModel.js';
+import { burrowGeometry, TUNNEL } from './burrow.js';
 import { RNG } from '../core/rng.js';
 
 const V = ( x, y, z ) => new THREE.Vector3( x, y, z );
@@ -50,10 +51,12 @@ export class Mammals {
 		const hindProto = buildDeer( false, this.material );
 		const marmotProto = buildMarmot( this.material );
 		const squirrelProto = buildSquirrel( this.material );
+		const hareProto = buildHare( this.material );
+		const bearProto = buildBear( this.material );
 		// fur: shells drawn over the skin, only near the camera
 		const shells = quality.fur ?? 12;
 		// (hairs a centimetre or two long are sub-pixel beyond these distances at 55 degrees)
-		for ( const [ p, far ] of [ [ stagProto, 28 ], [ hindProto, 28 ], [ marmotProto, 16 ], [ squirrelProto, 10 ] ] ) {
+		for ( const [ p, far ] of [ [ stagProto, 28 ], [ hindProto, 28 ], [ marmotProto, 16 ], [ squirrelProto, 10 ], [ hareProto, 16 ], [ bearProto, 45 ] ] ) {
 
 			if ( ! p.fur || ! shells ) continue;
 			p.furGeo = furGeometry( p.mesh.geometry, shells );
@@ -89,23 +92,45 @@ export class Mammals {
 
 		}
 
-		// --- a marmot colony on the turf just in front of the start
+		// --- a marmot colony on the turf just in front of the start: burrows (mounds of
+		// spoil with a real tunnel), and the marmots that live in them
+		this.burrows = [];
+		const burrowGeos = [ burrowGeometry( 1, true ), burrowGeometry( 2, false ), burrowGeometry( 3, true ), burrowGeometry( 4, false ) ];
+		[ [ 1, 494.5 ], [ 10, 497 ], [ 6, 488.5 ], [ - 4, 490 ] ].forEach( ( [ x, z ], i ) => {
+
+			// the holes face roughly toward the start, so people see into them
+			const h = Math.atan2( - 5 - x, 508 - z ) + ( i % 2 ? 0.55 : - 0.45 );
+			const y = this.terrain.heightAt( x, z );
+			const mesh = new THREE.Mesh( burrowGeos[ i ], this.material );
+			mesh.position.set( x, y, z );
+			mesh.rotation.y = h;
+			mesh.castShadow = mesh.receiveShadow = true;
+			mesh.name = 'burrow';
+			this.group.add( mesh );
+			mesh.updateMatrixWorld();
+			const w = ( p ) => p.clone().applyMatrix4( mesh.matrixWorld );
+			this.burrows.push( { pos: V( x, y, z ), heading: h, mouth: w( TUNNEL.mouth ), entry: w( TUNNEL.entry ), deep: w( TUNNEL.deep ) } );
+
+		} );
+
 		this.marmots = [];
-		for ( const [ x, z ] of [ [ 0, 495 ], [ 8, 497 ], [ 4, 490 ], [ - 3, 492 ] ] ) {
+		for ( let i = 0; i < 7; i ++ ) {
 
 			const m = instance( marmotProto );
-			m.burrow = V( x, 0, z );
+			m.home = this.burrows[ i % this.burrows.length ];
+			m.burrow = m.home.mouth;
 			m.pos = m.burrow.clone().add( V( rng.range( - 3, 3 ), 0, rng.range( - 3, 3 ) ) );
 			m.heading = rng.next() * Math.PI * 2;
 			m.state = 'forage';
 			m.timer = rng.range( 3, 8 );
 			m.sit = 0;
-			m.sink = 0;
+			m.tun = 0;
+			m.pitch = 0;
 			m.phase = rng.next() * 10;
 			m.target = m.pos.clone();
 			m.mesh.name = 'marmot';
 			// a big old Alpine marmot is the size of a small dog
-			m.mesh.scale.setScalar( rng.range( 1.1, 1.22 ) );
+			m.mesh.scale.setScalar( i >= 5 ? rng.range( 0.75, 0.85 ) : rng.range( 1.08, 1.22 ) );
 			this.group.add( m.mesh );
 			this.marmots.push( m );
 
@@ -113,10 +138,16 @@ export class Mammals {
 
 		// --- red squirrels at the foot of the nearest conifers
 		this.squirrels = [];
-		const nearTrees = forest.trees
-			.filter( ( t ) => t.variant < 6 && Math.hypot( t.x - 10, t.z - 560 ) < 140 && t !== forest.spawnVignette?.tree )
-			.sort( ( a, b ) => Math.hypot( a.x - 10, a.z - 560 ) - Math.hypot( b.x - 10, b.z - 560 ) )
-			.slice( 0, 2 );
+		const cands = forest.trees
+			.filter( ( t ) => t.variant < 6 && t !== forest.spawnVignette?.tree && Math.hypot( t.x + 5, t.z - 508 ) > 25 && Math.hypot( t.x + 5, t.z - 508 ) < 170 )
+			.sort( ( a, b ) => Math.hypot( a.x + 5, a.z - 508 ) - Math.hypot( b.x + 5, b.z - 508 ) );
+		const nearTrees = [];
+		for ( const t of cands ) {
+
+			if ( nearTrees.length >= 6 ) break;
+			if ( nearTrees.every( ( o ) => Math.hypot( o.x - t.x, o.z - t.z ) > 28 ) ) nearTrees.push( t );
+
+		}
 		if ( forest.spawnVignette ) nearTrees.unshift( forest.spawnVignette.tree );
 		for ( const t of nearTrees ) {
 
@@ -137,6 +168,49 @@ export class Mammals {
 
 		}
 
+
+		// --- mountain hares in the meadows round the start
+		this.hares = [];
+		for ( const [ x, z ] of [ [ 34, 532 ], [ - 42, 574 ], [ 58, 598 ] ] ) {
+
+			const h = instance( hareProto );
+			h.pos = this._dryPoint( x, z, 0, 6 );
+			h.home = h.pos.clone();
+			h.heading = rng.next() * Math.PI * 2;
+			h.state = 'feed';
+			h.timer = rng.range( 2, 8 );
+			h.hop = 0;
+			h.sit = 0;
+			h.pitch = 0;
+			h.phase = rng.next() * 10;
+			h.target = h.pos.clone();
+			h.mesh.name = 'hare';
+			this.group.add( h.mesh );
+			this.hares.push( h );
+
+		}
+
+		// --- a brown bear working along the wood edge, across the meadow from the start
+		this.bears = [];
+		{
+
+			const b = instance( bearProto );
+			b.home = new THREE.Vector2( - 115, 625 );
+			b.pos = this._dryPoint( b.home.x, b.home.y, 0, 20 );
+			b.heading = rng.next() * Math.PI * 2;
+			b.state = 'walk';
+			b.timer = rng.range( 6, 12 );
+			b.target = this._dryPoint( b.home.x, b.home.y, 10, 60 );
+			b.speed = 0;
+			b.phase = 0;
+			b.neck = 0.3;
+			b.headP = 0.2;
+			b.yaw = 0;
+			b.mesh.name = 'bear';
+			this.group.add( b.mesh );
+			this.bears.push( b );
+
+		}
 	}
 
 	// a random point between r0 and r1 from (x, z) on dry ground (falls back to the centre)
@@ -199,7 +273,9 @@ export class Mammals {
 
 			// studio-<animal>[-<pose>]
 			const [ k, pose ] = name.slice( 7 ).split( '-' );
-			const a = k === 'stag' ? this.deer[ 0 ] : k === 'hind' ? this.deer[ 1 ] : k === 'marmot' ? this.marmots[ 0 ] : this.squirrels[ 0 ];
+			const a = k === 'stag' ? this.deer[ 0 ] : k === 'hind' ? this.deer[ 1 ] : k === 'marmot' ? this.marmots[ 0 ] : k === 'hare' ? this.hares[ 0 ] : k === 'bear' ? this.bears[ 0 ] : this.squirrels[ 0 ];
+			if ( k === 'hare' ) { a.forced = pose || 'feed'; return { p: at( a, 0.14 ), h: 0.0, back: 0.9, heading: a.heading }; }
+			if ( k === 'bear' ) { a.forced = pose || 'look'; return { p: at( a, 0.7 ), h: 0.0, back: 4.2, heading: a.heading }; }
 			a.forced = k === 'stag' || k === 'hind' ? ( pose || 'stagup' ) : ( k === 'marmot' ? ( pose || 'forage' ) : undefined );
 			if ( k === 'squirrel' ) {
 
@@ -482,13 +558,14 @@ export class Mammals {
 
 		const dist = Math.hypot( cam.x - m.pos.x, cam.z - m.pos.z );
 		const rng = this.rng;
+		const home = m.home;
 		m.timer -= dt;
 		if ( m.forced ) {
 
 			m.state = m.forced;
 			m.timer = 5;
 
-		} else if ( m.state !== 'hide' && m.state !== 'dive' ) {
+		} else if ( m.state !== 'hide' && m.state !== 'dive' && m.state !== 'enter' && m.state !== 'emerge' ) {
 
 			if ( dist < 8 ) {
 
@@ -511,14 +588,18 @@ export class Mammals {
 
 		let speed = 0;
 		let sitT = 0;
+		let pitchT = 0;
+		let yOff = 0;
 		switch ( m.state ) {
 
 			case 'forage':
 				if ( m.timer <= 0 ) {
 
-					m.target.set( m.burrow.x + rng.range( - 3.5, 3.5 ), 0, m.burrow.z + rng.range( - 3.5, 3.5 ) );
+					// graze out from the burrow, never far from it
+					const a = rng.next() * Math.PI * 2, r = rng.range( 1.2, 4.5 );
+					m.target.set( home.mouth.x + Math.cos( a ) * r, 0, home.mouth.z + Math.sin( a ) * r );
 					m.state = 'amble';
-					m.timer = 4;
+					m.timer = 5;
 
 				}
 
@@ -530,7 +611,7 @@ export class Mammals {
 				speed = 0.5;
 				if ( Math.hypot( tx, tz ) < 0.3 || m.timer <= 0 ) {
 
-					m.state = rng.next() < 0.5 ? 'sentinel' : 'forage';
+					m.state = rng.next() < 0.45 ? 'sentinel' : 'forage';
 					m.timer = m.state === 'sentinel' ? rng.range( 5, 12 ) : rng.range( 3, 9 );
 
 				}
@@ -553,13 +634,48 @@ export class Mammals {
 				break;
 			case 'dive': {
 
-				const tx = m.burrow.x - m.pos.x, tz = m.burrow.z - m.pos.z;
-				m.heading = turnToward( m.heading, Math.atan2( tx, tz ), dt * 8 );
-				speed = 3.2;
-				if ( Math.hypot( tx, tz ) < 0.4 ) {
+				// scuttle to the mouth of the burrow...
+				const tx = home.mouth.x - m.pos.x, tz = home.mouth.z - m.pos.z;
+				m.heading = turnToward( m.heading, Math.atan2( tx, tz ), dt * 9 );
+				speed = Math.min( 3.2, Math.hypot( tx, tz ) * 4 + 0.6 );
+				if ( Math.hypot( tx, tz ) < 0.12 ) {
 
-					m.state = 'hide';
-					m.timer = rng.range( 12, 25 );
+					m.state = 'enter';
+					m.tun = 0;
+
+				}
+
+				break;
+
+			}
+
+			case 'enter':
+			case 'emerge': {
+
+				// ...and head first down the tunnel (or back up it, looking out)
+				const into = m.state === 'enter';
+				m.tun = Math.min( 1, m.tun + dt * ( into ? 1.8 : 0.6 ) );
+				const u = into ? m.tun : 1 - m.tun;
+				const p = u < 0.4 ? home.mouth.clone().lerp( home.entry, u / 0.4 ) : home.entry.clone().lerp( home.deep, ( u - 0.4 ) / 0.6 );
+				m.pos.set( p.x, 0, p.z );
+				yOff = p.y - this._ground( p );
+				m.heading = home.heading + ( into ? Math.PI : 0 );
+				pitchT = u > 0.3 ? ( into ? 0.5 : - 0.45 ) : 0;
+				speed = 0.0001;
+				if ( m.tun >= 1 ) {
+
+					if ( into ) {
+
+						m.state = 'hide';
+						m.timer = rng.range( 12, 25 );
+
+					} else {
+
+						m.state = 'sentinel';
+						m.timer = rng.range( 6, 12 );
+						m.warned = false;
+
+					}
 
 				}
 
@@ -570,9 +686,8 @@ export class Mammals {
 			case 'hide':
 				if ( m.timer <= 0 && dist > 20 ) {
 
-					m.state = 'sentinel';
-					m.timer = rng.range( 5, 10 );
-					m.warned = false;
+					m.state = 'emerge';
+					m.tun = 0;
 
 				}
 
@@ -580,22 +695,29 @@ export class Mammals {
 
 		}
 
-		m.pos.x += Math.sin( m.heading ) * speed * dt;
-		m.pos.z += Math.cos( m.heading ) * speed * dt;
+		if ( m.state !== 'enter' && m.state !== 'emerge' ) {
+
+			m.pos.x += Math.sin( m.heading ) * speed * dt;
+			m.pos.z += Math.cos( m.heading ) * speed * dt;
+
+		}
+
 		m.sit = damp( m.sit, sitT, 5, dt );
-		m.sink = damp( m.sink, m.state === 'hide' ? 1 : 0, 4, dt );
+		m.pitch = damp( m.pitch, pitchT, 8, dt );
 		const g = this._ground( m.pos );
-		m.mesh.position.set( m.pos.x, g - m.sink * 0.45, m.pos.z );
-		m.mesh.rotation.y = m.heading;
-		m.mesh.visible = m.sink < 0.98;
+		m.mesh.position.set( m.pos.x, g + yOff, m.pos.z );
+		m.mesh.rotation.set( m.pitch, m.heading, 0, 'YXZ' );
+		m.mesh.visible = m.state !== 'hide';
 		const B = m.bones;
 		// sit up about the haunches, forepaws tucked to the chest, head level
 		B.get( 'body' ).rotation.x = - m.sit * 0.8;
 		B.get( 'chest' ).rotation.x = - m.sit * 0.55;
 		const nod = m.state === 'forage' ? 0.4 + Math.sin( time * 6 + m.phase ) * 0.1 : 0;
 		B.get( 'head' ).rotation.x = m.sit * 1.2 + nod;
-		const gait = speed > 0 ? Math.sin( time * speed * 11 + m.phase ) : 0;
-		B.get( 'body' ).position.y = m.rest.get( 'body' ).y + Math.abs( gait ) * 0.012 * speed;
+		const moving = speed > 0 || m.state === 'enter' || m.state === 'emerge';
+		const gs = m.state === 'enter' ? 3 : m.state === 'emerge' ? 1.2 : speed;
+		const gait = moving ? Math.sin( time * gs * 11 + m.phase ) : 0;
+		B.get( 'body' ).position.y = m.rest.get( 'body' ).y + Math.abs( gait ) * 0.012 * Math.min( gs, 3 );
 		for ( const s of [ 'L', 'R' ] ) {
 
 			const k = s === 'L' ? 1 : - 1;
@@ -604,7 +726,283 @@ export class Mammals {
 
 		}
 
-		B.get( 'tail' ).rotation.x = m.sit * 0.8 + Math.sin( time * 2 + m.phase ) * 0.05;
+		// the tail flicks up as it runs
+		B.get( 'tail' ).rotation.x = m.sit * 0.8 + Math.sin( time * 2 + m.phase ) * 0.05 - ( m.state === 'dive' || m.state === 'enter' ? 0.5 : 0 );
+
+	}
+
+	// ----------------------------------------------------------------- hares
+	_updateHare( h, dt, time, cam ) {
+
+		const rng = this.rng;
+		const dx = cam.x - h.pos.x, dz = cam.z - h.pos.z;
+		const dist = Math.hypot( dx, dz );
+		h.timer -= dt;
+		if ( h.forced ) {
+
+			h.state = h.forced;
+			h.timer = 5;
+
+		} else if ( dist < 13 && h.state !== 'flee' ) {
+
+			h.state = 'flee';
+			h.timer = rng.range( 3, 5 );
+			h.fleeDir = Math.atan2( - dx, - dz ) + rng.range( - 0.5, 0.5 );
+			h.zig = 0;
+
+		} else if ( dist < 28 && h.state === 'feed' ) {
+
+			h.state = 'alert';
+			h.timer = rng.range( 3, 6 );
+
+		}
+
+		let speed = 0, sitT = 0, headT = 0.1, earT = 0;
+		switch ( h.state ) {
+
+			case 'feed':
+				headT = 0.55 + Math.sin( time * 7 + h.phase ) * 0.04;
+				earT = - 0.5;
+				if ( h.timer <= 0 ) {
+
+					h.state = rng.next() < 0.6 ? 'hop' : 'alert';
+					h.timer = rng.range( 2, 5 );
+					h.target.copy( this._dryPoint( h.home.x, h.home.z, 1, 7 ) );
+
+				}
+
+				break;
+			case 'alert':
+				sitT = 1;
+				headT = - 0.15;
+				if ( dist < 40 ) h.heading = turnToward( h.heading, Math.atan2( dx, dz ) + Math.PI * 0.5, dt * 1.5 );
+				if ( h.timer <= 0 && dist > 22 ) {
+
+					h.state = 'feed';
+					h.timer = rng.range( 4, 12 );
+
+				}
+
+				break;
+			case 'hop': {
+
+				const tx = h.target.x - h.pos.x, tz = h.target.z - h.pos.z;
+				h.heading = turnToward( h.heading, Math.atan2( tx, tz ), dt * 5 );
+				speed = 1.4;
+				if ( Math.hypot( tx, tz ) < 0.3 || h.timer <= 0 ) {
+
+					h.state = 'feed';
+					h.timer = rng.range( 4, 12 );
+
+				}
+
+				break;
+
+			}
+
+			case 'flee':
+				// bounding away, jinking now and then
+				h.zig -= dt;
+				if ( h.zig <= 0 ) {
+
+					h.fleeDir += rng.range( - 0.8, 0.8 );
+					h.zig = rng.range( 0.5, 1.1 );
+
+				}
+
+				h.heading = turnToward( h.heading, h.fleeDir, dt * 6 );
+				speed = 7;
+				earT = - 0.9;
+				if ( h.timer <= 0 ) {
+
+					h.state = 'alert';
+					h.timer = rng.range( 4, 8 );
+					h.home.copy( this._dryPoint( h.pos.x, h.pos.z, 0, 3 ) );
+
+				}
+
+				break;
+
+		}
+
+		// never into the water
+		const nx = h.pos.x + Math.sin( h.heading ) * speed * dt, nz = h.pos.z + Math.cos( h.heading ) * speed * dt;
+		if ( this.terrain.heightAt( nx, nz ) > 0.9 ) {
+
+			h.pos.x = nx;
+			h.pos.z = nz;
+
+		} else {
+
+			h.fleeDir = this._inland( h.pos );
+			h.heading = turnToward( h.heading, h.fleeDir, dt * 8 );
+
+		}
+
+		// the gait: bounds, hind feet landing ahead of the forefeet
+		const moving = speed > 0;
+		if ( moving ) h.hop = ( h.hop + dt * ( speed > 3 ? 3.2 : 2.6 ) ) % 1;
+		else h.hop = 0;
+		const p = h.hop;
+		const air = moving ? Math.max( 0, Math.sin( p * Math.PI * 2 ) ) : 0;
+		const lift = air * ( speed > 3 ? 0.18 : 0.07 );
+		h.sit = damp( h.sit, sitT, 5, dt );
+		const pitch = moving ? Math.cos( p * Math.PI * 2 ) * ( speed > 3 ? 0.35 : 0.2 ) : 0;
+		h.pitch = damp( h.pitch, pitch, 12, dt );
+		const g = this._ground( h.pos );
+		h.mesh.position.set( h.pos.x, g + lift, h.pos.z );
+		h.mesh.rotation.set( h.pitch - h.sit * 0.35, h.heading, 0, 'YXZ' );
+		const B = h.bones;
+		B.get( 'chest' ).rotation.x = - h.sit * 0.35;
+		B.get( 'head' ).rotation.x = damp( B.get( 'head' ).rotation.x, headT + h.sit * 0.5, 6, dt );
+		for ( const [ s, sd ] of [ [ 'L', 1 ], [ 'R', - 1 ] ] ) {
+
+			B.get( 'ear' + s ).rotation.x = damp( B.get( 'ear' + s ).rotation.x, earT, 6, dt );
+			B.get( 'ear' + s ).rotation.z = Math.sin( time * 0.7 + h.phase + sd ) * 0.08;
+			// forelegs reach on landing, hind legs thrust on take-off
+			B.get( 'f' + s ).rotation.x = moving ? - Math.sin( p * Math.PI * 2 + 0.6 ) * 0.9 : h.sit * 0.2;
+			B.get( 'h' + s ).rotation.x = moving ? Math.sin( p * Math.PI * 2 - 0.4 ) * 0.9 : 0;
+
+		}
+
+		B.get( 'tail' ).rotation.x = moving ? - 0.4 : 0;
+
+	}
+
+	// ------------------------------------------------------------------ bears
+	_updateBear( b, dt, time, cam ) {
+
+		const rng = this.rng;
+		const dx = cam.x - b.pos.x, dz = cam.z - b.pos.z;
+		const dist = Math.hypot( dx, dz );
+		b.timer -= dt;
+		if ( b.forced ) {
+
+			b.state = b.forced;
+			b.timer = 5;
+
+		} else if ( dist < 35 && b.state !== 'leave' ) {
+
+			// a bear that notices you simply walks off
+			b.state = 'leave';
+			b.timer = rng.range( 10, 16 );
+			b.target.copy( this._dryPoint( b.pos.x - dx / dist * 60, b.pos.z - dz / dist * 60, 0, 15 ) );
+
+		}
+
+		let speedT = 0, neckT = 0.35, headT = 0.25, yawT = 0;
+		switch ( b.state ) {
+
+			case 'walk':
+			case 'leave': {
+
+				const tx = b.target.x - b.pos.x, tz = b.target.z - b.pos.z;
+				b.heading = turnToward( b.heading, Math.atan2( tx, tz ), dt * 0.8 );
+				speedT = b.state === 'leave' ? 1.5 : 0.95;
+				// the head swings low from side to side as it walks
+				neckT = 0.5;
+				yawT = Math.sin( b.phase * Math.PI * 2 ) * 0.15;
+				if ( Math.hypot( tx, tz ) < 2 || b.timer <= 0 ) {
+
+					if ( b.state === 'leave' && dist < 60 ) {
+
+						b.target.copy( this._dryPoint( b.pos.x - dx / dist * 50, b.pos.z - dz / dist * 50, 0, 10 ) );
+						b.timer = 10;
+
+					} else {
+
+						b.state = rng.next() < 0.6 ? 'forage' : 'look';
+						b.timer = rng.range( 5, 12 );
+
+					}
+
+				}
+
+				break;
+
+			}
+
+			case 'forage':
+				// nose down, turning over the turf
+				neckT = 1.0;
+				headT = 0.6 + Math.sin( time * 2.3 ) * 0.1;
+				yawT = Math.sin( time * 0.6 ) * 0.25;
+				if ( b.timer <= 0 ) {
+
+					b.state = rng.next() < 0.5 ? 'look' : 'walk';
+					b.timer = rng.range( 6, 14 );
+					b.target.copy( this._dryPoint( b.home.x, b.home.y, 10, 70 ) );
+
+				}
+
+				break;
+			case 'look':
+				// head up, scenting the air
+				neckT = - 0.05;
+				headT = - 0.25 + Math.sin( time * 3.1 ) * 0.04;
+				yawT = Math.sin( time * 0.4 ) * 0.5;
+				if ( b.timer <= 0 ) {
+
+					b.state = 'walk';
+					b.timer = rng.range( 8, 16 );
+					b.target.copy( this._dryPoint( b.home.x, b.home.y, 10, 70 ) );
+
+				}
+
+				break;
+
+		}
+
+		b.speed = damp( b.speed, speedT, 2, dt );
+		const nx = b.pos.x + Math.sin( b.heading ) * b.speed * dt, nz = b.pos.z + Math.cos( b.heading ) * b.speed * dt;
+		if ( this.terrain.heightAt( nx, nz ) > 1.0 ) {
+
+			b.pos.x = nx;
+			b.pos.z = nz;
+
+		} else b.heading = turnToward( b.heading, this._inland( b.pos ), dt * 2 );
+
+		const g = this._ground( b.pos );
+		b.mesh.position.set( b.pos.x, g, b.pos.z );
+		const slope = this.terrain.heightAt( b.pos.x + Math.sin( b.heading ) * 0.8, b.pos.z + Math.cos( b.heading ) * 0.8 ) - g;
+		b.mesh.rotation.set( 0, b.heading, 0 );
+		const B = b.bones;
+		B.get( 'body' ).rotation.x = - Math.atan( slope / 0.8 ) * 0.7;
+		// a pacing walk: the legs on each side move nearly together, the whole body rolls
+		const stride = 1.6;
+		b.phase = ( b.phase + b.speed * dt / stride ) % 1;
+		const amp = Math.min( 1, b.speed / 0.95 );
+		for ( const [ side, off ] of [ [ 'L', 0 ], [ 'R', 0.5 ] ] ) {
+
+			for ( const [ front, o ] of [ [ true, off + 0.12 ], [ false, off ] ] ) {
+
+				const ph = ( b.phase + o ) * Math.PI * 2;
+				const swing = Math.sin( ph ), lift = Math.max( 0, Math.cos( ph ) );
+				if ( front ) {
+
+					B.get( 'fS' + side ).rotation.x = - swing * 0.35 * amp;
+					B.get( 'fE' + side ).rotation.x = lift * 0.5 * amp;
+					B.get( 'fF' + side ).rotation.x = - lift * 0.4 * amp;
+
+				} else {
+
+					B.get( 'hH' + side ).rotation.x = - swing * 0.3 * amp;
+					B.get( 'hK' + side ).rotation.x = - lift * 0.45 * amp;
+					B.get( 'hF' + side ).rotation.x = lift * 0.4 * amp;
+
+				}
+
+			}
+
+		}
+
+		B.get( 'body' ).rotation.z = Math.sin( b.phase * Math.PI * 2 ) * 0.05 * amp;
+		B.get( 'body' ).position.y = b.rest.get( 'body' ).y + Math.abs( Math.sin( b.phase * Math.PI * 2 ) ) * 0.025 * amp;
+		b.neck = damp( b.neck, neckT, 2, dt );
+		b.headP = damp( b.headP, headT, 2.5, dt );
+		b.yaw = damp( b.yaw, yawT, 2, dt );
+		B.get( 'neck' ).rotation.set( b.neck * 0.6, b.yaw * 0.5, 0, 'YXZ' );
+		B.get( 'head' ).rotation.set( b.headP, b.yaw * 0.5, 0, 'YXZ' );
 
 	}
 
@@ -752,7 +1150,7 @@ export class Mammals {
 	lod( camera ) {
 
 		const c = camera.position;
-		for ( const a of [ ...this.deer, ...this.marmots, ...this.squirrels ] ) {
+		for ( const a of [ ...this.deer, ...this.marmots, ...this.squirrels, ...this.hares, ...this.bears ] ) {
 
 			if ( a.fur ) a.fur.visible = a.mesh.visible && a.mesh.position.distanceTo( c ) < a.furFar * ( 55 / camera.fov );
 
@@ -766,6 +1164,8 @@ export class Mammals {
 		for ( const d of this.deer ) this._updateDeer( d, dt, time, cam, dusk );
 		for ( const m of this.marmots ) this._updateMarmot( m, dt, time, cam );
 		for ( const q of this.squirrels ) this._updateSquirrel( q, dt, time, cam );
+		for ( const h of this.hares ) this._updateHare( h, dt, time, cam );
+		for ( const b of this.bears ) this._updateBear( b, dt, time, cam );
 
 	}
 
