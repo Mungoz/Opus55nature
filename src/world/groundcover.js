@@ -40,6 +40,7 @@ mat3 rotX( float a ) { float c = cos( a ), s = sin( a ); return mat3( 1.0, 0.0, 
 // Loose stones on the strand and in the shallows
 // ---------------------------------------------------------------------------
 const stoneVert = /* glsl */ `
+#define VERTEX_CULL
 ${noiseGLSL}
 ${terrainUniformsGLSL}
 ${terrainLookupFnGLSL}
@@ -58,8 +59,9 @@ void main() {
 	vec2 p = wrapTile( aOff.xy, uTile );
 	float d = length( p - ( uFocus.w > 0.5 ? uFocus.xy : cameraPosition.xz ) );
 	float fade = 1.0 - smoothstep( uRadius * 0.7, uRadius, d );
-	vec4 bio = biomeAt( p );
 	vec4 hn = terrainHN( p );
+	if ( fade <= 0.0 || sphereOutsideView( vec3( p.x, hn.x, p.y ), 0.9 ) ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
+	vec4 bio = biomeAt( p );
 	float h = hn.x;
 	float depth = uWaterLevel - h;
 	// only on the strand itself; the lakebed texture carries the stones underwater
@@ -149,6 +151,7 @@ export const PONDS_GC = { value: Array.from( { length: 3 }, () => new THREE.Vect
 // ---------------------------------------------------------------------------
 // types: 0 autumn crocus, 1 gentian, 2 yarrow, 3 harebell, 4 hawkbit, 5 cotton grass (wet ground)
 const flowerVert = /* glsl */ `
+#define VERTEX_CULL
 ${noiseGLSL}
 ${terrainUniformsGLSL}
 ${terrainLookupFnGLSL}
@@ -169,6 +172,7 @@ void main() {
 	vec2 p = wrapTile( aOff.xy, uTile );
 	float d = length( p - ( uFocus.w > 0.5 ? uFocus.xy : cameraPosition.xz ) );
 	float fade = 1.0 - smoothstep( uRadius * 0.6, uRadius, d );
+	if ( fade <= 0.0 || sphereOutsideView( vec3( p.x, terrainH( p ) + 0.2, p.y ), 0.6 ) ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
 	vec4 bio = biomeAt( p );
 	float r1 = aOff.z, r2 = aOff.w;
 	float patch_ = textureLod( uNoiseTex, p / 18.0 + 0.23, 0.0 ).r;
@@ -306,12 +310,15 @@ export class GroundCover {
 		const stoneTile = 56, cut = 0.78;
 		const all = instanced( stoneGeometry( 1 ), stoneTile, 0.3 / k, 11 );
 		const big = instanced( stoneGeometry( 2 ), stoneTile, 0.3 / k, 11 );
-		{
+		// density never exceeds 0.55 (strand) + 0.03 (waterline) + 0.2 (scree): instances whose
+		// seed r1 is above that are rejected everywhere, so they need not be drawn at all
+		const maxDens = 0.78;
+		for ( const [ g, pick ] of [ [ all, ( r2 ) => r2 < cut ], [ big, ( r2 ) => r2 >= cut ] ] ) {
 
-			const src = big.getAttribute( 'aOff' ).array, keep = [];
-			for ( let i = 0; i < src.length; i += 4 ) if ( src[ i + 3 ] >= cut ) keep.push( src[ i ], src[ i + 1 ], src[ i + 2 ], src[ i + 3 ] );
-			big.setAttribute( 'aOff', new THREE.InstancedBufferAttribute( new Float32Array( keep ), 4 ) );
-			big.instanceCount = keep.length / 4;
+			const src = g.getAttribute( 'aOff' ).array, keep = [];
+			for ( let i = 0; i < src.length; i += 4 ) if ( src[ i + 2 ] <= maxDens && pick( src[ i + 3 ] ) ) keep.push( src[ i ], src[ i + 1 ], src[ i + 2 ], src[ i + 3 ] );
+			g.setAttribute( 'aOff', new THREE.InstancedBufferAttribute( new Float32Array( keep ), 4 ) );
+			g.instanceCount = keep.length / 4;
 
 		}
 

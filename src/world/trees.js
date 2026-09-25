@@ -212,6 +212,7 @@ vec3 barkAlbedo( float kind, vec2 b, float rnd, vec3 wp, out float rough ) {
 `;
 
 const nearVert = /* glsl */ `
+#define VERTEX_CULL
 ${noiseGLSL}
 uniform float uTime;
 uniform vec4 uWind;
@@ -238,6 +239,11 @@ void main() {
 		mat4 im = modelMatrix;
 	#endif
 	vec3 origin = im[ 3 ].xyz;
+	#ifndef BAKE
+		// the tallest variant is ~32 m and ~10 m in crown radius (scaled with the instance)
+		float sc = length( im[ 1 ].xyz );
+		if ( sphereOutsideView( origin + vec3( 0.0, 16.0 * sc, 0.0 ), 19.0 * sc ) ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
+	#endif
 	float rnd = hash12( floor( origin.xz * 3.0 ) );
 	vec3 wp = ( im * vec4( position, 1.0 ) ).xyz;
 	vec3 n = normalize( mat3( im ) * normal );
@@ -1055,6 +1061,8 @@ export class Forest {
 			meshes.forEach( ( m, k ) => {
 
 				m.count = counts[ k ];
+				// an empty InstancedMesh still costs a full draw set-up in every pass
+				m.visible = counts[ k ] > 0;
 				m.instanceMatrix.clearUpdateRanges();
 				m.instanceMatrix.addUpdateRange( 0, counts[ k ] * 16 );
 				m.instanceMatrix.needsUpdate = true;

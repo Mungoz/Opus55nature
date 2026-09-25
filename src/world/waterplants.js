@@ -13,6 +13,7 @@ import { RNG, hash2 } from '../core/rng.js';
 //  - water horsetail (Equisetum fluviatile) stands in the shallows: jointed green stems
 
 const vert = /* glsl */ `
+#define VERTEX_CULL
 ${noiseGLSL}
 uniform float uTime;
 uniform vec4 uWind;
@@ -28,6 +29,7 @@ varying float vAO;
 void main() {
 	mat4 im = modelMatrix * instanceMatrix;
 	vec3 origin = im[ 3 ].xyz;
+	if ( sphereOutsideView( origin + vec3( 0.0, 0.6, 0.0 ), 2.2 * length( im[ 1 ].xyz ) ) ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
 	float rnd = hash12( floor( origin.xz * 7.0 ) + 0.5 );
 	vec3 wp = ( im * vec4( position, 1.0 ) ).xyz;
 	vec3 n = normalize( mat3( im ) * normal );

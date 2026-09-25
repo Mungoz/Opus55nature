@@ -351,6 +351,10 @@ export class Terrain {
 		this.reflectMesh = new THREE.Mesh( buildTerrainGeometry( data, quality.terrainSpacing * 2.5, 1.045 ), this.material );
 		this.reflectMesh.frustumCulled = false;
 		this.reflectMesh.layers.set( 2 );
+		// the terrain's shader is the costliest in the frame: draw it after grass, trees and
+		// rocks so that the ground they hide is rejected by the depth test instead of shaded
+		this.mesh.renderOrder = 5;
+		this.reflectMesh.renderOrder = 5;
 
 	}
 

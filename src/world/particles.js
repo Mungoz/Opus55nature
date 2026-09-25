@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { commonParsGLSL } from '../shaders/common.glsl.js';
+import { commonParsGLSL, terrainUniformsGLSL, terrainLookupFnGLSL } from '../shaders/common.glsl.js';
 import { sharedUniforms } from '../core/uniforms.js';
 import { RNG } from '../core/rng.js';
 
@@ -16,6 +16,41 @@ varying vec3 vWorldPos;
 varying float vAlpha;
 void main() {
 	vec4 wp = modelMatrix * vec4( position, 1.0 );
+	vWorldPos = wp.xyz;
+	vAlpha = aAlpha;
+	vec4 mv = viewMatrix * wp;
+	gl_Position = projectionMatrix * mv;
+	gl_PointSize = clamp( aSize * uScale / max( -mv.z, 0.1 ), 1.0, 64.0 );
+}
+`;
+
+// The motes place themselves: each wraps within a 36 m box around the viewer and drifts on the
+// breeze, floating a set height over the ground. The time-dependent terms come in reduced on
+// the CPU (the drift already wrapped, the sway phases as sine and cosine) so the float
+// precision holds however long the game runs.
+const moteVert = /* glsl */ `
+${terrainUniformsGLSL}
+${terrainLookupFnGLSL}
+uniform float uScale;
+uniform vec3 uMoteCam;   // the viewer (the main camera, in every pass)
+uniform vec2 uMoteDrift; // ( time * wind * 0.6 - camera ) mod box, in x and z
+uniform vec3 uMoteSin;   // sin of time * ( 0.3, 0.27, 0.5 )
+uniform vec3 uMoteCos;   // cos of the same
+attribute vec4 aSeed;
+attribute float aSize;
+attribute float aAlpha;
+varying vec3 vWorldPos;
+varying float vAlpha;
+void main() {
+	const float B = 36.0;
+	float b1 = aSeed.w * 20.0, b2 = aSeed.w * 17.0, b3 = aSeed.w * 30.0;
+	float sx = uMoteSin.x * cos( b1 ) + uMoteCos.x * sin( b1 ); // sin( t * 0.3 + s * 20 )
+	float cz = uMoteCos.y * cos( b2 ) - uMoteSin.y * sin( b2 ); // cos( t * 0.27 + s * 17 )
+	float sy = uMoteSin.z * cos( b3 ) + uMoteCos.z * sin( b3 ); // sin( t * 0.5 + s * 30 )
+	float x = uMoteCam.x + mod( aSeed.x * B + uMoteDrift.x + sx * 1.5, B ) - B * 0.5;
+	float z = uMoteCam.z + mod( aSeed.y * B + uMoteDrift.y + cz * 1.5, B ) - B * 0.5;
+	float y = max( terrainH( vec2( x, z ) ), 0.0 ) + 0.3 + aSeed.z * 7.0 + sy * 0.4;
+	vec4 wp = vec4( x, y, z, 1.0 );
 	vWorldPos = wp.xyz;
 	vAlpha = aAlpha;
 	vec4 mv = viewMatrix * wp;
@@ -170,6 +205,15 @@ export class Particles {
 
 		}
 
+		// placed on the GPU (see moteVert): the seeds are all it needs
+		this.motes.geo.setAttribute( 'aSeed', new THREE.BufferAttribute( this.moteSeed, 4 ) );
+		this.motes.material.vertexShader = moteVert;
+		Object.assign( this.motes.material.uniforms, {
+			uMoteCam: { value: new THREE.Vector3() },
+			uMoteDrift: { value: new THREE.Vector2() },
+			uMoteSin: { value: new THREE.Vector3() },
+			uMoteCos: { value: new THREE.Vector3() },
+		} );
 		this.motes.points.layers.set( 4 ); // effects: drawn after the water
 		this.group.add( this.motes.points );
 
@@ -209,6 +253,8 @@ export class Particles {
 
 	drip( at, vel, count = 1 ) {
 
+		this.dropsLive = - 1;
+		this.drops.points.visible = true;
 		for ( let n = 0; n < count; n ++ ) {
 
 			const i = this.dropNext;
@@ -225,6 +271,8 @@ export class Particles {
 
 	splash( at, count, power, size = 1 ) {
 
+		this.dropsLive = - 1;
+		this.drops.points.visible = true;
 		for ( let n = 0; n < count; n ++ ) {
 
 			const i = this.dropNext;
@@ -266,50 +314,50 @@ export class Particles {
 	update( dt, time, camera, wind, water ) {
 
 		const cam = camera.position;
-		// droplets
+		// droplets: once the last one is gone there is nothing to step, upload or draw (a drop
+		// of zero alpha adds nothing to the frame) until the next splash
 		const d = this.drops;
-		for ( let i = 0; i < d.max; i ++ ) {
+		if ( this.dropsLive !== 0 ) {
 
-			if ( this.dropLife[ i ] <= 0 ) {
+			let live = 0;
+			for ( let i = 0; i < d.max; i ++ ) {
 
-				d.alpha[ i ] = 0;
-				continue;
+				if ( this.dropLife[ i ] <= 0 ) {
+
+					d.alpha[ i ] = 0;
+					continue;
+
+				}
+
+				this.dropLife[ i ] -= dt;
+				this.dropVel[ i * 3 + 1 ] -= 9.81 * dt;
+				d.pos[ i * 3 ] += this.dropVel[ i * 3 ] * dt;
+				d.pos[ i * 3 + 1 ] += this.dropVel[ i * 3 + 1 ] * dt;
+				d.pos[ i * 3 + 2 ] += this.dropVel[ i * 3 + 2 ] * dt;
+				if ( d.pos[ i * 3 + 1 ] < 0 ) {
+
+					this.dropLife[ i ] = 0;
+					d.alpha[ i ] = 0;
+
+				}
+
+				if ( d.alpha[ i ] !== 0 ) live ++;
 
 			}
 
-			this.dropLife[ i ] -= dt;
-			this.dropVel[ i * 3 + 1 ] -= 9.81 * dt;
-			d.pos[ i * 3 ] += this.dropVel[ i * 3 ] * dt;
-			d.pos[ i * 3 + 1 ] += this.dropVel[ i * 3 + 1 ] * dt;
-			d.pos[ i * 3 + 2 ] += this.dropVel[ i * 3 + 2 ] * dt;
-			if ( d.pos[ i * 3 + 1 ] < 0 ) {
-
-				this.dropLife[ i ] = 0;
-				d.alpha[ i ] = 0;
-
-			}
+			d.flush();
+			this.dropsLive = live;
+			d.points.visible = live > 0;
 
 		}
 
-		d.flush();
-
-		// motes wrap within a 36 m box around the viewer and drift on the breeze
-		const B = 36;
-		const m = this.motes;
-		for ( let i = 0; i < this.moteCount; i ++ ) {
-
-			const s = this.moteSeed.subarray( i * 4, i * 4 + 4 );
-			const ox = s[ 0 ] * B + time * wind.x * 0.6 + Math.sin( time * 0.3 + s[ 3 ] * 20 ) * 1.5;
-			const oz = s[ 1 ] * B + time * wind.y * 0.6 + Math.cos( time * 0.27 + s[ 3 ] * 17 ) * 1.5;
-			const x = cam.x + ( ( ( ox - cam.x ) % B ) + B ) % B - B / 2;
-			const z = cam.z + ( ( ( oz - cam.z ) % B ) + B ) % B - B / 2;
-			const g = this.terrain.heightAt( x, z );
-			const y = Math.max( g, 0 ) + 0.3 + s[ 2 ] * 7 + Math.sin( time * 0.5 + s[ 3 ] * 30 ) * 0.4;
-			m.pos[ i * 3 ] = x; m.pos[ i * 3 + 1 ] = y; m.pos[ i * 3 + 2 ] = z;
-
-		}
-
-		m.flush();
+		// motes wrap within a 36 m box around the viewer and drift on the breeze (placed on the GPU)
+		const B = 36, mu = this.motes.material.uniforms;
+		const wrap = ( v ) => ( ( v % B ) + B ) % B;
+		mu.uMoteCam.value.copy( cam );
+		mu.uMoteDrift.value.set( wrap( time * wind.x * 0.6 - cam.x ), wrap( time * wind.y * 0.6 - cam.z ) );
+		mu.uMoteSin.value.set( Math.sin( time * 0.3 ), Math.sin( time * 0.27 ), Math.sin( time * 0.5 ) );
+		mu.uMoteCos.value.set( Math.cos( time * 0.3 ), Math.cos( time * 0.27 ), Math.cos( time * 0.5 ) );
 
 		// leaves
 		for ( let i = 0; i < this.leafCount; i ++ ) {
@@ -344,8 +392,9 @@ export class Particles {
 			const drift = s.rest > 0 && s.p.y < 0.05 ? time : 0; // leaves afloat drift slowly
 			_e.set( s.rest > 0 ? 0 : s.rot.x, s.rot.y + drift * 0.05, s.rest > 0 ? 0 : s.rot.z );
 			_q.setFromEuler( _e );
-			this.leafPos.set( [ s.p.x, s.p.y, s.p.z, s.size * 1.8 ], i * 4 );
-			this.leafRot.set( [ _q.x, _q.y, _q.z, _q.w ], i * 4 );
+			const lp = this.leafPos, lr = this.leafRot, o = i * 4;
+			lp[ o ] = s.p.x; lp[ o + 1 ] = s.p.y; lp[ o + 2 ] = s.p.z; lp[ o + 3 ] = s.size * 1.8;
+			lr[ o ] = _q.x; lr[ o + 1 ] = _q.y; lr[ o + 2 ] = _q.z; lr[ o + 3 ] = _q.w;
 
 		}
 

@@ -39,6 +39,65 @@ const bio = [ 0, 0, 0, 0 ];
 
 export const START_POSE = [ - 5, 3.5, 508, 4, 4 ];
 
+const _frustum = new THREE.Frustum(), _m4 = new THREE.Matrix4();
+// would the renderer draw this object in the main view? (the same tests three.js makes)
+function inView( o ) {
+
+	for ( let p = o; p; p = p.parent ) if ( ! p.visible ) return false;
+	return o.frustumCulled === false || _frustum.intersectsObject( o );
+
+}
+
+// A material shared by different kinds of object (skinned, instanced, plain) needs a different
+// shader program for each, and three.js re-resolves it every time the kind changes from one
+// draw to the next. Give each kind its own copy (same shaders, the very same uniforms), and
+// the same for the shadow pass's depth material; nothing drawn changes.
+function splitSharedMaterials( scene ) {
+
+	const kind = ( o ) => ( o.isSkinnedMesh ? 's' : '' ) + ( o.isInstancedMesh ? 'i' + ( o.instanceColor ? 'c' : '' ) : '' ) + ( o.isBatchedMesh ? 'b' : '' ) || 'p';
+	const users = new Map();
+	scene.traverse( ( o ) => {
+
+		if ( ! o.isMesh || Array.isArray( o.material ) ) return;
+		let m = users.get( o.material );
+		if ( ! m ) users.set( o.material, m = new Map() );
+		const k = kind( o );
+		if ( ! m.has( k ) ) m.set( k, [] );
+		m.get( k ).push( o );
+
+	} );
+
+	for ( const [ mat, byKind ] of users ) {
+
+		if ( byKind.size < 2 ) continue;
+		let first = true;
+		for ( const list of byKind.values() ) {
+
+			if ( first ) { first = false; continue; }
+			const copy = mat.clone();
+			if ( mat.uniforms ) copy.uniforms = mat.uniforms;
+			for ( const o of list ) o.material = copy;
+
+		}
+
+	}
+
+	// the shadow pass: one plain depth material per kind of caster (casters with alpha-tested
+	// or displaced materials keep three.js's own per-material variants)
+	const depth = new Map();
+	scene.traverse( ( o ) => {
+
+		if ( ! o.isMesh || ! o.castShadow || o.customDepthMaterial !== undefined || Array.isArray( o.material ) ) return;
+		const m = o.material;
+		if ( m.alphaTest > 0 || m.alphaMap || m.displacementMap || m.alphaToCoverage || m.clipShadows ) return;
+		const k = kind( o );
+		if ( ! depth.has( k ) ) depth.set( k, new THREE.MeshDepthMaterial() );
+		o.customDepthMaterial = depth.get( k );
+
+	} );
+
+}
+
 export class App {
 
 	constructor( canvas, options = {} ) {
@@ -76,6 +135,9 @@ export class App {
 		r.info.autoReset = false;
 
 		this.scene = new THREE.Scene();
+		// world matrices are brought up to date once per frame, at the start of render(), rather
+		// than in each of its five to seven passes (nothing moves between the passes)
+		this.scene.matrixWorldAutoUpdate = false;
 		this.camera = new THREE.PerspectiveCamera( 55, 1, 0.25, 16000 );
 		this.camera.layers.enable( LAYERS.MAIN );
 		this.camera.layers.enable( LAYERS.WATER );
@@ -134,7 +196,6 @@ export class App {
 
 		await step( 0.45, 'Filling the lake' );
 		this.water = new Water( this.textures, this.quality );
-		this.water.mainCamera = this.camera;
 		this.water.reflectOnly.push( this.terrain.reflectMesh );
 		this.scene.add( this.water.mesh );
 		this.streams = new Streams( td, this.textures, this.water, this.quality, this.terrain.mesh, this.terrain.reflectMesh );
@@ -251,6 +312,7 @@ export class App {
 		this.forest.update( this.camera );
 		this.rocks.update( this.camera );
 		this.waterPlants.update( this.camera );
+		splitSharedMaterials( this.scene );
 		// compile in the background where the browser supports it (keeps the loader animating)
 		await r.compileAsync( this.scene, this.camera );
 		this.render();
@@ -355,6 +417,7 @@ export class App {
 		this.scene.add( this.groundCover.group );
 		this.forest.setNearDistance( q.treeNear );
 		this.terrain.uniforms.uGrassFar.value = q.grassFar;
+		splitSharedMaterials( this.scene );
 		this.renderScale = 1;
 		this.resize();
 
@@ -624,12 +687,17 @@ export class App {
 		const r = this.renderer;
 		r.info.reset();
 		r.shadowMap.needsUpdate = true;
+		this.scene.updateMatrixWorld();
 
-		// the stream's mirror (three.js Reflector)
-		this.streams.renderReflection( r, this.scene, this.camera );
+		// The mirrors, all before the frame and at the top level: the stream's (three.js
+		// Reflector), then the lake's and each pond's (three.js Water) when they are in view.
+		const cam = this.camera, mask = cam.layers.mask;
+		cam.updateMatrixWorld();
+		this.streams.renderReflection( r, this.scene, cam );
+		_frustum.setFromProjectionMatrix( _m4.multiplyMatrices( cam.projectionMatrix, cam.matrixWorldInverse ) );
+		for ( const w of [ this.water, ...this.streams.ponds ] ) if ( inView( w.mesh ) ) w.renderMirror( r, this.scene, cam );
 
 		// 1. everything but the water
-		const cam = this.camera, mask = cam.layers.mask;
 		r.setRenderTarget( this.post.sceneRT );
 		r.setClearColor( 0x000000, 1 );
 		r.clear( true, true, false );

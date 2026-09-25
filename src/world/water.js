@@ -242,16 +242,18 @@ export class Water {
 		// Objects that appear only in the reflection (a cheaper terrain on layer 2). three's
 		// mirror camera sees layer 0, so they join layer 0 for the mirror pass alone.
 		this.reflectOnly = [];
-		this.mainCamera = null;
 		// small waters far away borrow the lake's mirror image instead of rendering their own
 		this.fallback = opts.fallback || null;
 		this.farDist = opts.farDist ?? Infinity;
 		const own = { tex: rig.mirrorSampler.value, mat: rig.textureMatrix.value };
 		const centre = new THREE.Vector3();
 		const mirror = this.mesh.onBeforeRender;
-		this.mesh.onBeforeRender = ( renderer, scene, camera, ...rest ) => {
+		// The mirror is drawn by renderMirror(), which the app calls before the frame for each
+		// water in view - not from inside the water pass, where it would be a nested render
+		// with a lighting state of its own.
+		this.mesh.onBeforeRender = () => {};
+		this.renderMirror = ( renderer, scene, camera ) => {
 
-			if ( this.mainCamera && camera !== this.mainCamera ) return;
 			this.mesh.geometry.boundingSphere && centre.copy( this.mesh.geometry.boundingSphere.center ).applyMatrix4( this.mesh.matrixWorld );
 			const far = this.fallback && camera.position.distanceTo( centre ) > this.farDist;
 			this.uniforms.mirrorSampler.value = far ? this.fallback.uniforms.mirrorSampler.value : own.tex;
@@ -259,7 +261,7 @@ export class Water {
 			if ( far ) return;
 			for ( const o of this.reflectOnly ) o.layers.enable( 0 );
 			renderer.setClearColor( 0x000000, 1 );
-			mirror( renderer, scene, camera, ...rest );
+			mirror( renderer, scene, camera );
 			for ( const o of this.reflectOnly ) o.layers.disable( 0 );
 
 		};

@@ -35,6 +35,10 @@ export class SunShadows {
 
 			const l = new THREE.DirectionalLight( 0xffffff, 0 );
 			l.castShadow = true;
+			// on every layer: the water and effects passes sample the cascades too, and every
+			// pass then shares one lighting state (three.js re-resolves each material's program
+			// whenever that state changes between passes)
+			l.layers.enableAll();
 			const size = i === 0 ? quality.shadowSize : Math.min( quality.shadowSize, 2048 );
 			l.shadow.mapSize.set( size, size );
 			const r = n === 1 ? 90 : this.radii[ i ];

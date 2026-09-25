@@ -354,6 +354,8 @@ export class GeeseFlight {
 		if ( ! f ) {
 
 			this.mesh.count = 0;
+			// nothing to draw (an empty InstancedMesh still costs a draw set-up in every pass)
+			this.mesh.visible = false;
 			return;
 
 		}
@@ -375,6 +377,7 @@ export class GeeseFlight {
 		}
 
 		this.mesh.count = f.count;
+		this.mesh.visible = true;
 		this.mesh.instanceMatrix.needsUpdate = true;
 		f.honk -= dt;
 		if ( f.honk <= 0 ) {

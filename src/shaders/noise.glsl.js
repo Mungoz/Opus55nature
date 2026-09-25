@@ -10,6 +10,24 @@ export const noiseGLSL = /* glsl */ `
 
 const mat2 M2 = mat2( 0.8, -0.6, 0.6, 0.8 );
 
+#ifdef VERTEX_CULL
+// true if the sphere (c, r) is entirely outside the view of the pass being drawn; instanced
+// geometry uses it to skip off-screen instances before any texture reads
+bool sphereOutsideView( vec3 c, float r ) {
+	mat4 m = projectionMatrix * viewMatrix;
+	vec4 rx = vec4( m[ 0 ][ 0 ], m[ 1 ][ 0 ], m[ 2 ][ 0 ], m[ 3 ][ 0 ] );
+	vec4 ry = vec4( m[ 0 ][ 1 ], m[ 1 ][ 1 ], m[ 2 ][ 1 ], m[ 3 ][ 1 ] );
+	vec4 rw = vec4( m[ 0 ][ 3 ], m[ 1 ][ 3 ], m[ 2 ][ 3 ], m[ 3 ][ 3 ] );
+	vec4 pl[ 4 ];
+	pl[ 0 ] = rw + rx; pl[ 1 ] = rw - rx; pl[ 2 ] = rw + ry; pl[ 3 ] = rw - ry;
+	for ( int i = 0; i < 4; i ++ ) {
+		float d = ( dot( pl[ i ].xyz, c ) + pl[ i ].w ) / length( pl[ i ].xyz );
+		if ( d < -r ) return true;
+	}
+	return false;
+}
+#endif
+
 float hash11( float p ) { p = fract( p * .1031 ); p *= p + 33.33; p *= p + p; return fract( p ); }
 float hash12( vec2 p ) { vec3 p3 = fract( vec3( p.xyx ) * .1031 ); p3 += dot( p3, p3.yzx + 33.33 ); return fract( ( p3.x + p3.y ) * p3.z ); }
 float hash13( vec3 p3 ) { p3 = fract( p3 * .1031 ); p3 += dot( p3, p3.zyx + 31.32 ); return fract( ( p3.x + p3.y ) * p3.z ); }

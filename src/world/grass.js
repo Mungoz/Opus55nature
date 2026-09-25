@@ -10,6 +10,7 @@ import { RNG } from '../core/rng.js';
 // nearest the camera, so blades stay planted while the viewer moves.
 
 const vert = /* glsl */ `
+#define VERTEX_CULL
 ${noiseGLSL}
 ${terrainUniformsGLSL}
 ${terrainLookupFnGLSL}
@@ -54,6 +55,7 @@ void main() {
 
 	vec4 hn = terrainHN( p );
 	float h = hn.x;
+	if ( sphereOutsideView( vec3( p.x, h + 0.5, p.y ), 1.6 ) ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
 	vec4 bio = biomeAt( p );
 	float patchN = textureLod( uNoiseTex, p / 23.0, 0.0 ).g;
 	float dens;

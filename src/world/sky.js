@@ -419,7 +419,8 @@ export class Sky {
 		} );
 		this.mesh = new THREE.Mesh( new THREE.SphereGeometry( 1, 48, 24 ), this.material );
 		this.mesh.frustumCulled = false;
-		this.mesh.renderOrder = - 1000;
+		// drawn after every other opaque thing: its fragments survive only where nothing is in front
+		this.mesh.renderOrder = 1000;
 		this.mesh.name = 'sky';
 
 		this.auroraEnabled = true;

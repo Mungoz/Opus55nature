@@ -31,6 +31,22 @@ function instance( proto ) {
 	const rest = new Map();
 	for ( const [ n, b ] of bones ) rest.set( n, b.position.clone() );
 	const fur = proto.furGeo ? addFur( mesh, proto.furGeo, proto.furMat ) : null;
+	// A sphere that holds the animal in any pose: the bones only bob and bend about the body, so
+	// twice the rest-pose radius is ample. With it, animals out of a pass's view (the main
+	// camera, the mirrors, the sun's shadow camera) are skipped there. The shadow pass
+	// updates the skeleton itself, so an unseen animal's shadow still moves.
+	const geo = proto.mesh.geometry;
+	if ( ! geo.boundingSphere ) geo.computeBoundingSphere();
+	mesh.boundingSphere = geo.boundingSphere.clone();
+	mesh.boundingSphere.radius = mesh.boundingSphere.radius * 2 + 0.25;
+	mesh.frustumCulled = true;
+	if ( fur ) {
+
+		fur.boundingSphere = mesh.boundingSphere;
+		fur.frustumCulled = true;
+
+	}
+
 	return { mesh, bones, rest, fur, furFar: proto.furFar };
 
 }

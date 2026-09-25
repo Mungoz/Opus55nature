@@ -122,7 +122,7 @@ function faceUp( g ) {
 
 
 const _v = new THREE.Vector3();
-const _frustum = new THREE.Frustum(), _m4 = new THREE.Matrix4(), _sphere = new THREE.Sphere();
+const _frustum = new THREE.Frustum(), _m4 = new THREE.Matrix4(), _sphere = new THREE.Sphere(), _v4 = new THREE.Vector4();
 
 export class Streams {
 
@@ -141,7 +141,6 @@ export class Streams {
 		this.normalMap0 = tl.load( './textures/Water_1_M_Normal.jpg' );
 		this.normalMap1 = tl.load( './textures/Water_2_M_Normal.jpg' );
 		for ( const t of [ this.normalMap0, this.normalMap1 ] ) t.wrapS = t.wrapT = THREE.RepeatWrapping;
-		this.mainCamera = null;
 		this.ponds = [];
 		this.flowing = []; // materials driven by Water2's flow cycle
 		// three.js Reflector for the stream: a level mirror at the height of the water nearest you
@@ -476,8 +475,6 @@ export class Streams {
 
 	update( camera, dt ) {
 
-		this.mainCamera = camera;
-		for ( const p of this.ponds ) p.mainCamera = camera;
 		// Water2's flow cycle, and the projection that maps each vertex to the screen
 		const bias = new THREE.Matrix4().set( 0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1 );
 		const proj = bias.multiply( camera.projectionMatrix ).multiply( camera.matrixWorldInverse );
@@ -506,6 +503,48 @@ export class Streams {
 
 	}
 
+	// Screen-space bounds (0..1, y up) of the stream and falls, padded for the ripple offset;
+	// null when some of the water is behind the camera (then the whole mirror is drawn).
+	_screenRect( camera ) {
+
+		_m4.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse );
+		let u0 = 1, u1 = 0, v0 = 1, v1 = 0, any = false;
+		const add = ( x, y, z ) => {
+
+			const v = _v4.set( x, y, z, 1 ).applyMatrix4( _m4 );
+			if ( v.w < 0.5 ) return false;
+			const u = v.x / v.w * 0.5 + 0.5, vv = v.y / v.w * 0.5 + 0.5;
+			// ignore points far off screen: only the visible part of the water matters
+			if ( u < - 0.5 || u > 1.5 || vv < - 0.5 || vv > 1.5 ) return true;
+			u0 = Math.min( u0, u ); u1 = Math.max( u1, u ); v0 = Math.min( v0, vv ); v1 = Math.max( v1, vv );
+			any = true;
+			return true;
+
+		};
+
+		const c = camera.position;
+		for ( let i = 0; i < this.path.length; i ++ ) {
+
+			const q = this.path[ i ];
+			if ( ( q.p.x - c.x ) ** 2 + ( q.p.y - c.z ) ** 2 > 650 * 650 ) continue;
+			const w = q.w + 6;
+			for ( const [ dx, dz ] of [ [ w, 0 ], [ - w, 0 ], [ 0, w ], [ 0, - w ] ] ) if ( ! add( q.p.x + dx, q.surf, q.p.y + dz ) ) return null;
+
+		}
+
+		if ( this.fall.visible ) {
+
+			const bb = this.fall.geometry.boundingBox || ( this.fall.geometry.computeBoundingBox(), this.fall.geometry.boundingBox );
+			for ( let k = 0; k < 8; k ++ ) if ( ! add( k & 1 ? bb.max.x : bb.min.x, k & 2 ? bb.max.y : bb.min.y, k & 4 ? bb.max.z : bb.min.z ) ) return null;
+
+		}
+
+		if ( ! any ) return null;
+		const pad = 0.07;
+		return { u0: Math.max( 0, u0 - pad ), u1: Math.min( 1, u1 + pad ), v0: Math.max( 0, v0 - pad ), v1: Math.min( 1, v1 + pad ) };
+
+	}
+
 	// The stream's mirror: level with the water nearest the camera. Called before the frame.
 	renderReflection( renderer, scene, camera ) {
 
@@ -531,10 +570,38 @@ export class Streams {
 		if ( ! seen ) return;
 		this.reflector.position.y = Math.min( level, c.y - 0.3 );
 		this.reflector.updateMatrixWorld();
+		// Where on screen is the water? The mirror is sampled at the screen position of each
+		// water pixel (mirrored in x) plus a small ripple offset, so only that region is needed.
+		// Render it as an off-centre sub-frustum of the same camera into the same pixels of
+		// the target: identical results, a fraction of the work.
+		const rect = this._screenRect( camera );
+		const rt = this.reflector.getRenderTarget();
+		const proxy = this._proxy || ( this._proxy = new THREE.PerspectiveCamera() );
+		let cam = camera;
+		// (fullMirror, a debug switch, always draws the whole mirror)
+		if ( ! this.fullMirror && rect && ( rect.u1 - rect.u0 ) * ( rect.v1 - rect.v0 ) < 0.7 ) {
+
+			const W = rt.width, H = rt.height;
+			// in the mirror's own image the water appears flipped left to right
+			const x0 = Math.floor( ( 1 - rect.u1 ) * W ), x1 = Math.ceil( ( 1 - rect.u0 ) * W );
+			const y0 = Math.floor( rect.v0 * H ), y1 = Math.ceil( rect.v1 * H );
+			proxy.copy( camera, false );
+			proxy.matrixWorld.copy( camera.matrixWorld );
+			proxy.matrixWorldInverse.copy( camera.matrixWorldInverse );
+			proxy.setViewOffset( W, H, x0, H - y1, x1 - x0, y1 - y0 );
+			rt.viewport.set( x0, y0, x1 - x0, y1 - y0 );
+			rt.scissor.set( x0, y0, x1 - x0, y1 - y0 );
+			rt.scissorTest = true;
+			cam = proxy;
+
+		}
+
 		this.reflectMesh.layers.enable( 0 );
 		renderer.setClearColor( 0x000000, 1 );
-		this.reflector.onBeforeRender( renderer, scene, camera );
+		this.reflector.onBeforeRender( renderer, scene, cam );
 		this.reflectMesh.layers.disable( 0 );
+		rt.viewport.set( 0, 0, rt.width, rt.height );
+		rt.scissorTest = false;
 
 	}
 
