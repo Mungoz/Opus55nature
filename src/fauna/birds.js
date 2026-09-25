@@ -144,6 +144,11 @@ export class Murmuration {
 		}
 
 		mx /= n; my /= n; mz /= n;
+		// uniform steering of the flock's centre toward the attractor
+		const gtx = ax - mx, gty = ay - my, gtz = az - mz;
+		const gtd = Math.sqrt( gtx * gtx + gty * gty + gtz * gtz ) + 1e-3;
+		const gpull = 1.5 + Math.min( gtd / 40, 6 );
+		const gux = gtx / gtd * gpull, guy = gty / gtd * gpull, guz = gtz / gtd * gpull;
 		for ( let i = 0; i < n; i ++ ) {
 
 			const px = P[ i * 3 ], py = P[ i * 3 + 1 ], pz = P[ i * 3 + 2 ];
@@ -161,9 +166,9 @@ export class Murmuration {
 					const d2 = ox * ox + oy * oy + oz * oz;
 					if ( d2 > 64 ) continue;
 					cnt ++;
-					if ( d2 < 1.6 ) {
+					if ( d2 < 4 ) {
 
-						const inv = 1 / ( d2 + 0.05 );
+						const inv = 1.6 / ( d2 + 0.15 );
 						sx -= ox * inv; sy -= oy * inv; sz -= oz * inv;
 
 					}
@@ -188,13 +193,10 @@ export class Murmuration {
 			// hold together: steer toward the flock centroid
 			const gx = mx - px, gy = my - py, gz = mz - pz;
 			const gd = Math.sqrt( gx * gx + gy * gy + gz * gz ) + 1e-3;
-			const hold = Math.max( 0, gd - 18 ) * 0.08;
+			const hold = Math.max( 0, gd - 24 ) * 0.1;
 			fx += gx / gd * hold; fy += gy / gd * hold; fz += gz / gd * hold;
-			// pull toward the roaming centre (stronger when far)
-			const tx = ax - px, ty = ay - py, tz = az - pz;
-			const td = Math.sqrt( tx * tx + ty * ty + tz * tz ) + 1e-3;
-			const pull = 0.15 + Math.min( td / 140, 2.5 );
-			fx += tx / td * pull * 4; fy += ty / td * pull * 4; fz += tz / td * pull * 4;
+			// the whole flock is steered toward the roaming centre as one body
+			fx += gux; fy += guy; fz += guz;
 			// flee the falcon
 			if ( this.predator ) {
 

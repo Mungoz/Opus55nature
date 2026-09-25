@@ -10,7 +10,7 @@ import { Terrain } from './world/terrain.js';
 import { SunShadows } from './world/shadows.js';
 import { Water } from './world/water.js';
 import { Forest } from './world/trees.js';
-import { Meadow } from './world/grass.js';
+import { Meadow, CROP } from './world/grass.js';
 import { GroundCover } from './world/groundcover.js';
 import { Rocks } from './world/rocks.js';
 import { Particles } from './world/particles.js';
@@ -154,6 +154,8 @@ export class App {
 		this.scene.add( this.shallows.group );
 		this.mammals = new Mammals( td, this.forest, this.audio );
 		this.scene.add( this.mammals.group );
+		// marmots crop the turf short around their burrows
+		this.mammals.marmots.forEach( ( m, i ) => CROP.value[ i ].set( m.burrow.x, m.burrow.z, 9, 0.8 ) );
 		this.scene.add( this.starlings.mesh, this.geese.mesh, this.eagles.mesh, this.waterfowl.group, this.fish.mesh );
 		this._buildStone();
 		this.weather = new Weather( td, this.quality, this.audio );
@@ -401,7 +403,8 @@ export class App {
 		const t = this.elapsed;
 		U.uTime.value = t;
 		this.updateTime( dt );
-		if ( this.tour.active ) this.tour.update( dt );
+		if ( this.director ) this.director( dt );
+		else if ( this.tour.active ) this.tour.update( dt );
 		else this.controls.update( dt );
 		this.camera.updateMatrixWorld();
 
@@ -421,7 +424,7 @@ export class App {
 		this.fish.update( dt, this.camera, true );
 		this.shallows.update( dt, this.camera );
 		// (the debug follow camera must not spook what it films)
-		this.mammals.update( dt, t, this.options.follow ? { position: new THREE.Vector3( 1e4, 0, 1e4 ) } : this.camera, 1 - Math.min( 1, Math.abs( sunEl + 1 ) / 7 ) );
+		this.mammals.update( dt, t, this.options.follow || this.director ? { position: new THREE.Vector3( 1e4, 0, 1e4 ) } : this.camera, 1 - Math.min( 1, Math.abs( sunEl + 1 ) / 7 ) );
 		if ( this.options.follow ) this._debugFollow();
 		this._updateStones( dt );
 

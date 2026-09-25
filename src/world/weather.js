@@ -180,10 +180,10 @@ export class Weather {
 	}
 
 	// Fractal lightning path with a few side branches, as camera-facing ribbons.
-	_makeBolt( camera ) {
+	_makeBolt( camera, aim = null, dist = null ) {
 
 		const rng = this.rng;
-		const a = rng.next() * Math.PI * 2, d = rng.range( 1400, 4200 );
+		const a = aim ?? rng.next() * Math.PI * 2, d = dist ?? rng.range( 1400, 4200 );
 		const cx = camera.position.x + Math.cos( a ) * d, cz = camera.position.z + Math.sin( a ) * d;
 		const ground = Math.max( this.terrain.heightAt( cx, cz ), 0 );
 		const top = new THREE.Vector3( cx + rng.range( - 300, 300 ), Math.max( U.uCloudBase.value.x, ground + 400 ) + 200, cz + rng.range( - 300, 300 ) );
@@ -260,6 +260,17 @@ export class Weather {
 
 	}
 
+	// a lightning strike; aim (world angle in the xz-plane) lets a director place it in shot
+	strike( camera, aim = null, dist = null ) {
+
+		const r = this._makeBolt( camera, aim, dist );
+		this._boltLife = 0.35;
+		this._flicker = 0;
+		this.flash = 1.0 * Math.min( 1, 2500 / r.dist );
+		this.audio?.thunder( r.at, r.dist );
+
+	}
+
 	update( dt, time, camera, sky ) {
 
 		// optional slow cycle through the weathers
@@ -310,11 +321,7 @@ export class Weather {
 			if ( this._strikeTimer <= 0 ) {
 
 				this._strikeTimer = this.rng.range( 5, 16 ) / s.storm;
-				const { dist, at } = this._makeBolt( camera );
-				this._boltLife = 0.35;
-				this._flicker = 0;
-				this.flash = 1.0 * Math.min( 1, 2500 / dist );
-				this.audio?.thunder( at, dist );
+				this.strike( camera );
 
 			}
 

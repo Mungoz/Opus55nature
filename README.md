@@ -57,6 +57,16 @@ WebGL 2 is required. Every current desktop browser supports it.
 4. Under **Embed options**, set the viewport to **1280 × 720** (or bigger), and enable **Fullscreen button** and **Mobile friendly** (landscape).
 5. Save, then view the page. The first load takes a few seconds while the valley is generated on the GPU.
 
+## Recording the trailer
+
+`src/film.js` is a small director: open the page with `?film` and it plays a scripted shot list frame by frame at a fixed 30 fps, with letterboxing, title cards and captions. `tools/film.mjs` drives it in headless Chrome, captures every frame, renders the soundtrack offline (the game's own procedural soundscape, cued per shot, over an ambient pad whose chords change on the cuts), and encodes an H.264/AAC MP4 with ffmpeg:
+
+```bash
+npm run dev                                   # in one terminal
+node tools/film.mjs preview tools/out/film    # one still per shot
+node tools/film.mjs record  tools/out/film larchmere-trailer.mp4
+```
+
 ## Project layout
 
 ```
@@ -70,5 +80,6 @@ src/
   fx/post.js          bloom, god rays, tone mapping and grade
   audio.js            procedural soundscape
   ui.js · tour.js     interface and cinematic camera
-tools/                screenshot harness, UI test, itch.io zipper
+  film.js             trailer director · trailerAudio.js offline soundtrack
+tools/                screenshot harness, UI/mobile tests, trailer recorder, itch.io zipper
 ```

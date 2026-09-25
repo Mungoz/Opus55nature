@@ -1,10 +1,12 @@
 import './style.css';
 import { App } from './app.js';
 import { initUI } from './ui.js';
+import { Film } from './film.js';
 
 const params = new URLSearchParams( location.search );
 const num = ( k, d ) => ( params.has( k ) ? parseFloat( params.get( k ) ) : d );
-const shotMode = params.has( 'shot' );
+const filmMode = params.has( 'film' );
+const shotMode = params.has( 'shot' ) || filmMode;
 if ( shotMode ) document.body.classList.add( 'shot' );
 
 let stored = {};
@@ -57,6 +59,17 @@ if ( app ) app.load( ( f, text ) => {
 	if ( label && text ) label.textContent = text;
 
 } ).then( () => {
+
+	if ( filmMode ) {
+
+		// the recorder drives frames itself
+		document.body.classList.add( 'entered' );
+		window.film = new Film( app );
+		window.renderTrailerAudio = async () => ( await import( './trailerAudio.js' ) ).renderTrailerAudio( window.film.shots.map( ( s ) => s.dur ) );
+		window.__filmReady = true;
+		return;
+
+	}
 
 	const ui = shotMode ? null : initUI( app );
 	let last = performance.now();

@@ -163,10 +163,10 @@ void main() {
 	vec4 hn = terrainHN( p );
 	// each drift is mostly one species
 	float kind = floor( fract( textureLod( uNoiseTex, p / 31.0, 0.0 ).g * 3.7 + r2 * 0.35 ) * 5.0 );
-	float stemH, headR, tilt; vec3 col;
+	float stemH, headR, tilt, pw = 0.7; vec3 col;
 	if ( kind < 0.5 ) { stemH = 0.07; headR = 0.035; tilt = 1.25; col = vec3( 0.62, 0.45, 0.8 ); }
 	else if ( kind < 1.5 ) { stemH = 0.06; headR = 0.022; tilt = 1.3; col = vec3( 0.14, 0.24, 0.82 ); }
-	else if ( kind < 2.5 ) { stemH = 0.36; headR = 0.04; tilt = 0.12; col = vec3( 0.93, 0.91, 0.84 ); }
+	else if ( kind < 2.5 ) { stemH = 0.36; headR = 0.03; tilt = 0.35; pw = 1.9; col = vec3( 0.86, 0.84, 0.76 ); }
 	else if ( kind < 3.5 ) { stemH = 0.28; headR = 0.019; tilt = -1.15; col = vec3( 0.48, 0.55, 0.9 ); }
 	else { stemH = 0.2; headR = 0.026; tilt = 0.28; col = vec3( 0.98, 0.76, 0.16 ); }
 	stemH *= 0.8 + 0.4 * r2;
@@ -194,7 +194,7 @@ void main() {
 		vec3 side = vec3( -sin( a ), 0.0, cos( a ) );
 		float r = position.y;
 		float wProf = sin( r * 3.1416 ) * 0.85 + 0.15;
-		wp = top + ( dir * r * headR + side * position.x * headR * 0.7 * wProf ) * s;
+		wp = top + ( dir * r * headR + side * position.x * headR * pw * wProf ) * s;
 		n = normalize( cross( side, dir ) );
 		if ( n.y < 0.0 ) n = -n;
 		col *= 0.8 + 0.35 * r;

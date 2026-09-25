@@ -66,6 +66,16 @@ export class LeapingFish {
 
 	}
 
+	// director hook: a leap at a chosen spot
+	forceJump( x, z, dir, v0 = 4.2, speed = 1.8, s = 1.35 ) {
+
+		this.jump = { x, z, dir, v0, t: 0, T: 2 * v0 / 9.81, speed, s };
+		this.water.addRipple( x, z, 0.9 );
+		this.particles?.splash( new THREE.Vector3( x, 0, z ), 14, 1.4 );
+		this.timer = 1e9;
+
+	}
+
 	_start( camera ) {
 
 		camera.getWorldDirection( this._fwd );

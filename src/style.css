@@ -462,3 +462,16 @@ body.touch #hint { display: none; }
 	#touch-buttons button { width: 48px; height: 48px; }
 	#stick { bottom: 18px; left: 18px; width: 108px; height: 108px; }
 }
+
+/* ---------- trailer overlays (?film) ---------- */
+body.filming #ui, body.filming #loader { display: none !important; }
+#film { position: fixed; inset: 0; pointer-events: none; z-index: 30; font-family: var(--serif); color: #f6f0e4; }
+.film-bar { position: absolute; left: 0; right: 0; height: 12.6%; background: #000; }
+.film-bar.top { top: 0; }
+.film-bar.bottom { bottom: 0; }
+#film-title, #film-end { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; opacity: 0; text-shadow: 0 2px 30px rgba(0, 0, 0, 0.45); }
+#film h1 { font-weight: 300; font-size: 7.2vh; letter-spacing: 0.5em; margin: 0 0 0.35em 0.5em; text-transform: uppercase; }
+#film p { font-style: italic; font-size: 2.6vh; letter-spacing: 0.06em; margin: 0; color: rgba(246, 240, 228, 0.82); }
+#film-caption { position: absolute; left: 5.5%; bottom: 16%; font-size: 2.6vh; font-style: italic; letter-spacing: 0.08em; opacity: 0; text-shadow: 0 1px 18px rgba(0, 0, 0, 0.6); }
+#film-caption::before { content: ''; display: inline-block; width: 2.2vh; height: 1px; background: rgba(246, 240, 228, 0.7); vertical-align: middle; margin-right: 1.1vh; }
+#film-fade { position: absolute; inset: 0; background: #000; opacity: 0; }

@@ -2,3 +2,4 @@ node_modules
 dist
 *.zip
 tools/out
+*.mp4

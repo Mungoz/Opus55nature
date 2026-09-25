@@ -16,7 +16,14 @@ export class Soundscape {
 
 	}
 
-	start() {
+	now() {
+
+		return this.ctx.currentTime + ( this.t0 || 0 );
+
+	}
+
+	// ctx: pass an OfflineAudioContext to render offline (e.g. a trailer soundtrack)
+	start( offline = null ) {
 
 		if ( this.ctx ) {
 
@@ -26,8 +33,8 @@ export class Soundscape {
 		}
 
 		const AC = window.AudioContext || window.webkitAudioContext;
-		if ( ! AC ) return;
-		const ctx = this.ctx = new AC();
+		if ( ! AC && ! offline ) return;
+		const ctx = this.ctx = offline || new AC();
 		this.master = ctx.createGain();
 		this.master.gain.value = this.volume;
 		const comp = ctx.createDynamicsCompressor();
@@ -186,7 +193,7 @@ export class Soundscape {
 		if ( ! this.enabled ) return;
 		const ctx = this.ctx;
 		const dest = this._panner( pos );
-		let t = ctx.currentTime + 0.05;
+		let t = this.now() + 0.05;
 		const kind = Math.floor( Math.random() * 4 );
 		if ( kind === 0 ) {
 
@@ -243,7 +250,7 @@ export class Soundscape {
 		if ( ! this.enabled ) return;
 		const ctx = this.ctx;
 		const dest = this._panner( pos );
-		const t = ctx.currentTime + 0.05;
+		const t = this.now() + 0.05;
 		// the tremolo wail: rising, holding, falling, with a quavering vibrato
 		const o = ctx.createOscillator();
 		o.type = 'sine';
@@ -288,7 +295,7 @@ export class Soundscape {
 
 		if ( ! this.enabled ) return;
 		const dest = this._panner( pos );
-		let t = this.ctx.currentTime + 0.05;
+		let t = this.now() + 0.05;
 		for ( const [ dur, gap ] of [ [ 0.45, 0.35 ], [ 0.18, 0.12 ], [ 0.5, 0 ] ] ) {
 
 			this._tone( dest, t, dur, 400, 360, 0.25, 'sine', 4 );
@@ -306,7 +313,7 @@ export class Soundscape {
 		const n = 1 + Math.floor( Math.random() * Math.min( 3, count / 3 ) );
 		for ( let i = 0; i < n; i ++ ) {
 
-			const t = ctx.currentTime + 0.05 + i * ( 0.15 + Math.random() * 0.2 );
+			const t = this.now() + 0.05 + i * ( 0.15 + Math.random() * 0.2 );
 			const f = ctx.createBiquadFilter();
 			f.type = 'bandpass';
 			f.frequency.value = 900 + Math.random() * 300;
@@ -323,7 +330,7 @@ export class Soundscape {
 		if ( ! this.enabled ) return;
 		const ctx = this.ctx;
 		const dest = this._panner( pos );
-		const t = ctx.currentTime + 0.02;
+		const t = this.now() + 0.02;
 		const src = ctx.createBufferSource();
 		src.buffer = this.noise;
 		const f = ctx.createBiquadFilter();
@@ -352,7 +359,7 @@ export class Soundscape {
 		const wet = ctx.createGain();
 		wet.gain.value = 0.8;
 		dest.connect( wet ).connect( this.reverbSend );
-		let t = ctx.currentTime + 0.05;
+		let t = this.now() + 0.05;
 		const n = 3 + Math.floor( Math.random() * 3 );
 		for ( let i = 0; i < n; i ++ ) {
 
@@ -402,7 +409,7 @@ export class Soundscape {
 
 		if ( ! this.enabled ) return;
 		const dest = this._panner( pos );
-		const t = this.ctx.currentTime + 0.02;
+		const t = this.now() + 0.02;
 		const bp = this.ctx.createBiquadFilter();
 		bp.type = 'bandpass';
 		bp.frequency.value = 700;
@@ -417,7 +424,7 @@ export class Soundscape {
 
 		if ( ! this.enabled ) return;
 		const dest = this._panner( pos );
-		let t = this.ctx.currentTime + 0.03;
+		let t = this.now() + 0.03;
 		const n = 1 + Math.floor( Math.random() * 3 );
 		for ( let i = 0; i < n; i ++ ) {
 
@@ -432,7 +439,7 @@ export class Soundscape {
 
 		if ( ! this.enabled ) return;
 		const dest = this._panner( pos );
-		let t = this.ctx.currentTime + 0.02;
+		let t = this.now() + 0.02;
 		for ( let i = 0; i < 10; i ++ ) {
 
 			this._tone( dest, t, 0.035, 4200 + Math.random() * 800, 3000, 0.12, 'square' );
@@ -443,15 +450,15 @@ export class Soundscape {
 	}
 
 	// Thunder arrives after the flash at the speed of sound: a crack, then a long rumble.
-	thunder( pos, dist ) {
+	thunder( pos, dist, gain = 1, delayOverride = null ) {
 
 		if ( ! this.enabled ) return;
 		const ctx = this.ctx;
-		const delay = Math.min( dist / 343, 12 );
-		const t = ctx.currentTime + delay;
+		const delay = delayOverride ?? Math.min( dist / 343, 12 );
+		const t = this.now() + delay;
 		const near = Math.max( 0, 1 - dist / 4500 );
 		const dest = ctx.createGain();
-		dest.gain.value = 1;
+		dest.gain.value = gain;
 		dest.connect( this.master );
 		const wet = ctx.createGain();
 		wet.gain.value = 0.9;
