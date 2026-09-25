@@ -40,6 +40,15 @@ export function initUI( app ) {
 	const settings = { clouds: 0.34, wind: 1, volume: 0.8, sens: 1, aurora: true, invert: false, autores: true, dynweather: false, weather: 'clear', speed: app.timeSpeed, ...load() };
 	const persist = () => save( { ...settings, quality: app.presetName } );
 
+	// the walk / fly buttons show the current mode; up and down only make sense in flight
+	const syncWalk = () => {
+
+		document.querySelector( '[data-act="walk"]' )?.classList.toggle( 'on', app.controls.walk );
+		document.querySelector( '#touch-buttons [data-touch="walk"]' )?.classList.toggle( 'on', app.controls.walk );
+		document.body.classList.toggle( 'walking', app.controls.walk );
+
+	};
+
 	// ---------- toast ----------
 	let toastTimer = 0;
 	const toast = ( msg ) => {
@@ -97,7 +106,7 @@ export function initUI( app ) {
 		walk: () => {
 
 			app.controls.walk = ! app.controls.walk;
-			btn( 'walk' ).classList.toggle( 'on', app.controls.walk );
+			syncWalk();
 			toast( app.controls.walk ? 'Walking' : 'Flying' );
 
 		},
@@ -282,7 +291,6 @@ export function initUI( app ) {
 			if ( kind === 'walk' ) {
 
 				actions.walk();
-				b.classList.toggle( 'on', app.controls.walk );
 				return;
 
 			}
@@ -427,6 +435,8 @@ export function initUI( app ) {
 
 	// ---------- per-frame ----------
 	let lastClock = '';
+	syncWalk();
+
 	return {
 		update( dt ) {
 

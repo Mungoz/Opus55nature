@@ -126,6 +126,8 @@ export class App {
 
 		await step( 0.45, 'Filling the lake' );
 		this.water = new Water( this.textures, this.quality );
+		this.water.mainCamera = this.camera;
+		this.water.reflectOnly.push( this.terrain.reflectMesh );
 		this.scene.add( this.water.mesh );
 		this.streams = new Streams( td, this.textures, this.water );
 		this.scene.add( this.streams.group );
@@ -181,6 +183,8 @@ export class App {
 		this.controls.onClick = ( e ) => this.throwStone( e );
 		const p = this.options.cam;
 		this.controls.setPose( ...( p || START_POSE ) );
+		// on foot by default (screenshots and the trailer place the camera freely)
+		this.controls.walk = ! this.options.shot;
 		// debug: ?prop=log|fern|heath|mush frames the nearest one of those to the start
 		const pk = this.options.prop && this.forest.props[ this.options.prop ];
 		if ( pk ) {
@@ -508,6 +512,7 @@ export class App {
 		}
 
 		this.particles.update( dt, t, this.camera, wind, this.water );
+		this.water.update( dt );
 
 		// soundscape
 		const cp = this.camera.position;
@@ -570,7 +575,6 @@ export class App {
 		const r = this.renderer;
 		r.info.reset();
 		r.shadowMap.needsUpdate = true;
-		this.water.render( r, this.scene, this.camera );
 
 		r.setRenderTarget( this.post.sceneRT );
 		r.setClearColor( 0x000000, 1 );

@@ -417,6 +417,7 @@ body.touch #hint { display: none; }
 }
 
 #touch-buttons button.held, #touch-buttons button.on { background: rgba(233, 184, 106, 0.3); }
+body.walking #touch-buttons [data-touch="up"], body.walking #touch-buttons [data-touch="down"] { display: none; }
 #touch-buttons svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 @media (max-width: 640px) {

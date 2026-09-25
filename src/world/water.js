@@ -1,30 +1,62 @@
 import * as THREE from 'three';
+import { Water as ThreeWater } from 'three/addons/objects/Water.js';
 import { commonParsGLSL } from '../shaders/common.glsl.js';
 import { sharedUniforms, U } from '../core/uniforms.js';
 
 export const MAX_RIPPLES = 48;
 
+// The lake is three.js's Water (examples/jsm/objects/Water.js): its planar mirror pass,
+// its water normal map, and its shading - four scrolling scales of the normal map, a
+// sharp sun glint, subsurface scatter and a Fresnel mix with the distorted reflection.
+// The shader is extended in the same style for this scene: our sky and shadows, cat's
+// paws in the gusts, ripple rings from fish, birds, rain and thrown stones, clear
+// shallows that show the stony bed, and foam at the shore.
+
 const vert = /* glsl */ `
-uniform mat4 uTexMatrix;
-varying vec3 vWorldPos;
-varying vec4 vReflCoord;
+uniform mat4 textureMatrix;
+varying vec4 mirrorCoord;
+varying vec3 worldPosition;
 void main() {
 	vec4 wp = modelMatrix * vec4( position, 1.0 );
-	vWorldPos = wp.xyz;
-	vReflCoord = uTexMatrix * wp;
+	worldPosition = wp.xyz;
+	mirrorCoord = textureMatrix * wp;
 	gl_Position = projectionMatrix * viewMatrix * wp;
 }
 `;
 
 const frag = /* glsl */ `
 ${commonParsGLSL}
-uniform sampler2D tReflect;
-uniform sampler2D tWaterN;
+uniform sampler2D mirrorSampler;
+uniform sampler2D normalSampler;
+uniform float time;
+uniform float size;
+uniform float distortionScale;
+uniform vec3 waterColor;
+uniform vec3 eye;
 uniform vec4 uRipples[ ${MAX_RIPPLES} ];
-uniform float uRippleTime;
 uniform float uCalm;
-varying vec3 vWorldPos;
-varying vec4 vReflCoord;
+varying vec4 mirrorCoord;
+varying vec3 worldPosition;
+
+// three.js Water: four scales of the normal map drifting in different directions
+vec4 getNoise( vec2 uv ) {
+	vec2 uv0 = ( uv / 103.0 ) + vec2( time / 17.0, time / 29.0 );
+	vec2 uv1 = uv / 107.0 - vec2( time / -19.0, time / 31.0 );
+	vec2 uv2 = uv / vec2( 8907.0, 9803.0 ) + vec2( time / 101.0, time / 97.0 );
+	vec2 uv3 = uv / vec2( 1091.0, 1027.0 ) - vec2( time / 109.0, time / -113.0 );
+	vec4 noise = texture2D( normalSampler, uv0 ) +
+		texture2D( normalSampler, uv1 ) +
+		texture2D( normalSampler, uv2 ) +
+		texture2D( normalSampler, uv3 );
+	return noise * 0.5 - 1.0;
+}
+
+void sunLight( const vec3 surfaceNormal, const vec3 eyeDirection, float shiny, float spec, float diffuse, vec3 sunColor, inout vec3 diffuseColor, inout vec3 specularColor ) {
+	vec3 reflection = normalize( reflect( -uSunDir, surfaceNormal ) );
+	float direction = max( 0.0, dot( eyeDirection, reflection ) );
+	specularColor += pow( direction, shiny ) * sunColor * spec;
+	diffuseColor += max( dot( uSunDir, surfaceNormal ), 0.0 ) * sunColor * diffuse;
+}
 
 // Raindrop rings: each grid cell hosts a drop landing at its own rhythm.
 vec2 rainRings( vec2 p, float t ) {
@@ -49,49 +81,35 @@ vec2 rainRings( vec2 p, float t ) {
 	return s;
 }
 
-vec2 waveSlope( vec2 uv ) {
-	vec2 n = texture2D( tWaterN, uv ).xy * 2.0 - 1.0;
-	return n;
-}
-
 void main() {
-	vec3 wp = vWorldPos;
-	vec3 V = cameraPosition - wp;
-	float dist = length( V );
-	V /= dist;
-
-	float bed = terrainH( wp.xz );
-	float depth = uWaterLevel - bed;
+	vec3 wp = worldPosition;
+	float depth = uWaterLevel - terrainH( wp.xz );
 	if ( depth < -0.4 ) discard;
-
-	// ---- surface normal ----
-	vec2 wind = normalize( uWind.xy + 1e-4 );
-	vec2 side = vec2( -wind.y, wind.x );
+	vec3 worldToEye = eye - wp;
+	float dist = length( worldToEye );
+	vec3 eyeDirection = worldToEye / dist;
 	float t = uTime;
-	vec2 s = vec2( 0.0 );
-	s += waveSlope( wp.xz / 11.0 + wind * t * 0.028 ) * 0.55;
-	s += waveSlope( wp.xz / 3.7 + side * t * 0.045 + 0.3 ) * 0.35;
-	s += waveSlope( wp.xz / 1.3 - wind * t * 0.06 + 0.7 ) * 0.22;
-	s += waveSlope( wp.xz / 37.0 - side * t * 0.012 ) * 0.5;
 
+	// ---- surface normal: three.js Water's, calmed or ruffled by the wind ----
+	vec4 noise = getNoise( wp.xz * size );
+	vec3 surfaceNormal = normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) );
 	// cat's paws: gusts ruffle patches of the lake, the rest stays glassy
+	vec2 wind = normalize( uWind.xy + 1e-4 );
 	vec2 gp = wp.xz / 520.0 + wind * t * 0.0065;
-	float gust = texture2D( uNoiseTex, gp ).g * 0.65 + texture2D( uNoiseTex, gp * 2.7 + 0.4 ).r * 0.35;
-	gust = smoothstep( 0.42, 0.78, gust );
-	float rough = mix( uCalm, 1.0, gust ) * uWind.z;
-	// strong wind builds a proper chop; rain stipples the whole surface
-	rough *= 1.0 + smoothstep( 1.2, 2.2, uWind.z ) * 0.8;
-	rough += uWeather.x * 0.35;
-	// shallow water near shore is more ruffled, and distance softens the detail
-	rough *= mix( 1.0, 0.6, smoothstep( 40.0, 900.0, dist ) );
-	s *= 0.16 * rough;
+	float gust = smoothstep( 0.42, 0.78, texture2D( uNoiseTex, gp ).g * 0.65 + texture2D( uNoiseTex, gp * 2.7 + 0.4 ).r * 0.35 );
+	float rough = mix( uCalm, 1.0, gust ) * clamp( uWind.z * 1.4, 0.15, 2.0 );
+	rough *= 1.0 + smoothstep( 1.2, 2.2, uWind.z ) * 0.6;
+	rough += uWeather.x * 0.3;
+	rough *= mix( 1.0, 0.65, smoothstep( 60.0, 1200.0, dist ) );
+	surfaceNormal = normalize( mix( vec3( 0.0, 1.0, 0.0 ), surfaceNormal, clamp( rough, 0.0, 1.6 ) ) );
 
-	// ---- ripple rings (fish, wakes, stones) ----
+	// ---- ripple rings (fish, wakes, stones) and rain ----
+	vec2 s = vec2( 0.0 );
 	float splashFoam = 0.0;
 	for ( int i = 0; i < ${MAX_RIPPLES}; i ++ ) {
 		vec4 r = uRipples[ i ];
 		if ( r.w <= 0.0 ) continue;
-		float age = uRippleTime - r.z;
+		float age = t - r.z;
 		if ( age < 0.0 || age > 9.0 ) continue;
 		vec2 d = wp.xz - r.xy;
 		float dl = length( d ) + 1e-4;
@@ -101,89 +119,100 @@ void main() {
 		float amp = r.w * exp( -age * 0.55 ) / ( 1.0 + R * 0.8 );
 		float k = 9.0 / ( 1.0 + age * 0.35 );
 		s += ( d / dl ) * cos( x * k ) * env * amp * k * 0.06;
-		// aerated white water at the point of impact, breaking up as it spreads
 		if ( r.w > 0.8 ) splashFoam = max( splashFoam, exp( -dl * dl / ( 0.05 + age * 0.3 ) ) * exp( -age * 2.2 ) * ( r.w - 0.6 ) * smoothstep( 0.25, 0.6, texture2D( uNoiseTex, wp.xz * 1.7 + r.xy ).b + 0.3 - age * 0.3 ) );
 	}
-
 	if ( uWeather.x > 0.01 && dist < 80.0 ) s += rainRings( wp.xz, t ) * 0.2 * uWeather.x * ( 1.0 - smoothstep( 25.0, 80.0, dist ) );
+	surfaceNormal = normalize( surfaceNormal + vec3( -s.x, 0.0, -s.y ) * 1.6 );
 
-	vec3 N = normalize( vec3( -s.x, 1.0, -s.y ) );
-	float NoV = max( dot( N, V ), 0.0 );
-	float F = 0.02 + 0.98 * pow( 1.0 - NoV, 5.0 );
-
-	// ---- reflection ----
-	vec2 ruv = vReflCoord.xy / vReflCoord.w;
-	float distort = 0.9 / ( 1.0 + dist * 0.02 ) + 0.05;
-	ruv += vec2( N.x, N.z ) * distort * 0.35;
-	vec3 refl = texture2D( tReflect, ruv ).rgb;
-	// rougher patches blur the mirror a touch
-	refl = mix( refl, ( texture2D( tReflect, ruv + vec2( 0.0, 0.006 ) ).rgb + texture2D( tReflect, ruv - vec2( 0.0, 0.006 ) ).rgb ) * 0.5, gust * 0.5 );
-
-	// ---- sun glitter ----
+	// ---- three.js Water shading ----
 	float sh = sunShadow( wp, vec3( 0.0, 1.0, 0.0 ) );
-	vec3 spec = uSunColor * sh * specGGX( N, V, uSunDir, 0.085, 0.02 ) * 1.4;
-	spec *= exp( -dist * 0.00012 );
+	vec3 sunColor = uSunColor * sh;
+	vec3 diffuseLight = vec3( 0.0 );
+	vec3 specularLight = vec3( 0.0 );
+	sunLight( surfaceNormal, eyeDirection, 100.0, 2.0, 0.5, sunColor, diffuseLight, specularLight );
+	specularLight *= exp( -dist * 0.00012 );
+	// (three.js scales this by 1 / distance; capped here so the water at your feet, seen from
+	// eye height, does not tear the mirror image apart)
+	vec2 distortion = surfaceNormal.xz * ( 0.001 + 1.0 / max( dist, 45.0 ) ) * distortionScale;
+	vec3 reflectionSample = texture2D( mirrorSampler, mirrorCoord.xy / mirrorCoord.w + distortion ).rgb;
+	float theta = max( dot( eyeDirection, surfaceNormal ), 0.0 );
+	float rf0 = 0.02;
+	float reflectance = rf0 + ( 1.0 - rf0 ) * pow( ( 1.0 - theta ), 5.0 );
+	vec3 amb = skyIrradiance( vec3( 0.0, 1.0, 0.0 ) );
+	vec3 scatter = max( 0.0, dot( surfaceNormal, eyeDirection ) ) * waterColor * ( amb + sunColor * max( uSunDir.y, 0.0 ) * 0.3 ) / PI;
+	vec3 body = diffuseLight * waterColor * 0.3 / PI + scatter;
+	// the water is clear: in the shallows the stony bed shows through the body colour
+	float opacity = smoothstep( 0.2, 9.0, depth ) * 0.85;
+	vec3 col = reflectionSample * reflectance + specularLight + body * ( 1.0 - reflectance ) * opacity;
+	float alpha = reflectance + ( 1.0 - reflectance ) * opacity;
 
-	// ---- shoreline wash ----
+	// ---- foam: the swash at the shore, splashes, whitecaps in a gale ----
 	float lap = sin( t * 1.1 + wp.x * 0.35 + wp.z * 0.27 ) * 0.5 + 0.5;
 	float edge = smoothstep( 0.22 + lap * 0.12, 0.0, depth );
 	float foamN = texture2D( uNoiseTex, wp.xz * 0.35 + t * 0.02 ).b;
 	float foam = edge * smoothstep( 0.35, 0.8, foamN ) * 0.55 * ( 1.0 - smoothstep( 40.0, 220.0, dist ) );
-	vec3 foamCol = ( uSunColor * sh * max( uSunDir.y, 0.0 ) + skyIrradiance( vec3( 0.0, 1.0, 0.0 ) ) ) * 0.75 / PI;
-
-	vec3 col = refl * F + spec;
-	float alpha = F;
-	// whitecaps on wind-driven crests in a gale
-	float crest = texture2D( tWaterN, wp.xz / 7.0 + wind * t * 0.06 ).b * 0.6 + texture2D( tWaterN, wp.xz / 3.1 - side * t * 0.05 ).b * 0.4;
-	float caps = smoothstep( 0.7, 0.86, crest ) * smoothstep( 1.4, 2.2, uWind.z ) * gust * 0.5 * smoothstep( 1.0, 4.0, depth );
-	foam = max( foam, caps );
+	float crest = texture2D( normalSampler, wp.xz / 9.0 + wind * t * 0.05 ).b;
+	foam = max( foam, smoothstep( 0.85, 0.95, crest ) * smoothstep( 1.4, 2.2, uWind.z ) * gust * 0.5 * smoothstep( 1.0, 4.0, depth ) );
 	foam = max( foam, saturate( splashFoam * 1.4 ) );
+	vec3 foamCol = ( uSunColor * sh * max( uSunDir.y, 0.0 ) + amb ) * 0.75 / PI;
 	col = mix( col, foamCol, foam );
 	alpha = mix( alpha, 1.0, foam );
-	// fade out where the bed rises above the surface (thin film at the waterline)
+	// thin film where the bed rises through the surface
 	float film = smoothstep( -0.4, 0.02, depth );
 	gl_FragColor = vec4( col * film, alpha * film );
 }
 `;
-
-const _normal = new THREE.Vector3( 0, 1, 0 );
-const _reflectorPos = new THREE.Vector3();
-const _cameraPos = new THREE.Vector3();
-const _rotation = new THREE.Matrix4();
-const _lookAt = new THREE.Vector3();
-const _target = new THREE.Vector3();
-const _view = new THREE.Vector3();
-const _plane = new THREE.Plane();
-const _clip = new THREE.Vector4();
-const _q = new THREE.Vector4();
 
 export class Water {
 
 	constructor( textures, quality ) {
 
 		this.quality = quality;
-		this.reflectCamera = new THREE.PerspectiveCamera();
-		this.reflectCamera.layers.set( 0 );
-		this.reflectCamera.layers.enable( 2 );
-		this.texMatrix = new THREE.Matrix4();
-		this.rt = new THREE.WebGLRenderTarget( 2, 2, { type: THREE.HalfFloatType, depthBuffer: true, samples: 0 } );
-		this.rt.texture.name = 'reflection';
+		const normals = new THREE.TextureLoader().load( './textures/waternormals.jpg' );
+		normals.wrapS = normals.wrapT = THREE.RepeatWrapping;
+		normals.anisotropy = 4;
+
+		// the lake surface: a plane in XY, laid flat as three's Water expects
+		const geo = new THREE.PlaneGeometry( 1500, 2300, 1, 1 );
+		geo.translate( 0, 300, 0 );
+		this.mesh = new ThreeWater( geo, {
+			textureWidth: 512,
+			textureHeight: 512,
+			waterNormals: normals,
+			distortionScale: 3.7,
+			fog: false,
+		} );
+		this.mesh.rotation.x = - Math.PI / 2;
+		this.mesh.position.y = U.uWaterLevel.value;
+		this.mesh.name = 'water';
+		this.mesh.layers.set( 1 );
+		this.mesh.frustumCulled = false;
+		this.mesh.renderOrder = 10;
+
+		// three's mirror rig: reflection texture, texture matrix and eye, updated in place
+		const rig = this.mesh.material.uniforms;
+		this.reflectTarget = rig.mirrorSampler.value.renderTarget;
+		this.rt = this.reflectTarget;
+		this.texMatrix = rig.textureMatrix.value;
 
 		this.ripples = Array.from( { length: MAX_RIPPLES }, () => new THREE.Vector4( 0, 0, - 100, 0 ) );
 		this._rippleIndex = 0;
-
 		this.uniforms = {
 			...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ),
 			...sharedUniforms(),
-			tReflect: { value: this.rt.texture },
-			tWaterN: { value: textures.waterN },
-			uTexMatrix: { value: this.texMatrix },
+			mirrorSampler: rig.mirrorSampler,
+			textureMatrix: rig.textureMatrix,
+			eye: rig.eye,
+			normalSampler: rig.normalSampler,
+			time: { value: 0 },
+			size: { value: 2.2 },
+			distortionScale: rig.distortionScale,
+			waterColor: { value: new THREE.Color( 0x1e4a48 ).convertSRGBToLinear() },
 			uRipples: { value: this.ripples },
-			uRippleTime: U.uTime,
 			uCalm: { value: 0.3 },
 		};
-
 		this.material = new THREE.ShaderMaterial( {
+			name: 'LakeWater',
 			vertexShader: vert,
 			fragmentShader: frag,
 			uniforms: this.uniforms,
@@ -197,15 +226,22 @@ export class Water {
 			blendSrcAlpha: THREE.ZeroFactor,
 			blendDstAlpha: THREE.OneFactor,
 		} );
+		this.mesh.material = this.material;
 
-		const geo = new THREE.PlaneGeometry( 1500, 2300, 1, 1 );
-		geo.rotateX( - Math.PI / 2 );
-		geo.translate( 0, 0, - 300 );
-		this.mesh = new THREE.Mesh( geo, this.material );
-		this.mesh.name = 'water';
-		this.mesh.layers.set( 1 );
-		this.mesh.frustumCulled = false;
-		this.mesh.renderOrder = 10;
+		// Objects that appear only in the reflection (a cheaper terrain on layer 2). three's
+		// mirror camera sees layer 0, so they join layer 0 for the mirror pass alone.
+		this.reflectOnly = [];
+		this.mainCamera = null;
+		const mirror = this.mesh.onBeforeRender;
+		this.mesh.onBeforeRender = ( renderer, scene, camera, ...rest ) => {
+
+			if ( this.mainCamera && camera !== this.mainCamera ) return;
+			for ( const o of this.reflectOnly ) o.layers.enable( 0 );
+			renderer.setClearColor( 0x000000, 1 );
+			mirror( renderer, scene, camera, ...rest );
+			for ( const o of this.reflectOnly ) o.layers.disable( 0 );
+
+		};
 
 	}
 
@@ -220,59 +256,14 @@ export class Water {
 	setSize( width, height ) {
 
 		const s = this.quality.reflectScale;
-		this.rt.setSize( Math.max( 2, Math.round( width * s ) ), Math.max( 2, Math.round( height * s ) ) );
+		this.reflectTarget.setSize( Math.max( 2, Math.round( width * s ) ), Math.max( 2, Math.round( height * s ) ) );
 
 	}
 
-	// Mirror the main camera through the water plane and render the reflection.
-	render( renderer, scene, camera ) {
+	// the waves run faster in a stiffer breeze
+	update( dt ) {
 
-		_reflectorPos.set( 0, U.uWaterLevel.value, 0 );
-		_cameraPos.setFromMatrixPosition( camera.matrixWorld );
-		if ( _cameraPos.y < _reflectorPos.y ) return;
-
-		_view.set( _cameraPos.x, 2 * _reflectorPos.y - _cameraPos.y, _cameraPos.z );
-		_rotation.extractRotation( camera.matrixWorld );
-		_lookAt.set( 0, 0, - 1 ).applyMatrix4( _rotation ).add( _cameraPos );
-		_target.set( _lookAt.x, 2 * _reflectorPos.y - _lookAt.y, _lookAt.z );
-
-		const vc = this.reflectCamera;
-		vc.position.copy( _view );
-		vc.up.set( 0, 1, 0 ).applyMatrix4( _rotation ).reflect( _normal );
-		vc.lookAt( _target );
-		vc.far = camera.far;
-		vc.near = camera.near;
-		vc.updateMatrixWorld();
-		vc.projectionMatrix.copy( camera.projectionMatrix );
-
-		this.texMatrix.set( 0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1 );
-		this.texMatrix.multiply( vc.projectionMatrix );
-		this.texMatrix.multiply( vc.matrixWorldInverse );
-
-		// oblique near plane = the water surface (no geometry below it leaks in)
-		_plane.setFromNormalAndCoplanarPoint( _normal, _reflectorPos );
-		_plane.applyMatrix4( vc.matrixWorldInverse );
-		_clip.set( _plane.normal.x, _plane.normal.y, _plane.normal.z, _plane.constant );
-		const pm = vc.projectionMatrix;
-		_q.x = ( Math.sign( _clip.x ) + pm.elements[ 8 ] ) / pm.elements[ 0 ];
-		_q.y = ( Math.sign( _clip.y ) + pm.elements[ 9 ] ) / pm.elements[ 5 ];
-		_q.z = - 1.0;
-		_q.w = ( 1.0 + pm.elements[ 10 ] ) / pm.elements[ 14 ];
-		_clip.multiplyScalar( 2.0 / _clip.dot( _q ) );
-		pm.elements[ 2 ] = _clip.x;
-		pm.elements[ 6 ] = _clip.y;
-		pm.elements[ 10 ] = _clip.z + 1.0 - 0.0005;
-		pm.elements[ 14 ] = _clip.w;
-		vc.projectionMatrixInverse.copy( pm ).invert();
-
-		const prevTarget = renderer.getRenderTarget();
-		const prevShadowAuto = renderer.shadowMap.autoUpdate;
-		renderer.setRenderTarget( this.rt );
-		renderer.setClearColor( 0x000000, 1 );
-		renderer.clear( true, true, false );
-		renderer.render( scene, vc );
-		renderer.setRenderTarget( prevTarget );
-		renderer.shadowMap.autoUpdate = prevShadowAuto;
+		this.uniforms.time.value += dt * ( 0.35 + 0.9 * Math.min( 2, U.uWind.value.z ) );
 
 	}
 

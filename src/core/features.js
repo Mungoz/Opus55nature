@@ -181,8 +181,13 @@ float applyWater( vec2 p, float h ) {
 		float bed = surf - depth * ( 1.0 - pow( clamp( d / w, 0.0, 1.0 ), mix( 2.2, 5.0, outer ) ) ) - 0.05;
 		float lip = ( 0.55 + 0.35 * gnoise( p * 0.045 ) ) * ( 1.0 - 0.75 * inner ) + outer * ( 0.5 + 0.45 * gnoise( p * 0.07 + 2.0 ) );
 		float rise = mix( mix( 1.6, 4.5, inner ), 0.35, outer );
+		// toward the mouth the banks sink to water level, so the stream opens into the lake
+		lip *= smoothstep( 0.03, 0.5, surf );
 		float bank = surf + 0.08 + lip * smoothstep( 0.0, rise, d - w ) + max( d - w - rise, 0.0 ) * 0.04;
-		h = d < w ? bed : mix( bank, max( h, bank - 0.3 ), smoothstep( w + rise, w + 12.0, d ) );
+		float carved = d < w ? min( bed, h ) : mix( bank, max( h, bank - 0.3 ), smoothstep( w + rise, w + 12.0, d ) );
+		// never build banks up out of the lake: where the ground already lies under the
+		// water, only the channel is cut
+		h = mix( min( h, carved ), carved, smoothstep( surf - 0.7, surf + 0.05, h ) );
 	}
 	// ponds: an uneven bed - shelving shallows, a deeper hole off-centre - inside a low
 	// turf rim that undercuts in places

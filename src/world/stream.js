@@ -11,11 +11,14 @@ const flowVert = /* glsl */ `
 attribute vec4 aFlow; // across (-1..1), along (m), speed (m/s), turbulence
 attribute vec2 aDir;  // flow direction (xz)
 attribute float aHalfW;
+attribute float aFade;
 varying vec3 vWorldPos;
 varying vec4 vFlow;
 varying vec2 vDir;
 varying float vHalfW;
+varying float vFade;
 void main() {
+	vFade = aFade;
 	vec4 wp = modelMatrix * vec4( position, 1.0 );
 	vWorldPos = wp.xyz;
 	vFlow = aFlow;
@@ -34,6 +37,7 @@ varying vec3 vWorldPos;
 varying vec4 vFlow;
 varying vec2 vDir;
 varying float vHalfW;
+varying float vFade;
 vec2 wn( vec2 uv ) { return texture2D( tWaterN, uv ).xy * 2.0 - 1.0; }
 void main() {
 	vec3 wp = vWorldPos;
@@ -108,7 +112,7 @@ void main() {
 	col = mix( col, foamCol, foam );
 	alpha = mix( alpha, 0.9, foam );
 	col = applyAtmosphere( col, wp );
-	gl_FragColor = vec4( col, alpha );
+	gl_FragColor = vec4( col, alpha * vFade );
 }
 `;
 
@@ -230,7 +234,7 @@ export class Streams {
 	_buildRiver() {
 
 		const smp = this.terrain.river;
-		const pos = [], flow = [], dir = [], halfW = [], idx = [];
+		const pos = [], flow = [], dir = [], halfW = [], idx = [], fadeA = [];
 		// densify the samples for a smooth ribbon
 		const pts = [];
 		for ( let i = 0; i < smp.length - 1; i ++ ) {
@@ -251,6 +255,26 @@ export class Streams {
 
 		const last = smp[ smp.length - 1 ];
 		pts.push( { p: last.p.clone(), w: last.width, surf: last.surf, s: last.s } );
+		// where both banks are under the lake, the stream has become the lake
+		const td = this.terrain;
+		let end = pts.length;
+		for ( let i = 0; i < pts.length; i ++ ) {
+
+			const a = pts[ Math.max( 0, i - 1 ) ], b = pts[ Math.min( pts.length - 1, i + 1 ) ];
+			const t = b.p.clone().sub( a.p ).normalize();
+			const n = new THREE.Vector2( - t.y, t.x );
+			const o = pts[ i ].w + 3;
+			if ( td.heightAt( pts[ i ].p.x + n.x * o, pts[ i ].p.y + n.y * o ) < 0.02 && td.heightAt( pts[ i ].p.x - n.x * o, pts[ i ].p.y - n.y * o ) < 0.02 ) {
+
+				end = Math.min( pts.length, i + 4 );
+				break;
+
+			}
+
+		}
+
+		pts.length = end;
+		const sEnd = pts[ pts.length - 1 ].s;
 		this.path = pts;
 		pts.forEach( ( pt, i ) => {
 
@@ -262,7 +286,10 @@ export class Streams {
 			const speed = 0.35 + Math.min( slope * 40, 1.8 );
 			const turb = THREE.MathUtils.clamp( slope * 25, 0, 1 ) + ( pt.s < 25 ? 1 - pt.s / 25 : 0 );
 			const w = pt.w + 0.5;
+			const fade = THREE.MathUtils.smoothstep( sEnd - pt.s, 0, 9 );
 			for ( const side of [ - 1, 1 ] ) {
+
+				fadeA.push( fade );
 
 				pos.push( pt.p.x + n.x * w * side, pt.surf, pt.p.y + n.y * w * side );
 				flow.push( side, pt.s, speed, Math.min( turb, 1 ) );
@@ -284,6 +311,7 @@ export class Streams {
 		g.setAttribute( 'aFlow', new THREE.Float32BufferAttribute( flow, 4 ) );
 		g.setAttribute( 'aDir', new THREE.Float32BufferAttribute( dir, 2 ) );
 		g.setAttribute( 'aHalfW', new THREE.Float32BufferAttribute( halfW, 1 ) );
+		g.setAttribute( 'aFade', new THREE.Float32BufferAttribute( fadeA, 1 ) );
 		g.setIndex( idx );
 		g.computeBoundingSphere();
 		const m = new THREE.Mesh( g, this.flowMat );
@@ -353,6 +381,7 @@ export class Streams {
 			g.setAttribute( 'aFlow', new THREE.Float32BufferAttribute( flow, 4 ) );
 			g.setAttribute( 'aDir', new THREE.Float32BufferAttribute( dir, 2 ) );
 			g.setAttribute( 'aHalfW', new THREE.Float32BufferAttribute( hw, 1 ) );
+			g.setAttribute( 'aFade', new THREE.Float32BufferAttribute( new Float32Array( hw.length ).fill( 1 ), 1 ) );
 			g.setIndex( idx );
 			g.computeBoundingSphere();
 			const m = new THREE.Mesh( g, this.flowMat );
