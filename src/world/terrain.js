@@ -296,20 +296,23 @@ ${ __HORROR__ ? `#if STORY
 			float tread = 1.0 - smoothstep( halfW - 0.07, halfW + 0.07, ad + rag );
 			float side = gnoise( wp.xz * 0.019 + 2.0 ) > 0.0 ? 1.0 : -1.0;
 			float braidOff = 0.95 + 0.3 * gnoise( wp.xz * 0.05 + 1.3 );
-			float braidOn = smoothstep( 0.05, 0.4, gnoise( wp.xz * 0.03 + 7.7 ) ) * ( 1.0 - smoothstep( 0.2, 0.6, wForest ) );
+			// (a second, fainter line trodden beside the first, only here and there)
+			float braidOn = smoothstep( 0.35, 0.6, gnoise( wp.xz * 0.025 + 7.7 ) ) * ( 1.0 - smoothstep( 0.2, 0.6, wForest ) ) * 0.6;
 			float braid = braidOn * ( 1.0 - smoothstep( 0.1, 0.22, abs( off - side * braidOff ) + rag ) );
 			float verge = ( 1.0 - smoothstep( 0.45, 1.5, ad + rag * 3.0 ) ) * 0.8;
 			// materials: pale limestone gravel, packed earth, and needle litter under trees
 			vec2 guv = mat2( 0.6, -0.8, 0.8, 0.6 ) * wp.xz / 1.25;
 			vec4 gT = texture( tMat, vec3( guv, PEBBLE ) );
 			// dry limestone gravel, pale grey, darker in the gaps between stones
-			vec3 grav = decode( vec3( 0.63, 0.61, 0.57 ) ) * mix( 0.62, 1.2, gT.a ) * ( 0.9 + 0.2 * gnoise( wp.xz * 0.8 ) );
+			vec3 grav = decode( vec3( 0.5, 0.48, 0.44 ) ) * mix( 0.6, 1.1, gT.a ) * ( 0.85 + 0.25 * gnoise( wp.xz * 0.8 ) );
 			float stones = smoothstep( 0.55, 0.75, gT.a + 0.2 * gnoise( wp.xz * 1.9 ) );
 			// packed dust and earth where the boots go
-			vec3 earth = decode( vec3( 0.5, 0.44, 0.37 ) ) * ( 0.8 + 0.25 * gnoise( wp.xz * 4.3 ) + 0.1 * gnoise( wp.xz * 17.0 ) );
+			vec3 earth = decode( vec3( 0.4, 0.33, 0.26 ) ) * ( 0.8 + 0.25 * gnoise( wp.xz * 4.3 ) + 0.1 * gnoise( wp.xz * 17.0 ) );
+			// dark wet hollows along the tread where water stands after rain
+			earth *= 1.0 - 0.3 * smoothstep( 0.3, 0.7, gnoise( wp.xz * 0.9 + 3.0 ) ) * uWeather.y;
 			// the centre is scuffed to earth; gravel and set stones toward the edges
 			float scuff = ( 1.0 - smoothstep( 0.02, 0.2, ad + 0.08 * gnoise( wp.xz * 2.3 ) ) ) * smoothstep( -0.3, 0.3, gnoise( wp.xz * 0.4 + 9.0 ) );
-			vec3 tr = mix( grav, earth, max( scuff * ( 1.0 - stones ), 0.35 * ( 1.0 - stones ) ) );
+			vec3 tr = mix( grav, earth, max( scuff * ( 1.0 - stones ), 0.55 * ( 1.0 - stones ) ) );
 			tr = mix( tr, soilAlb * vec3( 0.78, 0.72, 0.66 ), smoothstep( 0.25, 0.7, wForest ) * 0.85 );
 			float yard = sm.y * smoothstep( -0.35, 0.25, gnoise( wp.xz * 0.9 ) + sm.y * 0.6 - 0.3 );
 			vec3 mud = mix( earth * 0.8, grav * 0.8, smoothstep( 0.62, 0.8, gT.a ) * 0.5 );

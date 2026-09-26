@@ -104,15 +104,37 @@ void main() {
 
 // Water2's shader for a shallow, clear stream: the same, with the ripples bending the
 // view through the water about as much as a few centimetres of water do
+// the bed under a pool (the terrain's height there)
+const poolGLSL = /* glsl */ `
+uniform sampler2D uHNear;
+uniform sampler2D uHFar;
+uniform vec4 uNearXf;
+uniform vec4 uFarXf;
+float poolBedH( vec2 p ) {
+	vec2 uvN = ( p - uNearXf.xy ) * uNearXf.z;
+	if ( all( greaterThan( uvN, vec2( 0.0 ) ) ) && all( lessThan( uvN, vec2( 1.0 ) ) ) ) return texture2D( uHNear, uvN ).r;
+	return texture2D( uHFar, ( p - uFarXf.xy ) * uFarXf.z ).r;
+}
+`;
+
 function streamShader() {
 
 	const base = Water2.WaterShader;
 	return {
 		...base, name: 'StreamShader',
-		uniforms: { ...THREE.UniformsUtils.clone( base.uniforms ), uFade: { value: new THREE.Vector2( 1e6, 1e6 + 1 ) } },
+		uniforms: { ...THREE.UniformsUtils.clone( base.uniforms ), uFade: { value: new THREE.Vector2( 1e6, 1e6 + 1 ) }, uPool: { value: new THREE.Vector4( 1e6, 1e6, 1, 0 ) }, uHNear: U.uHNear, uHFar: U.uHFar, uNearXf: U.uNearXf, uFarXf: U.uFarXf },
 		fragmentShader: base.fragmentShader
+			// a deep, slow pool (where there is one): its water stained dark with peat, so the
+			// bed is lost and the reflection is what shows; and its surface calmer
+			.replace( 'vec3 normal = normalize( vec3( normalColor.r * 2.0 - 1.0, normalColor.b,  normalColor.g * 2.0 - 1.0 ) );', `vec3 wPos = cameraPosition - vToEye;
+			float pool = uPool.w * ( 1.0 - smoothstep( uPool.z * 0.45, uPool.z, length( wPos.xz - uPool.xy ) ) );
+			vec3 normal = normalize( vec3( ( normalColor.r * 2.0 - 1.0 ) * ( 1.0 - 0.7 * pool ), normalColor.b, ( normalColor.g * 2.0 - 1.0 ) * ( 1.0 - 0.7 * pool ) ) );` )
+			.replace( 'vec4 refractColor = texture2D( tRefractionMap, uv );', `vec4 refractColor = texture2D( tRefractionMap, uv );
+			refractColor.rgb = mix( refractColor.rgb, refractColor.rgb * vec3( 0.05, 0.043, 0.03 ) + vec3( 0.002, 0.0017, 0.001 ), pool * 0.96 );
+			// (still black water: what little light it gives back is the sky and the banks)
+			reflectance = mix( reflectance, max( reflectance, 0.14 ), pool );` )
 			.replace( 'vec2 uv = coord.xy + coord.z * normal.xz * 0.05;', 'vec2 uv = coord.xy + coord.z * normal.xz * 0.012;' )
-			.replace( 'uniform vec4 config;', 'uniform vec4 config;\nuniform vec2 uFade;' )
+			.replace( 'uniform vec4 config;', 'uniform vec4 config;\nuniform vec2 uFade;\nuniform vec4 uPool;' )
 			.replace( 'gl_FragColor = vec4( color, 1.0 ) * mix( refractColor, reflectColor, reflectance );', 'gl_FragColor = vec4( color, 1.0 ) * mix( refractColor, reflectColor, reflectance );\n\t\t\tgl_FragColor.a = 1.0 - smoothstep( uFade.x, uFade.y, vUv.y );' ),
 	};
 
@@ -377,6 +399,8 @@ export class Streams {
 		// fade out over the last stretch, where the stream runs out into the lake
 		const sEnd = pts[ pts.length - 1 ].s;
 		m.material.uniforms.uFade.value.set( sEnd - 34, sEnd );
+		// (an edition's deep pool)
+		if ( td.pool ) m.material.uniforms.uPool.value.set( td.pool.c.x, td.pool.c.y, td.pool.r * 1.25, 1 );
 		m.material.side = THREE.DoubleSide;
 		m.layers.set( LAYERS.WATER );
 		m.renderOrder = 11;
@@ -809,12 +833,14 @@ export class Streams {
 
 		}
 
-		this.reflectMesh.layers.enable( 0 );
+		// three's Reflector renders with a clone of the camera, layers and all: it must see what a
+		// mirror sees (the scene, the detailed ground and the grass on the banks) but never the
+		// water itself (which would sample the very mirror being drawn) nor the rain
+		this.reflector.getReflectionCamera( cam ).layers.mask = 1 | ( 1 << LAYERS.MAIN );
 		// (things that appear only in reflections join the mirror's view for its pass)
 		if ( this.reflectOnly ) for ( const o of this.reflectOnly ) o.layers.enable( 0 );
 		renderer.setClearColor( 0x000000, 1 );
 		this.reflector.onBeforeRender( renderer, scene, cam );
-		this.reflectMesh.layers.disable( 0 );
 		if ( this.reflectOnly ) for ( const o of this.reflectOnly ) o.layers.disable( 0 );
 		rt.viewport.set( 0, 0, rt.width, rt.height );
 		rt.scissorTest = false;

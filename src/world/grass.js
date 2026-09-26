@@ -80,7 +80,7 @@ ${ __HORROR__ ? `#if STORY
 		// tufts lean in over the edge, thinning toward the tread
 		float tread = 1.0 - smoothstep( halfW - 0.12, halfW + 0.22, ad + rag );
 		float side = gnoise( p * 0.019 + 2.0 ) > 0.0 ? 1.0 : -1.0;
-		float braid = smoothstep( 0.05, 0.4, gnoise( p * 0.03 + 7.7 ) ) * ( 1.0 - smoothstep( 0.1, 0.2, abs( sm.x - side * ( 0.95 + 0.3 * gnoise( p * 0.05 + 1.3 ) ) ) + rag ) );
+		float braid = smoothstep( 0.35, 0.6, gnoise( p * 0.025 + 7.7 ) ) * 0.6 * ( 1.0 - smoothstep( 0.1, 0.2, abs( sm.x - side * ( 0.95 + 0.3 * gnoise( p * 0.05 + 1.3 ) ) ) + rag ) );
 		dens *= ( 1.0 - max( tread, braid * 0.85 ) ) * ( 1.0 - sm.w ) * ( 1.0 - sm.y * 0.55 );
 	}
 #endif` : '' }

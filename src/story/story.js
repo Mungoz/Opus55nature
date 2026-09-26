@@ -270,6 +270,108 @@ export class Story {
 
 	}
 
+	// Where to stand it so that it can be seen from the path: in open ground near p (within r),
+	// in clear view from each of the eye points 'from' (path distances), between rMin and rMax
+	// from the first of them, and with something light behind it - gold larches, birches or
+	// sky - so a dark coat shows, rather than spruce.
+	sightSpot( p, r, fromD, rMin = 60, rMax = 130 ) {
+
+		const td = this.app.terrainData, F = this.app.forest;
+		const eyes = fromD.map( ( d ) => {
+
+			const s = this.path.at( d );
+			return new THREE.Vector3( s.x, Math.max( 0, td.heightAt( s.x, s.z ) ) + 1.66, s.z );
+
+		} );
+
+		const light = new Set( [ ...F.speciesVariants.larch, ...F.speciesVariants.birch, ...F.speciesVariants.aspen ] );
+		let best = null, bs = - Infinity;
+		const q = new THREE.Vector3(), h = new THREE.Vector3();
+		for ( let k = 0; k < 260; k ++ ) {
+
+			const a = k * 2.39996, d = Math.sqrt( k / 260 ) * r;
+			const x = p.x + Math.cos( a ) * d, z = p.z + Math.sin( a ) * d;
+			const g = td.heightAt( x, z );
+			if ( g < 1.2 || this.collision.blocked( x, z, 0.7 ) ) continue;
+			const dist = Math.hypot( x - eyes[ 0 ].x, z - eyes[ 0 ].z );
+			if ( dist < rMin || dist > rMax ) continue;
+			let clear = 0;
+			for ( const e of eyes ) {
+
+				// the whole of it, knees to hat
+				q.set( x, g + 0.55, z );
+				h.set( x, g + 1.75, z );
+				if ( ! this.sight.blocked( e, q ) && ! this.sight.blocked( e, h ) ) clear ++;
+
+			}
+
+			if ( clear < eyes.length ) continue;
+			// what stands behind it, seen from the first eye
+			const e = eyes[ 0 ];
+			const dx = x - e.x, dz = z - e.z, l = Math.hypot( dx, dz );
+			let back = 0;
+			for ( const t of F.trees ) {
+
+				const tx = t.x - x, tz = t.z - z;
+				const along = ( tx * dx + tz * dz ) / l;
+				if ( along < 2 || along > 45 ) continue;
+				const across = Math.abs( tx * dz - tz * dx ) / l;
+				const crown = ( F.variants[ t.variant ].radius ?? 2 ) * t.s * 0.6;
+				if ( across > crown ) continue;
+				back = light.has( t.variant ) ? 2.5 : - 2;
+				break;
+
+			}
+
+			const s = back + clear - Math.abs( dist - ( rMin + rMax ) / 2 ) * 0.02 - d * 0.01;
+			if ( s > bs ) { bs = s; best = new THREE.Vector3( x, 0, z ); }
+
+		}
+
+		return best ?? this.findStand( p, r );
+
+	}
+
+	// Where to stand it so that its reflection in a water (level, contains) shows to someone
+	// walking the path between d0 and d1, looking ahead: of the candidate points, the one seen
+	// mirrored by most of the eye points, nearest the middle of their view.
+	reflectSpot( cands, d0, d1, level, contains, { minDist = 8, maxDist = 45 } = {} ) {
+
+		const td = this.app.terrainData;
+		const eyes = [];
+		for ( let d = d0; d <= d1; d += ( d1 - d0 ) / 6 ) {
+
+			const s = this.path.at( d );
+			eyes.push( { p: new THREE.Vector3( s.x, Math.max( 0, this.collision.floorAt( s.x, s.z, td.heightAt( s.x, s.z ) ) ) + 1.66, s.z ), tx: s.tx, tz: s.tz } );
+
+		}
+
+		let best = null, bs = - Infinity;
+		const pos = new THREE.Vector3();
+		for ( const c of cands ) {
+
+			pos.set( c.x, c.y ?? td.heightAt( c.x, c.z ), c.z );
+			let score = 0;
+			for ( const e of eyes ) {
+
+				const dist = Math.hypot( c.x - e.p.x, c.z - e.p.z );
+				if ( dist < minDist || dist > maxDist ) continue;
+				const share = this.sight.reflectable( e.p, pos, level, contains );
+				if ( share <= 0.25 ) continue;
+				// ahead of you: the angle off the path's heading
+				const ahead = ( ( c.x - e.p.x ) * e.tx + ( c.z - e.p.z ) * e.tz ) / dist;
+				score += share * ( 0.4 + 0.6 * Math.max( 0, ahead ) );
+
+			}
+
+			if ( score > bs ) { bs = score; best = { x: c.x, y: pos.y, z: c.z, score }; }
+
+		}
+
+		return best;
+
+	}
+
 	// the drone swells while it is seen (to level, easing out over sec)
 	drone( level, sec ) {
 

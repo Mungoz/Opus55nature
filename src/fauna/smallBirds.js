@@ -590,7 +590,7 @@ export class SmallBirds {
 
 				// the dip: a quick bob of the whole body, in bursts
 				p.bob = Math.max( 0, Math.sin( t * 11 ) ) * ( Math.sin( t * 0.9 + p.idx ) > 0 ? 1 : 0 );
-				if ( d < 7 || p.timer <= 0 ) {
+				if ( d < 7 || p.timer <= 0 || p.flyTo ) {
 
 					const pts = this.riverPts;
 					const step = ( rng.next() < 0.5 ? - 1 : 1 ) * rng.int( 2, 5 );
@@ -598,6 +598,16 @@ export class SmallBirds {
 					const s = pts[ p.idx ];
 					p.from.copy( p.pos );
 					p.to.set( s.p.x + rng.range( - 1, 1 ), s.surf + 0.08, s.p.y + rng.range( - 1, 1 ) );
+					// (a director may send it somewhere)
+					if ( p.flyTo ) {
+
+						p.to.copy( p.flyTo );
+						p.flyTo = null;
+						let bi = 0;
+						pts.forEach( ( q, qi ) => { if ( Math.hypot( q.p.x - p.to.x, q.p.y - p.to.z ) < Math.hypot( pts[ bi ].p.x - p.to.x, pts[ bi ].p.y - p.to.z ) ) bi = qi; } );
+						p.idx = bi;
+
+					}
 					p.u = 0;
 					p.dur = p.from.distanceTo( p.to ) / 8 + 0.3;
 					p.state = 'fly';

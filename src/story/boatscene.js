@@ -119,11 +119,13 @@ export class BoatScene {
 		if ( b.rope ) b.rope.visible = false;
 		const berth = P.berth.clone();
 		const jy = P.jettyFrame.yaw;
-		// from 90 m out in the bay, curving in to lie alongside the jetty's head
-		const out = V( berth.x - Math.sin( jy ) * 70 - Math.cos( jy ) * 30, 0, berth.z - Math.cos( jy ) * 70 + Math.sin( jy ) * 30 );
-		const mid = V( berth.x - Math.sin( jy ) * 25 + Math.cos( jy ) * 4, 0, berth.z - Math.cos( jy ) * 25 - Math.sin( jy ) * 4 );
-		// the boat travels stern first? no: bow first toward the jetty; the rower faces aft
-		const course = new THREE.CatmullRomCurve3( [ out, out.clone().lerp( mid, 0.5 ), mid, berth.clone() ] );
+		// from 75 m out in the bay (the jetty's +z points out over the lake), curving in to lie
+		// alongside its head; the boat goes bow first, and the rower faces aft
+		const ox = Math.sin( jy ), oz = Math.cos( jy ), sx = oz, sz = - ox;
+		const out = V( berth.x + ox * 75 + sx * 28, 0, berth.z + oz * 75 + sz * 28 );
+		const mid = V( berth.x + ox * 24 + sx * 6, 0, berth.z + oz * 24 + sz * 6 );
+		const near = V( berth.x + ox * 7 + sx * 1, 0, berth.z + oz * 7 + sz * 1 );
+		const course = new THREE.CatmullRomCurve3( [ out, out.clone().lerp( mid, 0.5 ), mid, near, berth.clone() ] );
 		S.input = false;
 		app.controls.enabled = false;
 		S.you.enable( true );
@@ -141,6 +143,8 @@ export class BoatScene {
 		} );
 		// black, the oars in the dark, the title
 		ui.fade( 1, 0.01 );
+		const t0c = course.getTangentAt( 0 );
+		P.placeBoat( b, out.x, out.z, Math.atan2( t0c.x, t0c.z ) );
 		this._seat( b );
 		const rowing = this._drive( b, course, ( u ) => u < 0.88 ? 1.7 : Math.max( 0.25, 1.7 * ( 1 - u ) / 0.12 ), ( bb ) => this._stroke( bb ) );
 		await S.wait( 1.5 );

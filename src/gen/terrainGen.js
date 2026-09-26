@@ -275,6 +275,26 @@ export class TerrainData {
 			surf[ i ] = THREE.MathUtils.lerp( surf[ i ], 0.0, k );
 
 		}
+		// a pool (an edition's): still water, level from its head to a weir of boulders at its
+		// outlet, over which it spills to the stream's own level below; the stream runs into it
+		// over a short riffle at its head. (Its banks are built up where the meadow falls away.)
+		const plq = STORY_FEATURES.pool;
+		if ( plq ) {
+
+			const sL = plq.s0 + ( plq.s1 - plq.s0 ) * 0.35;
+			const iL = samples.findIndex( ( smp ) => smp.s >= sL );
+			const level = surf[ iL ];
+			samples.forEach( ( smp, i ) => {
+
+				if ( smp.s > plq.s1 || smp.s < plq.s0 - 4 ) return;
+				const k = THREE.MathUtils.smoothstep( smp.s, plq.s0 - 4, plq.s0 + 5 );
+				surf[ i ] = smp.s < sL ? THREE.MathUtils.lerp( surf[ i ], level, k ) : level;
+
+			} );
+			this.poolLevel = level;
+
+		}
+
 		samples.forEach( ( smp, i ) => ( smp.surf = surf[ i ] ) );
 		// signed curvature from the turning of the tangent, smoothed along the stream
 		let K = samples.map( ( smp, i ) => {

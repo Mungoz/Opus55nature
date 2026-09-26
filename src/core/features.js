@@ -238,6 +238,14 @@ float applyWater( vec2 p, float h ) {
 		// water, only the channel is cut
 		h = mix( min( h, carved ), carved, smoothstep( surf - 0.7, surf + 0.05, h ) );
 	}
+	// a pool held up level (an edition's): where the meadow falls away below its water, the
+	// banks are built up to hold it, easing back down to the meadow a few metres out
+	if ( uPool.w > 0.0 && d > w && d < w + 30.0 ) {
+		float k = 1.0 - smoothstep( uPool.z * 0.85, uPool.z * 1.4, length( p - uPool.xy ) );
+		float lip = surf + 0.14 + 0.32 * smoothstep( 0.0, 2.5, d - w ) + 0.08 * gnoise( p * 0.3 );
+		float hold = lip - max( d - w - 7.0, 0.0 ) * 0.075;
+		h = mix( h, max( h, hold ), k );
+	}
 	// ponds: an uneven bed - shelving shallows, a deeper hole off-centre - inside a low
 	// turf rim that undercuts in places
 	for ( int i = 0; i < 4; i ++ ) {

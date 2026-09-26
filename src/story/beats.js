@@ -30,10 +30,10 @@ export const SKY = {
 	storm: [ [ 'hut', 0 ] ],
 	// the grade (post.js): exposure key, contrast, cooled shadows, colour drained - the valley
 	// losing its warmth as the evening goes
-	key: [ [ 'jettyHead', 0.9 ], [ 'bridge', 0.82 ], [ 'hut', 0.74 ], [ 'trough', 0.72 ], [ 'strand', 0.68 ], [ 'boat', 0.64 ] ],
-	contrast: [ [ 'jettyHead', 1.1 ], [ 'hut', 1.14 ], [ 'strand', 1.18 ] ],
-	cool: [ [ 'jettyHead', 0.1 ], [ 'hut', 0.3 ], [ 'tarn', 0.5 ], [ 'strand', 0.55 ] ],
-	desat: [ [ 'jettyHead', 0.04 ], [ 'hut', 0.16 ], [ 'tarn', 0.24 ], [ 'boat', 0.32 ] ],
+	key: [ [ 'jettyHead', 1.05 ], [ 'gate', 1.0 ], [ 'bridge', 0.88 ], [ 'hut', 0.78 ], [ 'trough', 0.74 ], [ 'strand', 0.7 ], [ 'boat', 0.66 ] ],
+	contrast: [ [ 'jettyHead', 1.06 ], [ 'hut', 1.12 ], [ 'strand', 1.16 ] ],
+	cool: [ [ 'jettyHead', 0.0 ], [ 'gate', 0.05 ], [ 'hut', 0.25 ], [ 'tarn', 0.45 ], [ 'strand', 0.5 ] ],
+	desat: [ [ 'jettyHead', 0.0 ], [ 'gate', 0.02 ], [ 'hut', 0.14 ], [ 'tarn', 0.22 ], [ 'boat', 0.3 ] ],
 	// the valley going quiet: songbirds, then wind, then the lake's lapping
 	birds: [ [ 'jettyHead', 1 ], [ 'signpost', 0.8 ], [ 'hut', 0.3 ], [ 'trough', 0.35 ], [ 'tarn', 0.15 ], [ 'wood', 0.1 ], [ 'strand', 0 ] ],
 	windMix: [ [ 'wood', 1 ], [ 'strand', 0.6 ], [ 'boatJ', 0.15 ], [ 'boat', 0.05 ] ],
@@ -132,7 +132,8 @@ export const BEATS = [
 			const D = V( pathHere.x + 16 * sgn, 0, pathHere.z + 6 );
 			const away = V( 140, 0, 592 );
 			// F1: the figure at the larch edge across the meadow, where the deer look
-			const F1 = S.findStand( V( - 12, 0, 566 ), 25, { edge: true } );
+			const ids = S.path.ids;
+			const F1 = S.sightSpot( V( 30, 0, 556 ), 50, [ ids.ford + 12, ids.ford, ids.ford + 30 ], 50, 80 );
 			// the herd is at the water's edge already (staged at load)
 			const order = [ ...deer.filter( ( d ) => ! d.stag ), deer.find( ( d ) => d.stag ) ];
 			order.forEach( ( d, k ) => {
@@ -310,33 +311,56 @@ export const BEATS = [
 		},
 	},
 
-	// F2 (and E8): on the footbridge, the pool's reflection shows someone standing on its bank
-	// upstream; the bank is empty
+	// F2 and E8: on the footbridge a dipper whirrs off from the stone under it, low up the
+	// pool; following it, you look up the pool's still water - and in it, at the pool's head,
+	// someone is standing in the stream. At the head of the pool the water is empty.
 	{
-		id: 'F2-bridge', at: 'bridge', lead: 1,
+		id: 'F2-pool', at: 'bridge', lead: - 1,
 		run: async ( S ) => {
 
-			const td = S.app.terrainData, R = td.river;
-			const on = S.props.bridge;
-			// a place on the pool's north bank, 16 m upstream of the bridge
-			let best = null;
-			for ( const s of R ) if ( Math.abs( s.s - 146 ) < 3 ) best = s;
-			const i = R.indexOf( best ), a = R[ i - 1 ], b = R[ i + 1 ];
-			const tx = b.p.x - a.p.x, tz = b.p.y - a.p.y, l = Math.hypot( tx, tz );
-			let nx = tz / l, nz = - tx / l;
-			// the bank on the far side of the pool from where you stand on the bridge
-			if ( ( nx * ( S.cam.x - best.p.x ) + nz * ( S.cam.z - best.p.y ) ) > 0 ) { nx = - nx; nz = - nz; }
-			const px = best.p.x + nx * ( best.width + 1.2 ), pz = best.p.y + nz * ( best.width + 1.2 );
-			S.figure.place( px, pz, Math.atan2( S.cam.x - px, S.cam.z - pz ) );
+			const app = S.app, td = app.terrainData, R = td.river;
+			const pl = app.layout.BRIDGE_POOL;
+			// the head of the pool, where the riffle runs in, in a hand's depth of water; on the line
+			// from the bridge to the falls, so that it stands in the falls' white reflection
+			const i = R.findIndex( ( q ) => q.s >= pl.s0 + 7 );
+			const h = R[ i ];
+			const a = R[ i - 1 ], c = R[ i + 1 ];
+			const tx = c.p.x - a.p.x, tz = c.p.y - a.p.y, l = Math.hypot( tx, tz );
+			const br = S.props.bridgeFrame, fall = app.streams.poolPos;
+			const fx = fall.x - br.x, fz = fall.z - br.z, fl = Math.hypot( fx, fz );
+			// where that line crosses the stream here
+			const cross = ( ( h.p.x - br.x ) * - tz + ( h.p.y - br.z ) * tx ) / ( fx * - tz + fz * tx );
+			let px = br.x + fx * cross, pz = br.z + fz * cross;
+			const off = Math.hypot( px - h.p.x, pz - h.p.y );
+			if ( ! isFinite( cross ) || off > h.width * 0.8 ) { px = h.p.x + tz / l * 1.2; pz = h.p.y - tx / l * 1.2; }
+			void fl;
+			const bed = td.heightAt( px, pz );
+			S.figure.place( px, pz, Math.atan2( S.cam.x - px, S.cam.z - pz ), Math.max( bed, h.surf - 0.35 ) - 0.02 );
 			S.figure.tilt = 0.5;
 			S.figure.setMode( 'reflect' );
-			// until you have seen it in the water, or walked on
+			// the dipper goes, low over the water, up to the head of the pool
+			const D = app.smallBirds.dippers;
+			const dip = D.length ? D.reduce( ( p, q ) => ( p.pos.distanceTo( S.cam ) < q.pos.distanceTo( S.cam ) ? p : q ) ) : null;
+			if ( dip ) {
+
+				dip.flyTo = V( h.p.x - tz / l * 0.8, h.surf + 0.08, h.p.y + tx / l * 0.8 );
+				S.sound.dipper( dip.pos.clone() );
+
+			}
+
+			const face = S.every( () => {
+
+				if ( S.figure.mode === 'hidden' ) return true;
+				if ( S.unseenFor > 0.3 ) S.figure.yaw = Math.atan2( S.cam.x - S.figure.pos.x, S.cam.z - S.figure.pos.z );
+				return false;
+
+			} );
+			void face;
 			const t0 = S.time;
-			await S.until( () => ( S.sight.reflect > 0 && S.seenFor > 1.3 ) || S.time - t0 > 25 || S.progress > S.path.ids.bridge + 22 );
+			await S.until( () => ( S.sight.reflect > 0 && S.seenFor > 1.5 ) || S.time - t0 > 30 || S.progress > S.path.ids.bridge + 16 );
 			if ( S.sight.reflect > 0 ) S.drone( 0.6, 4 );
-			await S.untilUnseen( 1.0 );
+			await S.untilUnseen( 0.8 );
 			S.figure.setMode( 'hidden' );
-			void on;
 
 		},
 	},

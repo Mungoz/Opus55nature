@@ -255,9 +255,9 @@ void main() {
 		// a row of clench nails along each seam, each with a rust stain
 		vec2 nq = vec2( mod( u + ( isFlat ? 0.0 : 0.03 ), 0.085 ) - 0.0425, edge - 0.017 );
 		float nl = length( nq );
-		float nail = 1.0 - smoothstep( 0.0035, 0.0055, nl );
-		float stain = ( 1.0 - smoothstep( 0.005, 0.03, length( nq * vec2( 1.3, 0.5 ) + vec2( 0.0, 0.012 ) ) ) );
-		alb = mix( alb, vec3( 0.22, 0.1, 0.04 ), max( nail, stain * 0.35 ) );
+		float nail = 1.0 - smoothstep( 0.0025, 0.004, nl );
+		float stain = ( 1.0 - smoothstep( 0.004, 0.022, length( nq * vec2( 1.3, 0.5 ) + vec2( 0.0, 0.01 ) ) ) );
+		alb = mix( alb, vec3( 0.16, 0.08, 0.04 ), max( nail * 0.8, stain * 0.15 ) );
 		float h = - chip * 0.0012 - ( 1.0 - smoothstep( 0.0, 0.005, edge ) ) * 0.002 + nail * 0.001;
 		if ( m == 18 ) {
 			// inside: larch needles and a few leaves settle in the bottom; rainwater stands

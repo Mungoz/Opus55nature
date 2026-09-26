@@ -214,6 +214,33 @@ export class Sight {
 
 	}
 
+	// How much of a figure standing at pos would an eye at eye see mirrored in water at level
+	// (contains( x, z ): is that point on this water)? The same test as measure(), for any eye
+	// and without the view (for choosing where to stand it).
+	reflectable( eye, pos, level, contains ) {
+
+		let seen = 0;
+		const m = new THREE.Vector3(), r = new THREE.Vector3(), p = new THREE.Vector3();
+		for ( const h of HEIGHTS ) {
+
+			const y = pos.y + h;
+			if ( y < level ) continue;
+			m.set( pos.x, 2 * level - y, pos.z );
+			const t = ( eye.y - level ) / ( eye.y - m.y );
+			r.copy( eye ).lerp( m, t );
+			if ( ! contains( r.x, r.z ) ) continue;
+			r.y = level + 0.02;
+			if ( this.blocked( eye, r, 0.3 ) ) continue;
+			p.set( pos.x, y, pos.z );
+			if ( this.blocked( r, p, 0.3 ) ) continue;
+			seen ++;
+
+		}
+
+		return seen / HEIGHTS.length;
+
+	}
+
 	get seen() {
 
 		return this.direct > 0 || this.reflect > 0;

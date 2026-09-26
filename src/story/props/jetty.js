@@ -329,8 +329,9 @@ export function buildBoat( { seed = 3, oars = true, gear = true } = {} ) {
 	const L = BOAT.L, N = 56;
 	const zAt = ( t ) => t * L - L / 2;
 	const outside = mixc( '#23272b', '#2c2a27', R() );
-	const inside = mixc( '#5b635c', '#626456', R() );
-	const rail = col( '#8d918e' );
+	// (the Oeschinensee boats: a dark hull, the inside a worn grey-green gone dull with use)
+	const inside = mixc( '#454c46', '#4c4e44', R() );
+	const rail = col( '#6f736f' );
 	const wood = () => mixc( '#6f5a45', '#86705a', R() ).multiplyScalar( 0.9 + 0.2 * R() );
 	const T = 0.018;
 
@@ -611,7 +612,7 @@ export function buildBoat( { seed = 3, oars = true, gear = true } = {} ) {
 		sack.computeVertexNormals();
 		const qs = section( 0.1 );
 		sack.translate( 0.1, qs.yG - 0.1, zAt( 0.1 ) );
-		k.add( sack, M.LEATHER, col( '#7d6d52' ) );
+		k.add( sack, M.LEATHER, col( '#5a4d3a' ) );
 
 	}
 
