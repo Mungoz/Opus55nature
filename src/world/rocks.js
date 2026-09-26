@@ -164,7 +164,7 @@ void main() {
 		float soaked = max( beside * 0.9, pool * 0.75 );
 		float streaks = smoothstep( 0.55, 0.8, gnoise( vec2( along * 0.45, wp.y * 0.018 ) ) * 0.5 + 0.5 ) * ( 1.0 - max( N.y, 0.0 ) );
 		// weathered to the grey of the surrounding crags, then soaked and stained
-		alb *= 0.78 * ( 1.0 - 0.5 * soaked - 0.28 * streaks );
+		alb *= 0.56 * ( 1.0 - 0.45 * soaked - 0.28 * streaks );
 		// spray-fed moss and algae on the soaked ledges
 		alb = mix( alb, vec3( 0.03, 0.05, 0.02 ), soaked * smoothstep( 0.3, 0.8, N.y ) * 0.6 );
 		rough = mix( rough, 0.22, soaked );

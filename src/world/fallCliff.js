@@ -70,14 +70,20 @@ export function buildFallCliff( td, lipB ) {
 		for ( let j = 0; j < ny; j ++ ) {
 
 			const y = yLo + j * dy;
+			// march out from inside the rock to where the ground first falls below y (from the
+			// valley side, the far bank of the plunge pool would read as a face)
 			let w = 1e3;
-			for ( let k = 0; k < c.hs.length; k ++ ) if ( c.hs[ k ] >= y ) {
+			const last = c.hs.length - 1;
+			if ( c.hs[ last ] >= y ) {
 
-				// interpolate within the step
-				const h0 = k > 0 ? c.hs[ k - 1 ] : c.hs[ k ];
-				const t = k > 0 && c.hs[ k ] > h0 ? ( y - h0 ) / ( c.hs[ k ] - h0 ) : 0;
-				w = c.ws[ Math.max( 0, k - 1 ) ] + t * dw;
-				break;
+				w = c.ws[ 0 ];
+				for ( let k = last; k > 0; k -- ) if ( c.hs[ k - 1 ] < y ) {
+
+					const t = ( y - c.hs[ k - 1 ] ) / Math.max( c.hs[ k ] - c.hs[ k - 1 ], 1e-4 );
+					w = c.ws[ k - 1 ] + t * dw;
+					break;
+
+				}
 
 			}
 

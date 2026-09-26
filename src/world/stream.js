@@ -235,8 +235,10 @@ export class Streams {
 		uniforms.tNormalMap1.value = this.normalMap1;
 		uniforms.textureMatrix.value = new THREE.Matrix4();
 		uniforms.flowDirection = { value: new THREE.Vector2( 0, - 1 ) };
-		// three.js Water2's flow cycle: two normal-map phases half a cycle apart
-		const cycle = 0.15, half = cycle * 0.5;
+		// three.js Water2's flow cycle: two normal-map phases half a cycle apart, cross-fading.
+		// The library's 0.15 suits its slow flows; a fast one (the falls) would run through it in
+		// a few frames and strobe, so the cycle is sized to last ~2.4 s whatever the speed.
+		const cycle = Math.max( 0.15, flowSpeed * 2.4 ), half = cycle * 0.5;
 		uniforms.config.value.set( 0, half, half, scale );
 		const m = new THREE.ShaderMaterial( { name: shader.name, uniforms, vertexShader: shader.vertexShader, fragmentShader: shader.fragmentShader, transparent: true } );
 		m.userData.flow = { speed: flowSpeed, cycle, half };

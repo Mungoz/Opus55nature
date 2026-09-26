@@ -219,7 +219,16 @@ float applyWater( vec2 p, float h ) {
 			bed += 0.05 * gnoise( p * 0.6 + fi * 3.0 );
 			float lip = 0.12 + 0.3 * ( 0.5 + 0.5 * gnoise( p * 0.12 + fi * 9.0 ) );
 			float rim = pd.w + 0.06 + lip * smoothstep( 0.0, 1.2, over ) + max( over - 1.2, 0.0 ) * 0.03;
-			h = rn < 1.0 ? bed : mix( rim, max( h, rim - 0.2 ), smoothstep( 1.2, 16.0, over ) );
+			float carved = rn < 1.0 ? bed : mix( rim, max( h, rim - 0.2 ), smoothstep( 1.2, 16.0, over ) );
+			// the plunge pool's rim opens where the stream leaves it: there the stream's own
+			// channel (already cut into h) is kept, and the pool deepens into it
+			if ( i == 3 ) {
+				float bend;
+				vec3 rq = riverQueryB( p, bend );
+				float gap = 1.0 - smoothstep( rq.z + 0.5, rq.z + 5.0, rq.x );
+				carved = mix( carved, min( carved, h ), gap );
+			}
+			h = carved;
 		}
 	}
 	return h;
