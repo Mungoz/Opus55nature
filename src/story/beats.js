@@ -31,7 +31,11 @@ export const SKY = {
 	storm: [ [ 'hut', 0 ] ],
 	// the grade (post.js): exposure key, contrast, cooled shadows, colour drained - the valley
 	// losing its warmth as the evening goes
-	key: [ [ 'jettyHead', 1.05 ], [ 'gate', 1.0 ], [ 'bridge', 0.88 ], [ 'hut', 0.78 ], [ 'trough', 0.85 ], [ 'tarn', 0.95 ], [ 'wood', 0.85 ], [ 'strand', 0.8 ], [ 'boat', 0.75 ] ],
+	// (as the light goes the eye adapts: the key rises again at dusk, so the wood and the shore
+	// stay readable, if colourless)
+	key: [ [ 'jettyHead', 1.05 ], [ 'gate', 1.0 ], [ 'bridge', 0.88 ], [ 'hut', 0.82 ], [ 'trough', 0.95 ], [ 'tarn', 1.0 ], [ 'strand', 1.0 ] ],
+	lift: [ [ 'jettyHead', 0 ], [ 'hut', 0.08 ], [ 'trough', 0.18 ], [ 'tarn', 0.28 ], [ 'pool', 0.36 ], [ 'wood', 0.5 ], [ 'strand', 0.46 ], [ 'boat', 0.42 ] ],
+	keyLow: [ [ 'jettyHead', 0.03 ], [ 'hut', 0.04 ], [ 'trough', 0.06 ], [ 'tarn', 0.08 ], [ 'pool', 0.1 ], [ 'wood', 0.12 ], [ 'strand', 0.12 ], [ 'boat', 0.11 ] ],
 	contrast: [ [ 'jettyHead', 1.06 ], [ 'hut', 1.12 ], [ 'strand', 1.16 ] ],
 	cool: [ [ 'jettyHead', 0.0 ], [ 'gate', 0.05 ], [ 'hut', 0.25 ], [ 'tarn', 0.45 ], [ 'strand', 0.5 ] ],
 	desat: [ [ 'jettyHead', 0.0 ], [ 'gate', 0.02 ], [ 'hut', 0.14 ], [ 'tarn', 0.22 ], [ 'boat', 0.3 ] ],
@@ -42,7 +46,7 @@ export const SKY = {
 };
 
 // (and darker: the grade's key drops, the colour drains)
-const STORM = { clouds: 1.0, wind: 2.1, rain: 1.0, overcast: 1.0, haze: 5.0, mist: 0.0012, base: 520, lowCloud: 0.006, storm: 1, key: 0.58, desat: 0.28, cool: 0.45 };
+const STORM = { clouds: 1.0, wind: 2.1, rain: 1.0, overcast: 1.0, haze: 5.0, mist: 0.0012, base: 520, lowCloud: 0.006, storm: 1, key: 0.7, desat: 0.28, cool: 0.45 };
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -573,21 +577,33 @@ export const BEATS = [
 	// E11: in the larch wood, three hinds standing among the trees, frozen, all staring back
 	// down the path behind you. They don't run until you are very close.
 	{
-		id: 'E11-hinds', at: 'wood', lead: - 40,
+		id: 'E11-hinds', at: 'pool', lead: 10,
 		run: async ( S ) => {
 
 			const hinds = S.app.mammals.deer.filter( ( d ) => ! d.stag ).slice( 0, 3 );
-			const at = [ [ 34, - 9 ], [ 40, 8 ], [ 47, - 6 ] ];
-			// staged ahead of you, out of sight
-			for ( const [ k, d ] of hinds.entries() ) {
+			const at = [ [ - 8, - 9 ], [ - 2, 8 ], [ 5, - 6 ] ];
+			const base = S.path.ids.wood;
+			// staged ahead in the wood while you are still at the pool, each as soon as its place
+			// is hidden from you
+			const staged = new Set();
+			await S.until( () => {
 
-				const s = S.path.at( S.progress + at[ k ][ 0 ] );
-				const x = s.x + s.tz * at[ k ][ 1 ], z = s.z - s.tx * at[ k ][ 1 ];
-				await S.untilOffscreen( V( x, 0, z ), 3 );
-				teleport( d, x, z, Math.atan2( - s.tx, - s.tz ) );
-				d.cmd = { do: 'stare', watch: V( 0, 0, 0 ), face: true };
+				for ( const [ k, d ] of hinds.entries() ) {
 
-			}
+					if ( staged.has( k ) ) continue;
+					const s = S.path.at( base + at[ k ][ 0 ] );
+					const x = s.x + s.tz * at[ k ][ 1 ], z = s.z - s.tx * at[ k ][ 1 ];
+					if ( ! S.hidden( V( x, S.app.terrainData.heightAt( x, z ), z ), 3 ) ) continue;
+					if ( ! S.hidden( d.mesh.position, 3 ) ) continue;
+					teleport( d, x, z, Math.atan2( - s.tx, - s.tz ) );
+					d.cmd = { do: 'stare', watch: V( 0, 0, 0 ), face: true };
+					staged.add( k );
+
+				}
+
+				return staged.size === hinds.length || S.progress > base - 15;
+
+			} );
 
 			const watch = S.every( () => {
 
@@ -597,9 +613,10 @@ export const BEATS = [
 
 			} );
 			void watch;
-			await S.until( () => hinds.some( ( d ) => dist2( d.pos, S.cam.x, S.cam.z ) < 9 ) || S.progress > S.path.ids.wood + 70 );
+			await S.until( () => hinds.some( ( d ) => d.cmd && dist2( d.pos, S.cam.x, S.cam.z ) < 9 ) || S.progress > S.path.ids.wood + 70 );
 			for ( const d of hinds ) {
 
+				if ( ! d.cmd ) continue;
 				const ax = d.pos.x - S.cam.x, az = d.pos.z - S.cam.z, al = Math.hypot( ax, az ) || 1;
 				d.cmd = { do: 'run', to: V( d.pos.x + ax / al * 60 + 20, 0, d.pos.z + az / al * 60 ), speed: 7, near: 4, then: 'graze' };
 				if ( Math.random() < 0.5 ) S.app.audio.bark( d.pos.clone().setY( 1 ) );
@@ -620,7 +637,8 @@ export const BEATS = [
 
 			const qs = S.app.mammals.squirrels;
 			const q = nearest( qs, V( - 221, 0, 642 ), ( a ) => a.tree );
-			await S.until( () => dist2( q.tree, S.cam.x, S.cam.z ) < 32 );
+			// (it is on the trunk facing the path, a man's height up: in view as you come)
+			await S.until( () => dist2( q.tree, S.cam.x, S.cam.z ) < 22 );
 			q.cmd = { do: 'scold', watch: V( 0, 0, 0 ) };
 			const upd = S.every( () => {
 

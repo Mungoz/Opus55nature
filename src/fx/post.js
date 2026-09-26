@@ -134,6 +134,10 @@ uniform vec2 uRes;
 // a grade an edition may set: x key scale (exposure target), y contrast, z cool shift in the
 // shadows, w desaturation
 uniform vec4 uGrade;
+// the key for the darkest scenes (night): an edition may lift it, as eyes adapt
+uniform float uKeyLow;
+// lift the shadows (display-referred gamma): the dark of a wood at dusk, as eyes see it
+uniform float uLift;
 varying vec2 vUv;
 
 const mat3 SRGB_TO_2020 = mat3( vec3( 0.6274, 0.0691, 0.0164 ), vec3( 0.3293, 0.9195, 0.0880 ), vec3( 0.0433, 0.0113, 0.8956 ) );
@@ -181,7 +185,7 @@ void main() {
 	// auto exposure: map the adapted average to a key that sinks in the dark,
 	// so dusk and night stay dim and moody rather than being lifted to grey
 	float logL = texture2D( tAdapt, vec2( 0.5 ) ).r;
-	float key = mix( 0.03, 0.165, smoothstep( -12.5, -2.5, logL ) ) * uGrade.x;
+	float key = mix( uKeyLow, 0.165, smoothstep( -12.5, -2.5, logL ) ) * uGrade.x;
 	float ev = clamp( log2( key ) - logL, -2.0, 7.5 );
 	c *= exp2( ev ) * uExposure;
 
@@ -191,6 +195,7 @@ void main() {
 	c = mix( c, scot, uNight * 0.55 * ( 1.0 - smoothstep( 0.1, 0.6, L ) ) );
 
 	c = agx( c );
+	c = pow( max( c, 0.0 ), vec3( 1.0 / ( 1.0 + uLift ) ) );
 
 	// the edition's grade: contrast about mid-grey, colour drained, shadows cooled
 	{
@@ -257,6 +262,8 @@ export class Post {
 			uSaturation: { value: 1.12 },
 			uRes: { value: new THREE.Vector2() },
 			uGrade: { value: this.grade },
+			uKeyLow: { value: 0.03 },
+			uLift: { value: 0 },
 		} ) );
 
 		this.sceneRT = null;

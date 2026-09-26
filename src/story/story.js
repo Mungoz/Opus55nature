@@ -219,6 +219,17 @@ export class Story {
 	// wait until p (a point, radius r) is out of the view
 	untilOffscreen( p, r = 1 ) { return this.until( () => this.offscreen( p, r ) ); }
 
+	// out of the view, or hidden behind the ground, trunks or walls
+	hidden( p, r = 1 ) {
+
+		if ( this.offscreen( p, r ) ) return true;
+		const y = p.y ?? this.app.terrainData.heightAt( p.x, p.z );
+		return this.sight.blocked( this.cam, _v.set( p.x, y + 1.2, p.z ), 0.5 ) && this.sight.blocked( this.cam, _v.set( p.x, y + 0.4, p.z ), 0.5 );
+
+	}
+
+	untilHidden( p, r = 1 ) { return this.until( () => this.hidden( p, r ) ); }
+
 	offscreen( p, r = 1 ) {
 
 		const cam = this.app.camera;
@@ -636,6 +647,9 @@ export class Story {
 		G.y += ( sky.contrast - G.y ) * gk;
 		G.z += ( sky.cool - G.z ) * gk;
 		G.w += ( sky.desat - G.w ) * gk;
+		const CU = app.post.composite.material.uniforms;
+		CU.uKeyLow.value += ( sky.keyLow - CU.uKeyLow.value ) * gk;
+		CU.uLift.value += ( sky.lift - CU.uLift.value ) * gk;
 		// beats (once the walk has begun)
 		for ( const b of this.beats ) {
 
