@@ -12,7 +12,7 @@ const browser = await puppeteer.launch( { executablePath: 'C:/Program Files/Goog
 const page = await browser.newPage();
 await page.setViewport( { width: W, height: H } );
 page.on( 'pageerror', ( e ) => console.log( '[pageerror]', e.message ) );
-await page.goto( `http://localhost:5199/?shot=30&speed=1&t=10&follow=studio-${target}&hide=grass,reeds`, { waitUntil: 'load' } );
+await page.goto( `http://localhost:5199/?shot=30&speed=1&t=10&follow=${target.startsWith( "heron" ) ? target : "studio-" + target}&hide=grass,reeds`, { waitUntil: 'load' } );
 await page.waitForFunction( 'window.__shotReady === true', { timeout: 180000 } );
 await page.evaluate( ( a, b ) => { app.options.angle = a; if ( b ) app.options.back = b; }, parseFloat( angle ), back ? parseFloat( back ) : 0 );
 for ( let i = 0; i < n; i ++ ) {

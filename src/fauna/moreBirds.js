@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Sculpt, noise3 } from './sdf.js';
 import { creatureMaterial, PartBuilder, MAT } from './creature.js';
+import { Gaze } from './motion.js';
 import { RNG } from '../core/rng.js';
 
 // Three more birds of an alpine lake, each after reference photographs:
@@ -44,10 +45,21 @@ function eyes( material, r, pos, color = '#0b0806' ) {
 // black shoulder patches, dagger bill yellow-orange, long yellowish-brown legs.
 // Standing pose; the neck S-curves forward, the head held level.
 // ---------------------------------------------------------------------------
-function heronGeometry() {
+// Rigged (neck, head, legs), so it can walk, crouch and strike.
+function heronModel( material ) {
 
 	const S = new Sculpt();
 	S.bone( 'body', [ 0, 0.62, 0 ] );
+	S.bone( 'neck1', [ 0, 0.74, 0.12 ], 'body' );
+	S.bone( 'neck2', [ 0, 0.9, 0.16 ], 'neck1' );
+	S.bone( 'head', [ 0, 1.05, 0.18 ], 'neck2' );
+	for ( const [ sd, s ] of [ [ - 1, 'L' ], [ 1, 'R' ] ] ) {
+
+		S.bone( 'hip' + s, [ sd * 0.04, 0.58, 0.0 ], 'body' );
+		S.bone( 'ank' + s, [ sd * 0.045, 0.455, 0.01 ], 'hip' + s );
+		S.bone( 'toe' + s, [ sd * 0.05, 0.03, 0.02 ], 'ank' + s );
+
+	}
 	const grey = new THREE.Color( '#9aa0a3' ), white = new THREE.Color( '#e8e7e1' ), black = new THREE.Color( '#1b1b1d' ), darkGrey = new THREE.Color( '#6e7478' );
 	const col = ( x, y, z ) => {
 
@@ -83,28 +95,41 @@ function heronGeometry() {
 	for ( const sd of [ - 1, 1 ] ) S.ellipsoid( [ sd * 0.065, 0.61, - 0.1 ], [ 0.08, 0.26, 0.028 ], P( 0.02, { pat: [ 0, 0.4, 0 ] } ), Sculpt.frame( [ 0, - 0.6, - 1 ], [ sd, 0.3, 0 ] ) );
 	S.cone( [ 0, 0.56, - 0.18 ], [ 0, 0.46, - 0.33 ], 0.045, 0.018, P( 0.03 ) );
 	// breast plumes hanging from the lower neck
-	S.cone( [ 0, 0.78, 0.16 ], [ 0, 0.64, 0.17 ], 0.045, 0.028, P( 0.04 ) );
+	S.cone( [ 0, 0.78, 0.16 ], [ 0, 0.64, 0.17 ], 0.045, 0.028, P( 0.04, { bone: 'neck1' } ) );
 	// the neck: a long slender S, the head held high
 	const neck = [ [ [ 0, 0.74, 0.12 ], 0.042 ], [ [ 0, 0.84, 0.19 ], 0.03 ], [ [ 0, 0.93, 0.15 ], 0.024 ], [ [ 0, 1.02, 0.16 ], 0.022 ], [ [ 0, 1.06, 0.19 ], 0.022 ] ];
-	for ( let i = 0; i < neck.length - 1; i ++ ) S.cone( neck[ i ][ 0 ], neck[ i + 1 ][ 0 ], neck[ i ][ 1 ], neck[ i + 1 ][ 1 ], P( 0.02 ) );
+	const nb = [ 'neck1', 'neck1', 'neck2', 'neck2' ];
+	for ( let i = 0; i < neck.length - 1; i ++ ) S.cone( neck[ i ][ 0 ], neck[ i + 1 ][ 0 ], neck[ i ][ 1 ], neck[ i + 1 ][ 1 ], P( 0.02, { bone: nb[ i ] } ) );
 	// head, flat-crowned, and the long plumes off the back of the crown
-	S.ellipsoid( [ 0, 1.075, 0.215 ], [ 0.026, 0.028, 0.048 ], P( 0.02 ) );
-	S.cone( [ 0, 1.095, 0.18 ], [ 0, 1.06, 0.06 ], 0.006, 0.0015, { bone: 'body', color: '#1b1b1d', k: 0.005, mat: MAT.FEATHER } );
+	S.ellipsoid( [ 0, 1.075, 0.215 ], [ 0.026, 0.028, 0.048 ], P( 0.02, { bone: 'head' } ) );
+	S.cone( [ 0, 1.095, 0.18 ], [ 0, 1.06, 0.06 ], 0.006, 0.0015, { bone: 'head', color: '#1b1b1d', k: 0.005, mat: MAT.FEATHER } );
 	// the dagger of a bill
-	S.cone( [ 0, 1.072, 0.245 ], [ 0, 1.058, 0.375 ], 0.015, 0.0025, { bone: 'body', color: ( x, y, z ) => ( z > 0.35 ? '#c9a042' : '#d6a54a' ), k: 0.008, mat: MAT.BILL } );
+	S.cone( [ 0, 1.072, 0.245 ], [ 0, 1.058, 0.375 ], 0.015, 0.0025, { bone: 'head', color: ( x, y, z ) => ( z > 0.35 ? '#c9a042' : '#d6a54a' ), k: 0.008, mat: MAT.BILL } );
 	// legs: long, yellowish-brown, thighs feathered grey
-	for ( const sd of [ - 1, 1 ] ) {
+	for ( const [ sd, s ] of [ [ - 1, 'L' ], [ 1, 'R' ] ] ) {
 
-		S.cone( [ sd * 0.04, 0.58, 0.0 ], [ sd * 0.045, 0.45, 0.01 ], 0.022, 0.011, P( 0.02 ) );
-		S.cone( [ sd * 0.045, 0.46, 0.01 ], [ sd * 0.05, 0.03, 0.02 ], 0.009, 0.007, { bone: 'body', color: '#8a7a55', k: 0.006, mat: MAT.BILL } );
-		for ( const a of [ - 0.5, 0, 0.5 ] ) S.cone( [ sd * 0.05, 0.02, 0.02 ], [ sd * 0.05 + Math.sin( a ) * 0.09, 0.008, 0.02 + Math.cos( a ) * 0.09 ], 0.005, 0.003, { bone: 'body', color: '#7a6a48', k: 0.004, mat: MAT.BILL } );
+		S.cone( [ sd * 0.04, 0.58, 0.0 ], [ sd * 0.045, 0.45, 0.01 ], 0.022, 0.011, P( 0.02, { bone: 'hip' + s } ) );
+		S.cone( [ sd * 0.045, 0.46, 0.01 ], [ sd * 0.05, 0.03, 0.02 ], 0.009, 0.007, { bone: 'ank' + s, color: '#8a7a55', k: 0.006, mat: MAT.BILL } );
+		for ( const a of [ - 0.5, 0, 0.5 ] ) S.cone( [ sd * 0.05, 0.02, 0.02 ], [ sd * 0.05 + Math.sin( a ) * 0.09, 0.008, 0.02 + Math.cos( a ) * 0.09 ], 0.005, 0.003, { bone: 'toe' + s, color: '#7a6a48', k: 0.004, mat: MAT.BILL } );
 
 	}
 
-	const g = S.build( 0.0085 );
-	g.deleteAttribute( 'skinIndex' );
-	g.deleteAttribute( 'skinWeight' );
-	return g;
+	return S.mesh( material, 0.0085 );
+
+}
+
+// another heron sharing the first's geometry, with a skeleton of its own
+function cloneRig( proto ) {
+
+	const mesh = new THREE.SkinnedMesh( proto.mesh.geometry, proto.mesh.material );
+	const root = proto.mesh.children.find( ( c ) => c.isBone ).clone( true );
+	mesh.add( root );
+	const bones = new Map();
+	root.traverse( ( b ) => { if ( b.isBone ) bones.set( b.name, b ); } );
+	mesh.updateMatrixWorld( true );
+	mesh.bind( new THREE.Skeleton( proto.mesh.skeleton.bones.map( ( b ) => bones.get( b.name ) ) ) );
+	mesh.castShadow = true;
+	return { mesh, bones };
 
 }
 
@@ -238,19 +263,21 @@ export class MoreBirds {
 		this.material = creatureMaterial();
 
 		// herons: standing in the shallows along the shore near the start
-		const stand = heronGeometry(), fly = heronFlightGeometry();
+		const proto = heronModel( this.material ), fly = heronFlightGeometry();
 		this.flyMat = creatureMaterial( { flapSpeed: 2.3, flapAmp: 0.55 } );
 		this.herons = [];
 		for ( const [ x, z ] of [ [ 28, 452 ], [ - 48, 452 ] ] ) {
 
 			const spot = this._shallow( x, z, 0.12, 0.35 );
+			const rig = this.herons.length === 0 ? proto : cloneRig( proto );
 			const h = {
 				home: spot.clone(), pos: spot.clone(), heading: rng.next() * Math.PI * 2,
 				state: 'stalk', timer: rng.range( 3, 8 ), neck: 0, strike: 0,
-				stand: new THREE.Mesh( stand, this.material ), fly: new THREE.Mesh( fly, this.flyMat ),
-				vel: new THREE.Vector3(), flyT: 0,
+				stand: rig.mesh, bones: rig.bones, fly: new THREE.Mesh( fly, this.flyMat ),
+				vel: new THREE.Vector3(), flyT: 0, phase: 0,
+				gaze: new Gaze( rng, { yaw: 0.9, pitch: 0.2, hold: [ 1.5, 5 ], speed: 5 } ),
 			};
-			h.stand.add( eyes( this.material, 0.006, [ 0.022, 1.082, 0.225 ], '#d8b030' ) );
+			rig.bones.get( 'head' ).add( eyes( this.material, 0.006, [ 0.022, 0.032, 0.045 ], '#d8b030' ) );
 			h.stand.castShadow = h.fly.castShadow = true;
 			h.fly.visible = false;
 			this.group.add( h.stand, h.fly );
@@ -312,6 +339,45 @@ export class MoreBirds {
 		}
 
 		return V( x, 0, z );
+
+	}
+
+	// The standing heron: slow, high, deliberate steps while it stalks, one leg at a time;
+	// frozen, the neck drawn down into a crouch, head cocked over the water; the strike, the
+	// neck shooting out and down and back; between, its head turns slowly this way and that.
+	_poseHeron( h, dt, time ) {
+
+		const B = h.bones;
+		const stepping = h.state === 'step';
+		// one step each ~1.4 s: lift the foot high, swing it forward, set it down
+		if ( stepping ) h.phase = ( h.phase + dt / 1.4 ) % 2;
+		for ( const [ s, off ] of [ [ 'L', 0 ], [ 'R', 1 ] ] ) {
+
+			let u = ( h.phase - off + 2 ) % 2; // this leg's step is u in [0, 1)
+			u = stepping && u < 1 ? u : 1;
+			const lift = u < 1 ? Math.sin( Math.PI * u ) : 0;
+			const fwd = u < 1 ? - Math.cos( Math.PI * u ) : 1;
+			const planted = stepping ? fwd : 0;
+			B.get( 'hip' + s ).rotation.x = - planted * 0.18 - lift * 0.25;
+			// the "knee" (the ankle) bends backward as the foot comes up
+			B.get( 'ank' + s ).rotation.x = lift * 0.9;
+			B.get( 'toe' + s ).rotation.x = - lift * 0.6;
+
+		}
+
+		// the body rides level; it lifts a little as each leg passes under it
+		const bob = stepping ? Math.abs( Math.sin( Math.PI * h.phase ) ) * 0.01 : 0;
+		const crouch = h.state === 'freeze' || h.state === 'strike' ? 1 : 0;
+		h.crouch = damp( h.crouch ?? 0, crouch, 2, dt );
+		h.stand.position.set( h.pos.x, - 0.28 - h.crouch * 0.04 + bob, h.pos.z );
+		h.stand.rotation.set( h.crouch * 0.12, h.heading, 0, 'YXZ' );
+		const look = h.gaze.update( dt, null );
+		// the neck: upright and still while it walks (the head holds still, the body moves under
+		// it); drawn down in an S when it fishes; flung forward in the strike
+		const st = h.strike;
+		B.get( 'neck1' ).rotation.set( h.crouch * 0.55 + st * 0.9, look.yaw * 0.3 * ( 1 - h.crouch ), 0, 'YXZ' );
+		B.get( 'neck2' ).rotation.set( - h.crouch * 0.9 + st * 0.6, look.yaw * 0.4, 0, 'YXZ' );
+		B.get( 'head' ).rotation.set( h.crouch * 0.55 + st * 0.3 + look.pitch * 0.3, look.yaw * 0.3, h.crouch * Math.sin( time * 0.7 ) * 0.1, 'YXZ' );
 
 	}
 
@@ -435,12 +501,7 @@ export class MoreBirds {
 			const flying = h.state === 'fly';
 			h.stand.visible = ! flying;
 			h.fly.visible = flying;
-			if ( ! flying ) {
-
-				h.stand.position.set( h.pos.x, - 0.28 - h.strike * 0.12, h.pos.z );
-				h.stand.rotation.set( h.strike * 0.9 + h.neck * 0.05, h.heading, 0, 'YXZ' );
-
-			}
+			if ( ! flying ) this._poseHeron( h, dt, time );
 
 		}
 
