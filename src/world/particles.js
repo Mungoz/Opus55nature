@@ -227,7 +227,7 @@ export class Particles {
 		this.leafRot = new Float32Array( this.leafCount * 4 );
 		const tint = new Float32Array( this.leafCount * 3 );
 		this.leafState = [];
-		const palette = [ '#e0b030', '#d79a22', '#c9661c', '#e8c24a', '#b5471a', '#d4a038' ].map( ( c ) => new THREE.Color( c ).convertSRGBToLinear() );
+		const palette = [ '#e0b030', '#d79a22', '#c9661c', '#e8c24a', '#b5471a', '#d4a038' ].map( ( c ) => new THREE.Color( c ) );
 		for ( let i = 0; i < this.leafCount; i ++ ) {
 
 			const c = palette[ i % palette.length ];

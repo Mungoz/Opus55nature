@@ -56,7 +56,6 @@ function brownTroutGeometry() {
 
 		}
 
-		c.convertSRGBToLinear();
 		colors.push( c.r, c.g, c.b );
 
 	}

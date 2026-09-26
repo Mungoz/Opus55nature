@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { canBeSeen } from '../gen/visibility.js';
+import { CROP } from './grass.js';
 import { commonParsGLSL } from '../shaders/common.glsl.js';
 import { paletteGLSL } from '../shaders/palette.glsl.js';
 import { sharedUniforms } from '../core/uniforms.js';
@@ -119,6 +120,7 @@ uniform sampler2DArray tMatN;
 #define SOIL 2.0
 #define TURF 3.0
 uniform float uGrassFar;
+uniform vec4 uCrop[ 12 ]; // turf grazed short; entries with strength 1 are marmot burrow mouths
 varying vec3 vWorldPos;
 
 vec3 decode( vec3 c ) { return pow( c, vec3( 2.2 ) ); }
@@ -264,6 +266,21 @@ void main() {
 		dn = mix( dn, soilDN * 1.2, bankW );
 		cav = mix( cav, soilT.a, bankW );
 	}
+	// marmot spoil: bare, pale, pebbly earth round each burrow mouth, ragged at the edge
+	float spoil = 0.0;
+	for ( int i = 1; i < 12; i += 2 ) {
+		vec4 cr = uCrop[ i ];
+		if ( cr.w < 0.99 ) continue;
+		float d = length( wp.xz - cr.xy ) + gnoise( wp.xz * 2.3 + float( i ) ) * 0.45 + gnoise( wp.xz * 7.0 ) * 0.12;
+		spoil = max( spoil, 1.0 - smoothstep( cr.z * 0.55, cr.z * 1.1, d ) );
+	}
+	if ( spoil > 0.0 ) {
+		vec3 dirt = mix( decode( vec3( 0.42, 0.34, 0.26 ) ), decode( vec3( 0.5, 0.42, 0.33 ) ), smoothstep( -0.4, 0.6, gnoise( wp.xz * 6.0 ) ) );
+		dirt = mix( dirt, pebAlb * vec3( 1.0, 0.95, 0.85 ), smoothstep( 0.6, 0.85, pebT.a ) * 0.35 );
+		alb = mix( alb, dirt, spoil );
+		dn = mix( dn, pebDN, spoil * 0.7 );
+		cav = mix( cav, pebT.a, spoil );
+	}
 	// rock
 	alb = mix( alb, rockAlb, wRock );
 	dn = mix( dn, rockDN, wRock );
@@ -343,6 +360,7 @@ export class Terrain {
 			tMat: { value: textures.matAlbedo },
 			tMatN: { value: textures.matNormal },
 			uGrassFar: { value: quality.grassFar },
+			uCrop: CROP,
 		};
 		this.material = new THREE.ShaderMaterial( {
 			vertexShader: vert,

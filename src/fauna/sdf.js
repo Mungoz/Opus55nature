@@ -1,5 +1,20 @@
 import * as THREE from 'three';
 
+// The animals' palettes are sampled from photographs, whose colours are as displayed (exposed
+// and tone-mapped), far brighter than the albedo of real fur and feathers. Colours are taken
+// as sRGB (THREE.Color stores them linear) and scaled down to albedo.
+export const ALBEDO = 0.42;
+// ...and given back a little of the saturation the camera's exposure took from them
+export const SATURATE = 1.3;
+export function toAlbedo( r, g, b, out, i ) {
+
+	const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+	out[ i ] = Math.max( 0, l + ( r - l ) * SATURATE ) * ALBEDO;
+	out[ i + 1 ] = Math.max( 0, l + ( g - l ) * SATURATE ) * ALBEDO;
+	out[ i + 2 ] = Math.max( 0, l + ( b - l ) * SATURATE ) * ALBEDO;
+
+}
+
 // Sculpting organic creatures: a body is a smooth union of distance-field
 // primitives (round cones and oriented ellipsoids), each bound to a bone.
 // It is polygonised with surface nets into one continuous skin, weighted to
@@ -314,7 +329,7 @@ export class Sculpt {
 		const tipC = new THREE.Color();
 		const defComb = new THREE.Vector3( 0, - 0.35, - 1 ).normalize();
 		const comb = new THREE.Vector3();
-		const cols = this.parts.map( ( P ) => ( typeof P.color === 'function' ? null : new THREE.Color( P.color ).convertSRGBToLinear() ) );
+		const cols = this.parts.map( ( P ) => ( typeof P.color === 'function' ? null : new THREE.Color( P.color ) ) );
 		const tmpC = new THREE.Color();
 		const pd = new Float32Array( this.parts.length );
 		for ( let v = 0; v < nv; v ++ ) {
@@ -343,11 +358,11 @@ export class Sculpt {
 				const w = Math.exp( - ( pd[ p ] - dmin ) / 0.012 );
 				if ( w < 1e-3 ) continue;
 				bw.set( P.bone, ( bw.get( P.bone ) || 0 ) + w );
-				const c = cols[ p ] ?? tmpC.set( P.color( x, y, z ) ).convertSRGBToLinear();
+				const c = cols[ p ] ?? tmpC.set( P.color( x, y, z ) );
 				const cwt = Math.exp( - ( pd[ p ] - dmin ) / 0.006 );
 				cr += c.r * cwt; cg += c.g * cwt; cb += c.b * cwt; cw += cwt;
 				fl += ( typeof P.fur === 'function' ? P.fur( x, y, z ) : P.fur ) * cwt;
-				if ( P.tip ) tipC.set( typeof P.tip === 'function' ? P.tip( x, y, z ) : P.tip ).convertSRGBToLinear();
+				if ( P.tip ) tipC.set( typeof P.tip === 'function' ? P.tip( x, y, z ) : P.tip );
 				else tipC.setRGB( c.r * 1.3, c.g * 1.3, c.b * 1.3 );
 				tr += tipC.r * cwt; tg += tipC.g * cwt; tb += tipC.b * cwt;
 				if ( P.comb ) {
@@ -366,7 +381,8 @@ export class Sculpt {
 
 			}
 
-			furAttr.set( [ tr / cw, tg / cw, tb / cw, fl / cw ], v * 4 );
+			toAlbedo( tr / cw, tg / cw, tb / cw, furAttr, v * 4 );
+			furAttr[ v * 4 + 3 ] = fl / cw;
 			combAttr.set( [ comb.x / cw, comb.y / cw, comb.z / cw ], v * 3 );
 			patAttr.set( [ p0 / cw, p1 / cw, p2 / cw ], v * 3 );
 
@@ -382,7 +398,7 @@ export class Sculpt {
 			}
 
 			const ao = Math.min( 1, Math.max( 0.25, 1 - occ / this.aoStep * 0.35 ) );
-			color.set( [ cr / cw * ao, cg / cw * ao, cb / cw * ao ], v * 3 );
+			toAlbedo( cr / cw * ao, cg / cw * ao, cb / cw * ao, color, v * 3 );
 			const top = [ ...bw.entries() ].sort( ( a, b ) => b[ 1 ] - a[ 1 ] ).slice( 0, 4 );
 			const sum = top.reduce( ( s, e2 ) => s + e2[ 1 ], 0 );
 			top.forEach( ( [ name, w ], q ) => {

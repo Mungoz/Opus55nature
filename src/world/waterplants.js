@@ -133,7 +133,8 @@ void main() {
 // Geometry
 // ---------------------------------------------------------------------------
 
-const srgb = ( hex ) => new THREE.Color( hex ).convertSRGBToLinear();
+// (THREE.Color already takes hex as sRGB and stores it linear)
+const srgb = ( hex ) => new THREE.Color( hex );
 
 class Geo {
 

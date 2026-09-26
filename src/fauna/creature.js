@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { commonParsGLSL } from '../shaders/common.glsl.js';
 import { noiseGLSL } from '../shaders/noise.glsl.js';
 import { sharedUniforms, U } from '../core/uniforms.js';
+import { ALBEDO, toAlbedo } from './sdf.js';
+export { ALBEDO, toAlbedo };
 
 // Surface kinds stored per vertex (aMat)
 export const MAT = { PLAIN: 0, FEATHER: 1, FUR: 2, SCALES: 3, BILL: 4, EYE: 5 };
@@ -436,15 +438,15 @@ export class PartBuilder {
 			const tmp = new THREE.Color();
 			for ( let i = 0; i < n; i ++ ) {
 
-				tmp.set( color( p.getX( i ), p.getY( i ), p.getZ( i ) ) ).convertSRGBToLinear();
-				c.set( [ tmp.r, tmp.g, tmp.b ], i * 3 );
+				tmp.set( color( p.getX( i ), p.getY( i ), p.getZ( i ) ) );
+				toAlbedo( tmp.r, tmp.g, tmp.b, c, i * 3 );
 
 			}
 
 		} else {
 
-			const col = new THREE.Color( color ).convertSRGBToLinear();
-			for ( let i = 0; i < n; i ++ ) c.set( [ col.r, col.g, col.b ], i * 3 );
+			const col = new THREE.Color( color );
+			for ( let i = 0; i < n; i ++ ) toAlbedo( col.r, col.g, col.b, c, i * 3 );
 
 		}
 

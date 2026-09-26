@@ -30,7 +30,6 @@ export function troutGeometry( minnow = false ) {
 		const y = pos.getY( i ) / 0.063;
 		const c = y > 0.3 ? back.clone() : ( y > - 0.2 ? band.clone().lerp( back, ( y + 0.2 ) / 0.5 * 0.4 ) : belly.clone() );
 		if ( ! minnow && y > 0 && Math.sin( pos.getZ( i ) * 180 ) * Math.sin( pos.getX( i ) * 150 ) > 0.85 ) c.multiplyScalar( 0.3 ); // spots
-		c.convertSRGBToLinear();
 		colors.push( c.r, c.g, c.b );
 
 	}
