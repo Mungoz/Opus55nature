@@ -48,7 +48,8 @@ void main() {
 	vec2 c = gl_PointCoord * 2.0 - 1.0;
 	float r2 = dot( c, c );
 	if ( r2 > 1.0 ) discard;
-	float a = pow( 1.0 - r2, 1.5 ) * vAlpha * 0.11;
+	// soft-edged and thin: a drifting veil rather than a lit cone
+	float a = pow( 1.0 - r2, 2.2 ) * vAlpha * 0.055;
 	vec3 V = normalize( cameraPosition - vWorldPos );
 	float sh = sunShadowFast( vWorldPos );
 	vec3 col = ( skyIrradiance( vec3( 0.0, 1.0, 0.0 ) ) * 0.55 + uSunColor * sh * ( 0.3 + 1.2 * pow( max( dot( -V, uSunDir ), 0.0 ), 5.0 ) ) ) / PI;
@@ -66,36 +67,98 @@ function streamShader() {
 
 }
 
-// Water2's own shader (flow-mapped normals, reflection, refraction), with the falling
-// water aerated: where the flowing normal maps churn, the sheet turns white, lit by the
-// same sky and sun as the rest of the valley; it frays to spray at its edges and foot.
+// Water2's own shader (flow-mapped normals, reflection, refraction) for the falling water,
+// after photographs of the Staubbach and Giessbach falls: the library's two flowing normal
+// maps are sampled drawn out far down the fall, so their scrolling reads as streaks
+// racing down the sheet; sampled again coarser still, they give the jets the sheet breaks
+// into lower down. A glassy tongue at the lip whitens within a few metres as it draws in
+// air; the edges fray and the thin water between the jets lets the rock show through.
+// Lit by the same sky and sun as the rest of the valley (not glowing).
 function whiteWaterShader( length ) {
 
 	const base = Water2.WaterShader;
 	const frag = base.fragmentShader
-		.replace( 'uniform vec4 config;', 'uniform vec4 config;\nuniform float uLength;\nuniform sampler2D uIrrLUT;\nuniform vec3 uSunC;\nuniform vec3 uSunD;\nuniform vec3 uFaceN;\n' + skyMappingGLSL )
+		.replace( 'uniform vec4 config;', 'uniform vec4 config;\nuniform float uLength;\nuniform vec2 uWidth;\nuniform sampler2D uIrrLUT;\nuniform vec3 uSunC;\nuniform vec3 uSunD;\nuniform vec3 uFaceN;\n' + skyMappingGLSL )
+		.replace( 'vec4 normalColor0 = texture2D( tNormalMap0, ( vUv * scale ) + flow * flowMapOffset0 );', 'vec2 fuv = vUv * vec2( scale, scale * 0.28 );\n\t\t\tvec4 normalColor0 = texture2D( tNormalMap0, fuv + flow * flowMapOffset0 );' )
+		.replace( 'vec4 normalColor1 = texture2D( tNormalMap1, ( vUv * scale ) + flow * flowMapOffset1 );', 'vec4 normalColor1 = texture2D( tNormalMap1, fuv + flow * flowMapOffset1 );' )
 		.replace( 'gl_FragColor = vec4( color, 1.0 ) * mix( refractColor, reflectColor, reflectance );', `
 			vec4 water = vec4( color, 1.0 ) * mix( refractColor, reflectColor, reflectance );
 			float v = clamp( vUv.y / uLength, 0.0, 1.0 );
-			float halfW = 2.4 + 5.5 * pow( v, 1.2 );
+			float halfW = uWidth.x + uWidth.y * pow( v, 1.2 );
 			float across = abs( vUv.x ) / halfW;
+			// jets: the same flowing maps drawn out much further, scrolling more slowly
+			vec2 juv = vec2( vUv.x * 0.12, vUv.y * 0.016 );
+			float j0 = texture2D( tNormalMap1, juv + flow * flowMapOffset0 * 0.3 ).r;
+			float j1 = texture2D( tNormalMap1, juv + flow * flowMapOffset1 * 0.3 + vec2( 0.37, 0.11 ) ).r;
+			float jet = mix( j0, j1, flowLerp );
 			// aeration from the churn of the two flowing normal maps
 			float churn = abs( normalColor0.r - normalColor1.r ) + abs( normalColor0.g - normalColor1.g ) + ( 1.0 - normalColor.b ) * 1.2;
-			float foam = smoothstep( 0.1, 0.5, churn + v * 0.45 ) * smoothstep( 0.0, 0.08, v );
+			float aer = smoothstep( 0.0, 0.1, v );
+			float foam = smoothstep( 0.08, 0.5, churn * 0.8 + jet * 0.55 + v * 0.3 ) * aer;
 			vec3 N = normalize( uFaceN + vec3( normal.x, 0.0, normal.z ) * 0.6 );
 			vec3 V = normalize( vToEye );
-			vec3 light = texture2D( uIrrLUT, dirToSkyUV( N ) ).rgb * 0.8 + texture2D( uIrrLUT, dirToSkyUV( vec3( 0.0, 1.0, 0.0 ) ) ).rgb * 0.35
-				+ uSunC * ( max( dot( N, uSunD ), 0.0 ) * 0.8 + pow( max( dot( -V, uSunD ), 0.0 ), 4.0 ) * 0.6 );
-			vec3 white = color * 0.85 * light / PI;
-			vec3 col = mix( water.rgb, white, 0.35 + 0.6 * foam );
-			float alpha = ( 1.0 - smoothstep( 0.5 - 0.1 * v, 1.0, across + ( normalColor.r - 0.5 ) * 0.6 ) ) * mix( 0.97, 0.7, v * v );
+			vec3 light = texture2D( uIrrLUT, dirToSkyUV( N ) ).rgb * 0.75 + texture2D( uIrrLUT, dirToSkyUV( vec3( 0.0, 1.0, 0.0 ) ) ).rgb * 0.3
+				+ uSunC * ( max( dot( N, uSunD ), 0.0 ) * 0.75 + pow( max( dot( -V, uSunD ), 0.0 ), 4.0 ) * 0.5 );
+			// thicker water in the jets, thinner (greyer, more see-through) between them
+			vec3 white = color * light / PI * ( 0.62 + 0.4 * jet );
+			vec3 col = mix( water.rgb, white, 0.2 + 0.75 * foam );
+			// the sheet frays at its edges and, lower down, parts into jets and spray
+			float body = 1.0 - smoothstep( 0.4, 1.0, across + ( 0.5 - jet ) * ( 0.35 + 0.7 * v ) + ( normalColor.r - 0.5 ) * 0.3 );
+			float parted = smoothstep( 0.18 + 0.42 * v * v, 0.5 + 0.3 * v, jet + churn * 0.22 + ( 1.0 - across ) * 0.3 );
+			float alpha = body * mix( 0.96, parted, smoothstep( 0.12, 0.6, v ) ) * mix( 0.97, 0.78, v );
+			alpha *= 1.0 - 0.75 * smoothstep( 0.9, 1.0, v + ( jet - 0.5 ) * 0.06 );
 			gl_FragColor = vec4( col, alpha );` );
 	return {
 		name: 'WhiteWaterShader',
-		uniforms: { ...THREE.UniformsUtils.clone( base.uniforms ), uLength: { value: length }, uIrrLUT: { value: null }, uSunC: { value: new THREE.Vector3() }, uSunD: { value: new THREE.Vector3() }, uFaceN: { value: new THREE.Vector3() } },
+		uniforms: { ...THREE.UniformsUtils.clone( base.uniforms ), uLength: { value: length }, uWidth: { value: new THREE.Vector2( 2.4, 5.5 ) }, uIrrLUT: { value: null }, uSunC: { value: new THREE.Vector3() }, uSunD: { value: new THREE.Vector3() }, uFaceN: { value: new THREE.Vector3() } },
 		vertexShader: base.vertexShader,
 		fragmentShader: frag,
 	};
+
+}
+
+// The boil in the plunge pool: Water2's flow-mapped normals on a disc, flowing out from
+// where the fall lands (a radial flow map); where they churn, the water is white.
+function boilShader() {
+
+	const base = Water2.WaterShader;
+	const frag = base.fragmentShader
+		.replace( 'uniform vec4 config;', 'uniform vec4 config;\nuniform sampler2D uIrrLUT;\nuniform vec3 uSunC;\nuniform vec3 uSunD;\n' + skyMappingGLSL )
+		.replace( 'gl_FragColor = vec4( color, 1.0 ) * mix( refractColor, reflectColor, reflectance );', `
+			vec4 water = vec4( color, 1.0 ) * mix( refractColor, reflectColor, reflectance );
+			float r = length( vUv - 0.5 ) * 2.0;
+			float churn = abs( normalColor0.r - normalColor1.r ) + abs( normalColor0.g - normalColor1.g ) + ( 1.0 - normalColor.b ) * 1.2;
+			// white where the maps churn, thickest right under the fall, broken into patches
+			float foam = smoothstep( 0.45, 0.9, churn * 0.8 + ( 1.0 - r ) * 0.45 + ( normalColor0.b - normalColor1.b ) * 0.6 );
+			vec3 V = normalize( vToEye );
+			vec3 N = normalize( vec3( normal.x * 0.5, 1.0, normal.z * 0.5 ) );
+			vec3 light = texture2D( uIrrLUT, dirToSkyUV( N ) ).rgb + uSunC * max( dot( N, uSunD ), 0.0 ) * 0.8;
+			vec3 white = color * light / PI;
+			float alpha = foam * 0.9 * ( 1.0 - smoothstep( 0.05, 0.85, r + ( normalColor.r - 0.5 ) * 0.9 + ( churn - 0.6 ) * 0.25 ) );
+			gl_FragColor = vec4( mix( water.rgb, white, 0.85 ), alpha );` );
+	return {
+		name: 'BoilShader',
+		uniforms: { ...THREE.UniformsUtils.clone( base.uniforms ), uIrrLUT: { value: null }, uSunC: { value: new THREE.Vector3() }, uSunD: { value: new THREE.Vector3() } },
+		vertexShader: base.vertexShader,
+		fragmentShader: frag,
+	};
+
+}
+
+// a flow map pointing out from the centre (Water2 reads it as rg * 2 - 1)
+function radialFlowMap( n = 32 ) {
+
+	const d = new Uint8Array( n * n * 4 );
+	for ( let j = 0; j < n; j ++ ) for ( let i = 0; i < n; i ++ ) {
+
+		const x = ( i + 0.5 ) / n - 0.5, y = ( j + 0.5 ) / n - 0.5, l = Math.hypot( x, y ) || 1;
+		d.set( [ ( x / l * 0.5 + 0.5 ) * 255, ( y / l * 0.5 + 0.5 ) * 255, 0, 255 ], ( j * n + i ) * 4 );
+
+	}
+
+	const t = new THREE.DataTexture( d, n, n );
+	t.needsUpdate = true;
+	return t;
 
 }
 
@@ -199,6 +262,16 @@ export class Streams {
 
 		const last = smp[ smp.length - 1 ];
 		pts.push( { p: last.p.clone(), w: last.width, surf: last.surf, s: last.s } );
+		// the stream begins where it leaves the plunge pool (the pool is a water of its own)
+		const pp = td.ponds.find( ( pd ) => pd.plunge );
+		if ( pp ) {
+
+			let first = 0;
+			while ( first < pts.length - 2 && pts[ first ].p.distanceTo( pp.c ) < pp.r * 0.92 ) first ++;
+			pts.splice( 0, first );
+
+		}
+
 		// where both banks are under the lake, the stream has become the lake
 		let end = pts.length;
 		for ( let i = 0; i < pts.length; i ++ ) {
@@ -312,13 +385,14 @@ export class Streams {
 				geometry: g,
 				position: new THREE.Vector3( pd.c.x, pd.surf, pd.c.y ),
 				reflectScale: 0.6,
-				ripples: this.lake.ripples,
+				ripples: pd.plunge ? undefined : this.lake.ripples,
 				fallback: this.lake,
 				farDist: 220,
 				name: 'pond',
 			} );
 			w.uniforms.size.value = 3.5;
 			w.reflectOnly.push( this.terrainMesh );
+			if ( pd.plunge ) this.plunge = w;
 			this.ponds.push( w );
 			this.group.add( w.mesh );
 
@@ -371,6 +445,7 @@ export class Streams {
 		}
 
 		const foot = lip.clone().addScaledVector( out, reach );
+		this.fallInfo = { lipB, lip: lip.clone(), lipY, floorY, reach, halfWidth: 4.5, side: new THREE.Vector3( side.x, 0, side.y ) };
 		const top3 = new THREE.Vector3( lip.x, lipY, lip.y ), foot3 = new THREE.Vector3( foot.x, floorY, foot.y );
 		const X = new THREE.Vector3( side.x, 0, side.y ).normalize();
 		const Y = top3.clone().sub( foot3 ).normalize(); // up the curtain
@@ -384,11 +459,14 @@ export class Streams {
 
 		const L = top3.distanceTo( foot3 );
 		const worldPts = [], uvs = [], idx = [];
-		const rows = 16;
+		const rows = 40;
+		const out3 = new THREE.Vector3( out.x, 0, out.y );
 		for ( let j = 0; j <= rows; j ++ ) {
 
 			const v = j / rows;
-			const c = top3.clone().lerp( foot3, v );
+			// thrown out over the lip, it falls as a projectile: out in proportion to the time
+			// of falling, down with its square
+			const c = top3.clone().addScaledVector( out3, reach * Math.sqrt( v ) ).setY( lipY + ( floorY - lipY ) * v );
 			const halfW = 2.4 + 5.5 * Math.pow( v, 1.2 );
 			for ( const sd of [ - 1, 1 ] ) {
 
@@ -412,7 +490,7 @@ export class Streams {
 		g.setIndex( idx );
 		g.computeBoundingSphere();
 		const scale = 0.18;
-		const fall = new THREE.Mesh( g, this._flowMaterial( whiteWaterShader( L ), { color: 0xe8f0f2, reflectivity: 0.05, scale, flowSpeed: 1.6 } ) );
+		const fall = new THREE.Mesh( g, this._flowMaterial( whiteWaterShader( L ), { color: 0xe8f0f2, reflectivity: 0.05, scale, flowSpeed: 2.6 } ) );
 		fall.material.side = THREE.DoubleSide;
 		fall.material.uniforms.uFaceN.value.copy( Z );
 		fall.layers.set( LAYERS.WATER );
@@ -421,6 +499,27 @@ export class Streams {
 		fall.name = 'waterfall';
 		this.group.add( fall );
 		this.fall = fall;
+
+		// the boil where it lands
+		{
+
+			const disc = new THREE.CircleGeometry( 8, 48 );
+			disc.rotateX( - Math.PI / 2 );
+			disc.translate( foot.x, floorY + 0.04, foot.y );
+			faceUp( disc );
+			const m = this._flowMaterial( boilShader(), { color: 0xeef3f4, reflectivity: 0.03, scale: 7, flowSpeed: 0.8 } );
+			m.defines = { ...m.defines, USE_FLOWMAP: '' };
+			m.uniforms.tFlowMap = { value: radialFlowMap() };
+			m.side = THREE.DoubleSide;
+			m.depthWrite = false;
+			const boil = new THREE.Mesh( disc, m );
+			boil.layers.set( LAYERS.WATER );
+			boil.renderOrder = 13;
+			boil.name = 'boil';
+			this.group.add( boil );
+			this.boil = boil;
+
+		}
 
 		// mist and spray
 		const n = 320;
@@ -436,7 +535,7 @@ export class Streams {
 				mp.set( [ foot.x + Math.cos( a ) * r, floorY + 0.5, foot.y + Math.sin( a ) * r ], i * 3 );
 				const sp = 2 + R() * 5;
 				vel.set( [ Math.cos( a ) * sp + out.x * 3, 2 + R() * 6, Math.sin( a ) * sp + out.y * 3 ], i * 3 );
-				seed.set( [ 5 + R() * 9, R(), R(), 0.1 + R() * 0.08 ], i * 4 );
+				seed.set( [ 4 + R() * 7, R(), R(), 0.1 + R() * 0.08 ], i * 4 );
 
 			} else {
 
@@ -475,6 +574,20 @@ export class Streams {
 
 	update( camera, dt ) {
 
+		// the fall drums on its pool: splash after splash where the water lands
+		if ( this.plunge && this.fall.visible ) {
+
+			this._drum = ( this._drum ?? 0 ) - dt;
+			if ( this._drum <= 0 ) {
+
+				this._drum = 0.1 + Math.random() * 0.12;
+				const a = Math.random() * Math.PI * 2, r = Math.sqrt( Math.random() ) * 4.5;
+				this.plunge.addRipple( this.poolPos.x + Math.cos( a ) * r, this.poolPos.z + Math.sin( a ) * r, 0.85 + Math.random() * 0.4 );
+
+			}
+
+		}
+
 		// Water2's flow cycle, and the projection that maps each vertex to the screen
 		const bias = new THREE.Matrix4().set( 0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1 );
 		const proj = bias.multiply( camera.projectionMatrix ).multiply( camera.matrixWorldInverse );
@@ -495,10 +608,16 @@ export class Streams {
 		}
 
 		// the white water is lit by the valley's own sky and sun
-		const fu = this.fall.material.uniforms;
-		fu.uIrrLUT.value = U.uIrrLUT.value;
-		fu.uSunC.value.copy( U.uSunColor.value );
-		fu.uSunD.value.copy( U.uSunDir.value );
+		for ( const m of [ this.fall.material, this.boil.material ] ) {
+
+			const fu = m.uniforms;
+			fu.uIrrLUT.value = U.uIrrLUT.value;
+			fu.uSunC.value.copy( U.uSunColor.value );
+			fu.uSunD.value.copy( U.uSunDir.value );
+
+		}
+
+		this.boil.visible = this.fall.visible;
 		this.fall.visible = camera.position.distanceTo( this.poolPos ) < 900;
 
 	}

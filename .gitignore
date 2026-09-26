@@ -3,3 +3,5 @@ dist
 *.zip
 tools/out
 *.mp4
+
+shots/

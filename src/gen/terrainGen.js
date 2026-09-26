@@ -315,9 +315,24 @@ export class TerrainData {
 			let m = h( k );
 			for ( let j = 1; j <= 24; j ++ ) m = Math.min( m, h( k + j ) );
 			k += 25;
-			return { c: pd.c.clone(), r: pd.r, surf: m - 0.3 };
+			return { c: pd.c.clone(), r: pd.r, surf: m - 0.3, plunge: !! pd.plunge };
 
 		} );
+		// the plunge pool and the stream leaving it share one level
+		{
+
+			const pp = this.ponds.find( ( pd ) => pd.plunge );
+			if ( pp ) {
+
+				pp.surf = Math.min( pp.surf, samples[ 0 ].surf );
+				for ( const smp of samples ) if ( smp.p.distanceTo( pp.c ) < pp.r * 1.25 ) smp.surf = Math.min( smp.surf, pp.surf );
+				for ( let i = 1; i < samples.length; i ++ ) samples[ i ].surf = Math.min( samples[ i ].surf, samples[ i - 1 ].surf );
+				samples.forEach( ( smp, i ) => rd.set( [ smp.p.x, smp.p.y, smp.surf, smp.width ], i * 4 ) );
+				this.featureUniforms.uRiverTex.value.needsUpdate = true;
+
+			}
+
+		}
 		this.featureUniforms.uPonds.value = this.ponds.map( ( pd ) => new THREE.Vector4( pd.c.x, pd.c.y, pd.r, pd.surf ) );
 		this.featureUniforms.uFeatures.value = 1;
 
@@ -330,7 +345,7 @@ export class TerrainData {
 		this.featureUniforms = {
 			uRiverTex: { value: riverTexture() },
 			uRiverBox: { value: new THREE.Vector4( - 1e6, - 1e6, 1e6, 1e6 ) },
-			uPonds: { value: Array.from( { length: 3 }, () => new THREE.Vector4( 1e6, 1e6, 0, 0 ) ) },
+			uPonds: { value: Array.from( { length: 4 }, () => new THREE.Vector4( 1e6, 1e6, 0, 0 ) ) },
 			uFeatures: { value: 0 },
 		};
 		this._measureWater();

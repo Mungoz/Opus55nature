@@ -83,7 +83,11 @@ export const PONDS = [
 	{ c: new THREE.Vector2( - 58, 540 ), r: 15 },
 	{ c: new THREE.Vector2( - 262, 810 ), r: 22 },
 	{ c: new THREE.Vector2( 250, 1185 ), r: 27 },
+	// the plunge pool the waterfall has scoured out of the foot of its cliff; the stream
+	// flows out of it (its level is the stream's, set when the water is measured)
+	{ c: FALL.base.clone().addScaledVector( FALL.out, 15 ), r: 17, plunge: true },
 ];
+export const PLUNGE = 3; // index of the plunge pool among the ponds
 
 // GLSL: shared constants + the carving functions. Uniforms are filled by the generator.
 export const featuresGLSL = /* glsl */ `
@@ -95,7 +99,7 @@ export const featuresGLSL = /* glsl */ `
 #define RIVER_CHUNK 8
 uniform highp sampler2D uRiverTex;
 uniform vec4 uRiverBox;           // bounds of the stream (min x, min z, max x, max z), padded
-uniform vec4 uPonds[ 3 ];         // x, z, radius, surface height
+uniform vec4 uPonds[ 4 ];         // x, z, radius, surface height (3: the plunge pool)
 uniform float uFeatures;          // 0 during the pre-pass that measures the natural ground
 const vec2 FALL_BASE = vec2( ${FALL.base.x.toFixed( 3 )}, ${FALL.base.y.toFixed( 3 )} );
 const vec2 FALL_OUT = vec2( ${FALL.out.x.toFixed( 5 )}, ${FALL.out.y.toFixed( 5 )} );
@@ -196,15 +200,17 @@ float applyWater( vec2 p, float h ) {
 	}
 	// ponds: an uneven bed - shelving shallows, a deeper hole off-centre - inside a low
 	// turf rim that undercuts in places
-	for ( int i = 0; i < 3; i ++ ) {
+	for ( int i = 0; i < 4; i ++ ) {
 		vec4 pd = uPonds[ i ];
 		if ( length( p - pd.xy ) > pd.z * 2.2 + 18.0 ) continue;
 		float fi = float( i );
 		float rn = pondShape( p, pd, fi );
 		float over = ( rn - 1.0 ) * pd.z; // metres beyond the shoreline (approx.)
 		if ( over < 16.0 ) {
-			vec2 hole = pd.xy + pd.z * 0.35 * vec2( cos( fi * 2.4 + 1.0 ), sin( fi * 2.4 + 1.0 ) );
-			float deep = 0.55 + pd.z * 0.07;
+			// the plunge pool is deepest right under the fall, where the water lands
+			float plunge = i == 3 ? 1.0 : 0.0;
+			vec2 hole = pd.xy + mix( pd.z * 0.35 * vec2( cos( fi * 2.4 + 1.0 ), sin( fi * 2.4 + 1.0 ) ), - FALL_OUT * pd.z * 0.3, plunge );
+			float deep = ( 0.55 + pd.z * 0.07 ) * ( 1.0 + plunge * 1.3 );
 			deep *= 0.55 + 0.75 * exp( - dot( p - hole, p - hole ) / ( pd.z * pd.z * 0.25 ) );
 			deep *= 0.8 + 0.35 * gnoise( p * 0.09 + fi * 5.0 );
 			float bed = pd.w - deep * ( 1.0 - pow( clamp( rn, 0.0, 1.0 ), mix( 1.3, 3.5, 0.5 + 0.5 * gnoise( p * 0.05 + fi ) ) ) ) - 0.06;
@@ -219,7 +225,7 @@ float applyWater( vec2 p, float h ) {
 
 float pondWater( vec2 p ) {
 	float m = 0.0;
-	for ( int i = 0; i < 3; i ++ ) {
+	for ( int i = 0; i < 4; i ++ ) {
 		vec4 pd = uPonds[ i ];
 		if ( length( p - pd.xy ) > pd.z * 2.2 ) continue;
 		float over = ( pondShape( p, pd, float( i ) ) - 1.0 ) * pd.z;

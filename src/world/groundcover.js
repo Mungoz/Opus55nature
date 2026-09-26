@@ -145,7 +145,7 @@ function stoneGeometry( detail = 2 ) {
 
 // ---------------------------------------------------------------------------
 // pond positions for the cotton grass (filled in once the terrain is generated)
-export const PONDS_GC = { value: Array.from( { length: 3 }, () => new THREE.Vector4( 1e6, 1e6, 0, - 100 ) ) };
+export const PONDS_GC = { value: Array.from( { length: 4 }, () => new THREE.Vector4( 1e6, 1e6, 0, - 100 ) ) };
 
 // Autumn wildflowers
 // ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ uniform float uRadius;
 uniform float uTime;
 uniform vec4 uWind;
 uniform sampler2D uNoiseTex;
-uniform vec4 uPondsGC[ 3 ]; // x, z, radius, surface
+uniform vec4 uPondsGC[ 4 ]; // x, z, radius, surface
 attribute vec4 aOff;
 attribute vec3 aGeo; // x: 0 stem / 1 petal, y: petal index
 varying vec3 vWorldPos;
@@ -179,7 +179,7 @@ void main() {
 	vec4 hn = terrainHN( p );
 	// boggy margins of the pools, the stream and the lake
 	float wet = smoothstep( 0.03, 0.2, bio.a ) * ( 1.0 - smoothstep( 0.5, 0.85, bio.a ) ) * step( 1.8, hn.x );
-	for ( int i = 0; i < 3; i ++ ) {
+	for ( int i = 0; i < 4; i ++ ) {
 		// the boggy fringe of the pools
 		vec4 pd = uPondsGC[ i ];
 		if ( length( p - pd.xy ) > pd.z * 2.4 ) continue;

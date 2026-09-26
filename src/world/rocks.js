@@ -97,11 +97,19 @@ varying vec3 vNormal;
 varying vec3 vObj;
 varying float vAO;
 void main() {
-	mat4 im = modelMatrix * instanceMatrix;
+	#ifdef USE_INSTANCING
+		mat4 im = modelMatrix * instanceMatrix;
+	#else
+		mat4 im = modelMatrix;
+	#endif
 	vec4 wp = im * vec4( position, 1.0 );
 	vWorldPos = wp.xyz;
 	vNormal = normalize( mat3( im ) * normal );
-	vObj = position * length( im[ 0 ].xyz ) + im[ 3 ].xyz * 0.37;
+	#ifdef CLIFF
+		vObj = wp.xyz * 0.4;
+	#else
+		vObj = position * length( im[ 0 ].xyz ) + im[ 3 ].xyz * 0.37;
+	#endif
 	vAO = aAO;
 	gl_Position = projectionMatrix * viewMatrix * wp;
 }
@@ -111,6 +119,10 @@ const frag = /* glsl */ `
 ${commonParsGLSL}
 uniform sampler2DArray tMat;
 uniform sampler2DArray tMatN;
+#ifdef CLIFF
+	uniform vec4 uFall;     // lip x, lip z, half width of the falling water, pool level
+	uniform vec2 uFallSide; // along the wall
+#endif
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 varying vec3 vObj;
@@ -142,6 +154,21 @@ void main() {
 	alb *= 1.0 - wet * 0.5;
 	alb = mix( alb, vec3( 0.05, 0.06, 0.03 ), smoothstep( 0.1, -0.6, wp.y - uWaterLevel ) * 0.6 );
 	float rough = mix( mix( 0.72, 0.95, moss ), 0.2, wet );
+	#ifdef CLIFF
+		// the rock by the fall is soaked by spray and runs with seepage: dark and glistening
+		// beside the water and round the pool, dark stains streaking down the rest of the face
+		vec2 fp = wp.xz - uFall.xy;
+		float along = dot( fp, uFallSide );
+		float beside = 1.0 - smoothstep( uFall.z, uFall.z + 10.0, abs( along ) );
+		float pool = smoothstep( uFall.w + 16.0, uFall.w + 2.0, wp.y ) * ( 1.0 - smoothstep( uFall.z + 6.0, uFall.z + 26.0, abs( along ) ) );
+		float soaked = max( beside * 0.9, pool * 0.75 );
+		float streaks = smoothstep( 0.55, 0.8, gnoise( vec2( along * 0.45, wp.y * 0.018 ) ) * 0.5 + 0.5 ) * ( 1.0 - max( N.y, 0.0 ) );
+		// weathered to the grey of the surrounding crags, then soaked and stained
+		alb *= 0.78 * ( 1.0 - 0.5 * soaked - 0.28 * streaks );
+		// spray-fed moss and algae on the soaked ledges
+		alb = mix( alb, vec3( 0.03, 0.05, 0.02 ), soaked * smoothstep( 0.3, 0.8, N.y ) * 0.6 );
+		rough = mix( rough, 0.22, soaked );
+	#endif
 	float ao = vAO * mix( 0.6 + 0.4 * t.a, 1.0, 0.3 );
 	float sh = sunShadow( wp, N );
 	vec3 col = shadeSurface( alb, Nd, V, wp, ao, sh, rough, 0.035 );
@@ -175,6 +202,26 @@ export class Rocks {
 		this.list = [];
 		this._last = new THREE.Vector3( 1e9, 0, 0 );
 		this.maxDist = 420;
+
+	}
+
+	// the same rock for the sculpted cliff under the waterfall (a plain mesh in world space)
+	cliffMaterial( fall ) {
+
+		return new THREE.ShaderMaterial( {
+			vertexShader: vert,
+			fragmentShader: frag,
+			defines: { CLIFF: '' },
+			uniforms: {
+				...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ),
+				...sharedUniforms(),
+				tMat: this.material.uniforms.tMat,
+				tMatN: this.material.uniforms.tMatN,
+				uFall: { value: new THREE.Vector4( fall.lip.x, fall.lip.y, fall.halfWidth, fall.floorY ) },
+				uFallSide: { value: new THREE.Vector2( fall.side.x, fall.side.z ).normalize() },
+			},
+			lights: true,
+		} );
 
 	}
 

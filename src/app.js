@@ -18,6 +18,7 @@ import { Forest } from './world/trees.js';
 import { Meadow, CROP } from './world/grass.js';
 import { GroundCover, PONDS_GC } from './world/groundcover.js';
 import { Rocks } from './world/rocks.js';
+import { buildFallCliff } from './world/fallCliff.js';
 import { Particles } from './world/particles.js';
 import { Murmuration, GeeseFlight, Eagles } from './fauna/birds.js';
 import { Waterfowl } from './fauna/waterfowl.js';
@@ -220,6 +221,17 @@ export class App {
 			{ x: - 14, z: 492, s: 2.6, sink: 0.45 }, { x: 52, z: 522, s: 1.5 }, { x: 78, z: 598, s: 4.2 }, { x: - 30, z: 560, s: 1.2 }, { x: 5, z: 500, s: 0.9 },
 		] );
 		this.scene.add( this.rocks.group );
+		// the sculpted rock of the waterfall's cliff
+		{
+
+			const g = buildFallCliff( td, this.streams.fallInfo.lipB );
+			const cliff = new THREE.Mesh( g, this.rocks.cliffMaterial( this.streams.fallInfo ) );
+			cliff.castShadow = cliff.receiveShadow = true;
+			cliff.name = 'fall-cliff';
+			this.scene.add( cliff );
+			this.fallCliff = cliff;
+
+		}
 
 		await step( 0.72, 'Sowing the meadows' );
 		this.meadow = new Meadow( this.quality );

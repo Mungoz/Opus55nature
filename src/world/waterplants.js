@@ -505,7 +505,7 @@ export class WaterPlants {
 		for ( const pd of td.ponds ) {
 
 			const inPond = ( x, z ) => Math.hypot( x - pd.c.x, z - pd.c.y ) < pd.r * 0.82 && td.heightAt( x, z ) < pd.surf - 0.25;
-			const nc = rng.int( 2, 3 );
+			const nc = pd.plunge ? 0 : rng.int( 2, 3 );
 			for ( let k = 0; k < nc; k ++ ) {
 
 				const a = rng.next() * Math.PI * 2, r = rng.range( 0.3, 0.6 ) * pd.r;
