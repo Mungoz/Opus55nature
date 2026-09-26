@@ -4,6 +4,7 @@ import { buildMarmot, buildSquirrel, buildHare, buildBear } from './mammalModels
 import { buildDeer } from './deerModel.js';
 import { burrowGeometry, TUNNEL } from './burrow.js';
 import { RNG } from '../core/rng.js';
+import { approach, steer, legCycle, stanceAngle, Spring, Gaze, Bouts } from './motion.js';
 
 const V = ( x, y, z ) => new THREE.Vector3( x, y, z );
 const wrapAngle = ( a ) => Math.atan2( Math.sin( a ), Math.cos( a ) );
@@ -370,10 +371,38 @@ export class Mammals {
 
 		}
 
+		d.gaze ??= new Gaze( rng, { yaw: 0.9, pitch: 0.25, hold: [ 1, 4 ] } );
+		d.bite ??= new Bouts( rng, [ 0.8, 2.5 ], [ 0.4, 1.8 ] );
+		d.flick ??= new Bouts( rng, [ 0.12, 0.35 ], [ 2, 9 ], 25 );
+		d.neckS ??= new Spring( 0.3, 1.1 );
+		d.headS ??= new Spring( 0.2, 1.6 );
+		d.yawS ??= new Spring( 0, 1.3 );
+		let speedT = 0, want = d.heading, rate = 1.0;
 		switch ( d.state ) {
 
 			case 'graze':
-				d.speed = damp( d.speed, 0, 3, dt );
+				// Grazing, it moves on a step or two every few seconds without lifting its head,
+				// and now and then lifts it to look round, still chewing.
+				d.stepT = ( d.stepT ?? rng.range( 2, 6 ) ) - dt;
+				if ( d.stepT <= 0 && ! d.stepping ) {
+
+					d.stepping = rng.range( 0.9, 2.0 );
+					d.stepHeading = d.heading + rng.range( - 0.7, 0.7 );
+
+				}
+
+				if ( d.stepping ) {
+
+					speedT = 0.3;
+					want = d.stepHeading;
+					rate = 0.5;
+					d.stepping = Math.max( 0, d.stepping - dt );
+					if ( ! d.stepping ) d.stepT = rng.range( 3, 9 );
+
+				}
+
+				d.lookUp = Math.max( 0, ( d.lookUp ?? 0 ) - dt );
+				if ( ! d.lookUp && ! d.stepping && rng.next() < dt * 0.07 ) d.lookUp = rng.range( 2, 5.5 );
 				if ( d.timer <= 0 ) {
 
 					d.state = 'walk';
@@ -400,12 +429,12 @@ export class Mammals {
 			case 'walk': {
 
 				const tx = d.target.x - d.pos.x, tz = d.target.z - d.pos.z;
-				d.heading = turnToward( d.heading, Math.atan2( tx, tz ), dt * 1.2 );
-				d.speed = damp( d.speed, 1.1, 2, dt );
+				want = Math.atan2( tx, tz );
+				speedT = 1.1;
 				if ( Math.hypot( tx, tz ) < 1 || d.timer <= 0 ) {
 
 					d.state = 'graze';
-					d.timer = rng.range( 6, 16 );
+					d.timer = rng.range( 8, 20 );
 
 				}
 
@@ -414,7 +443,6 @@ export class Mammals {
 			}
 
 			case 'alert':
-				d.speed = damp( d.speed, 0, 4, dt );
 				if ( d.timer <= 0 ) {
 
 					d.state = dist < 32 ? 'walk' : 'graze';
@@ -425,8 +453,9 @@ export class Mammals {
 
 				break;
 			case 'flee':
-				d.heading = turnToward( d.heading, d.fleeDir, dt * 3 );
-				d.speed = damp( d.speed, 8, 3, dt );
+				want = d.fleeDir;
+				rate = 2.4;
+				speedT = 8;
 				if ( d.timer <= 0 ) {
 
 					d.state = 'walk';
@@ -438,7 +467,6 @@ export class Mammals {
 
 				break;
 			case 'roar':
-				d.speed = 0;
 				if ( d.timer <= 0 ) {
 
 					d.state = 'graze';
@@ -450,6 +478,12 @@ export class Mammals {
 
 		}
 
+		// a body with mass: it gathers speed and pulls up; it turns more tightly when slow
+		d.speed = approach( d.speed, speedT, speedT > 3 ? 5 : 0.9, speedT > 3 ? 4 : 1.6, dt );
+		const prevHeading = d.heading;
+		if ( d.speed > 0.05 || d.state === 'flee' ) d.heading = steer( d.heading, want, rate * ( 0.4 + Math.min( 1, d.speed ) * 0.6 ), dt );
+		d.turnRate = wrapAngle( d.heading - prevHeading ) / Math.max( dt, 1e-3 );
+
 		const moving = ! d.forced || d.forced === 'stagwalk' || d.forced === 'stagrun';
 		if ( moving && d.speed > 0.01 ) {
 
@@ -458,7 +492,7 @@ export class Mammals {
 			if ( this.terrain.heightAt( ax, az ) < 1.0 ) {
 
 				const inland = this._inland( d.pos );
-				d.heading = turnToward( d.heading, inland, dt * 3.5 );
+				d.heading = steer( d.heading, inland, 3.5, dt );
 				d.fleeDir = inland;
 				if ( d.state === 'walk' ) d.target.copy( this._dryPoint( d.home.x, d.home.y, 2, 10 ) );
 
@@ -470,7 +504,7 @@ export class Mammals {
 				d.pos.x = nx;
 				d.pos.z = nz;
 
-			} else d.speed = damp( d.speed, 0, 6, dt );
+			} else d.speed = approach( d.speed, 0, 1, 6, dt );
 
 		}
 
@@ -483,11 +517,15 @@ export class Mammals {
 		const body = B.get( 'body' );
 		body.rotation.x = - Math.atan( slope ) * 0.6;
 
-		// ---- gait ----
-		const running = d.speed > 3;
-		const stride = running ? 3.4 : 1.25; // metres per cycle
-		d.phase = ( d.phase + d.speed * dt / ( stride * s ) + 1 ) % 1;
-		const amp = running ? 1 : Math.min( 1, d.speed / 1.1 );
+		// ---- gait: feet planted through the stance, the stride lengthening with speed ----
+		const running = d.speed > 2.6;
+		// turning on the spot it steps round rather than pivoting on frozen legs
+		const gaitV = Math.max( d.speed, Math.min( 0.6, Math.abs( d.turnRate ) * 0.5 ) );
+		const stride = running ? 3.4 : 0.85 + gaitV * 0.35; // metres per cycle
+		d.phase = ( d.phase + gaitV * dt / ( stride * s ) + 1 ) % 1;
+		const amp = running ? 1 : Math.min( 1, gaitV / 0.6 );
+		const duty = running ? 0.4 : 0.64;
+		const hipA = running ? 0.6 : stanceAngle( stride, duty, 0.8 ) * amp;
 		for ( const [ side, sgn ] of [ [ 'L', 0 ], [ 'R', 0.5 ] ] ) {
 
 			// lateral-sequence walk (LH, LF, RH, RF); bounding gallop pairs the legs
@@ -495,23 +533,21 @@ export class Mammals {
 			const offH = running ? 0.6 + sgn * 0.24 : sgn;
 			for ( const [ front, off ] of [ [ true, offF ], [ false, offH ] ] ) {
 
-				const ph = ( d.phase + off ) * Math.PI * 2;
-				const swing = Math.sin( ph ); // +: leg forward
-				const lift = Math.max( 0, Math.cos( ph ) ); // raised during the forward swing
-				const a = running ? 0.75 : 0.32 * amp;
+				const { swing, lift } = legCycle( d.phase + off, duty );
+				const L = lift * ( running ? 1 : amp );
 				if ( front ) {
 
-					B.get( 'fS' + side ).rotation.x = - swing * a * 0.8;
-					B.get( 'fE' + side ).rotation.x = - lift * a * 0.35;
-					B.get( 'fK' + side ).rotation.x = lift * a * 2.0;
-					B.get( 'fF' + side ).rotation.x = lift * a * 0.8;
+					B.get( 'fS' + side ).rotation.x = - swing * hipA;
+					B.get( 'fE' + side ).rotation.x = - L * 0.3;
+					B.get( 'fK' + side ).rotation.x = L * ( running ? 1.5 : 1.15 );
+					B.get( 'fF' + side ).rotation.x = L * ( running ? 0.6 : 0.5 );
 
 				} else {
 
-					B.get( 'hH' + side ).rotation.x = - swing * a * 0.7;
-					B.get( 'hS' + side ).rotation.x = - lift * a * 0.5;
-					B.get( 'hC' + side ).rotation.x = lift * a * 1.1;
-					B.get( 'hF' + side ).rotation.x = lift * a * 0.6;
+					B.get( 'hH' + side ).rotation.x = - swing * hipA * 0.95;
+					B.get( 'hS' + side ).rotation.x = - L * 0.45;
+					B.get( 'hC' + side ).rotation.x = L * ( running ? 0.9 : 0.75 );
+					B.get( 'hF' + side ).rotation.x = L * 0.45;
 
 				}
 
@@ -520,23 +556,33 @@ export class Mammals {
 		}
 
 		const bodyRest = d.rest.get( 'body' );
-		body.position.y = bodyRest.y + ( running ? Math.abs( Math.sin( d.phase * Math.PI * 2 ) ) * 0.1 - 0.03 : Math.abs( Math.sin( d.phase * Math.PI * 4 ) ) * 0.012 * amp );
+		// the body rides lowest as each foot takes the weight, and shifts over the leg bearing it
+		body.position.y = bodyRest.y + ( running ? Math.abs( Math.sin( d.phase * Math.PI * 2 ) ) * 0.1 - 0.03 : ( 0.5 + 0.5 * Math.cos( d.phase * Math.PI * 4 ) ) * 0.016 * amp );
 		body.rotation.x += running ? Math.sin( d.phase * Math.PI * 2 ) * 0.08 : 0;
+		body.rotation.z = running ? 0 : Math.sin( d.phase * Math.PI * 2 ) * 0.022 * amp - d.turnRate * 0.04;
 
-		// ---- neck & head ----
+		// ---- neck & head: springs, a gaze that fixes and snaps, the head leading turns ----
+		const toCam = THREE.MathUtils.clamp( wrapAngle( Math.atan2( dx, dz ) - d.heading ), - 1.1, 1.1 );
+		const look = d.gaze.update( dt, d.state === 'alert' && ! d.pose ? toCam : null );
+		const bite = d.bite.update( dt );
 		let neckT = 0, headT = 0, yawT = 0;
-		if ( d.state === 'graze' ) {
+		if ( d.state === 'graze' && ! d.lookUp ) {
 
-			neckT = 1.25 + Math.sin( time * 0.7 + d.phase * 10 ) * 0.05;
-			headT = 0.55;
-			// the occasional glance up between mouthfuls
-			if ( Math.sin( time * 0.21 + d.phase * 13 ) > 0.93 ) neckT = 0.25;
+			neckT = 1.25;
+			headT = 0.55 + bite * 0.07 * Math.max( 0, Math.sin( time * 7 + d.phase * 5 ) );
+			yawT = look.yaw * 0.25;
+
+		} else if ( d.state === 'graze' ) {
+
+			neckT = 0.2;
+			headT = 0.1 + look.pitch;
+			yawT = look.yaw;
 
 		} else if ( d.state === 'alert' ) {
 
 			neckT = - 0.05;
-			headT = 0.0;
-			yawT = d.pose ? 0 : THREE.MathUtils.clamp( wrapAngle( Math.atan2( dx, dz ) - d.heading ), - 1.1, 1.1 );
+			headT = look.pitch * 0.5;
+			yawT = d.pose ? 0 : look.yaw;
 
 		} else if ( d.state === 'roar' ) {
 
@@ -550,25 +596,30 @@ export class Mammals {
 
 		} else if ( d.state === 'walk' ) {
 
-			neckT = 0.35 + Math.sin( d.phase * Math.PI * 4 ) * 0.04;
+			neckT = 0.35;
 			headT = 0.25;
+			// the head leads into a turn and glances about as it goes
+			yawT = THREE.MathUtils.clamp( wrapAngle( want - d.heading ), - 0.5, 0.5 ) + look.yaw * 0.3;
 
 		}
 
-		d.neck = damp( d.neck, neckT, 2.5, dt );
-		d.head = damp( d.head, headT, 3, dt );
-		d.yaw = damp( d.yaw, yawT, 3, dt );
-		B.get( 'neck1' ).rotation.set( d.neck * 0.65, d.yaw * 0.4, 0, 'YXZ' );
-		B.get( 'neck2' ).rotation.set( d.neck * 0.35, d.yaw * 0.3, 0, 'YXZ' );
-		B.get( 'head' ).rotation.set( d.head, d.yaw * 0.3, 0, 'YXZ' );
+		d.neck = d.neckS.update( neckT, dt );
+		d.head = d.headS.update( headT, dt );
+		d.yaw = d.yawS.update( yawT, dt );
+		// a walking deer nods, in time with its forelegs
+		const nod = running ? Math.sin( d.phase * Math.PI * 2 ) * 0.1 : Math.sin( d.phase * Math.PI * 4 + 0.8 ) * 0.045 * amp;
+		B.get( 'neck1' ).rotation.set( d.neck * 0.65 + nod, d.yaw * 0.4, 0, 'YXZ' );
+		B.get( 'neck2' ).rotation.set( d.neck * 0.35 - nod * 0.4, d.yaw * 0.3, 0, 'YXZ' );
+		B.get( 'head' ).rotation.set( d.head - nod * 0.3, d.yaw * 0.3, 0, 'YXZ' );
 		// ears swivel and flick
 		d.earT -= dt;
 		const flick = d.earT < 0.15 ? Math.sin( d.earT / 0.15 * Math.PI ) * 0.5 : 0;
 		if ( d.earT < 0 ) d.earT = rng.range( 1.5, 6 );
-		const alertEars = d.state === 'alert' ? - 0.4 : 0;
-		B.get( 'earL' ).rotation.set( alertEars, 0, flick );
-		B.get( 'earR' ).rotation.set( alertEars, 0, - flick * 0.6 );
-		B.get( 'tail' ).rotation.x = d.state === 'flee' ? - 0.9 : Math.sin( time * 3 + d.phase * 20 ) * 0.08;
+		const alertEars = d.state === 'alert' || d.lookUp ? - 0.4 : 0;
+		B.get( 'earL' ).rotation.set( alertEars, look.yaw * 0.3, flick );
+		B.get( 'earR' ).rotation.set( alertEars, look.yaw * 0.3, - flick * 0.6 );
+		const tf = d.flick.update( dt );
+		B.get( 'tail' ).rotation.x = d.state === 'flee' ? - 0.9 : - tf * 0.35 * ( 0.6 + 0.4 * Math.sin( time * 30 ) );
 
 	}
 
@@ -714,10 +765,33 @@ export class Mammals {
 
 		}
 
-		if ( m.state !== 'enter' && m.state !== 'emerge' ) {
+		m.gaze ??= new Gaze( rng, { yaw: 1.0, pitch: 0.3, hold: [ 0.6, 2.8 ], speed: 9 } );
+		m.nib ??= new Bouts( rng, [ 0.6, 2.2 ], [ 0.3, 1.5 ] );
+		m.tailS ??= new Spring( 0, 2.5, 0.45 );
+		m.v ??= 0;
+		if ( m.state === 'forage' ) {
 
-			m.pos.x += Math.sin( m.heading ) * speed * dt;
-			m.pos.z += Math.cos( m.heading ) * speed * dt;
+			// grazing on all fours, it shuffles on a pace now and then and lifts its head to look
+			m.shuf = ( m.shuf ?? rng.range( 1, 4 ) ) - dt;
+			if ( m.shuf < 0 ) {
+
+				speed = 0.22;
+				if ( m.shuf < - 0.5 ) m.shuf = rng.range( 1.5, 5 );
+
+			}
+
+			m.lookUp = Math.max( 0, ( m.lookUp ?? 0 ) - dt );
+			if ( ! m.lookUp && rng.next() < dt * 0.12 ) m.lookUp = rng.range( 1, 3 );
+
+		}
+
+		const tunnel = m.state === 'enter' || m.state === 'emerge';
+		const v0 = m.v;
+		m.v = tunnel ? 0 : approach( m.v, speed, 7, 10, dt );
+		if ( ! tunnel ) {
+
+			m.pos.x += Math.sin( m.heading ) * m.v * dt;
+			m.pos.z += Math.cos( m.heading ) * m.v * dt;
 
 		}
 
@@ -728,25 +802,50 @@ export class Mammals {
 		m.mesh.rotation.set( m.pitch, m.heading, 0, 'YXZ' );
 		m.mesh.visible = m.state !== 'hide';
 		const B = m.bones;
-		// sit up about the haunches, forepaws tucked to the chest, head level
-		B.get( 'body' ).rotation.x = - m.sit * 0.8;
-		B.get( 'chest' ).rotation.x = - m.sit * 0.55;
-		const nod = m.state === 'forage' ? 0.4 + Math.sin( time * 6 + m.phase ) * 0.1 : 0;
-		B.get( 'head' ).rotation.x = m.sit * 1.2 + nod;
-		const moving = speed > 0 || m.state === 'enter' || m.state === 'emerge';
-		const gs = m.state === 'enter' ? 3 : m.state === 'emerge' ? 1.2 : speed;
-		const gait = moving ? Math.sin( time * gs * 11 + m.phase ) : 0;
-		B.get( 'body' ).position.y = m.rest.get( 'body' ).y + Math.abs( gait ) * 0.012 * Math.min( gs, 3 );
+
+		// ---- gait, by distance travelled: a waddling walk, and a half-bound when it runs ----
+		const gv = tunnel ? ( m.state === 'enter' ? 1.6 : 0.6 ) : m.v;
+		const running = gv > 1.1;
+		const stride = running ? 0.5 : 0.2;
+		m.gph = ( ( m.gph ?? 0 ) + gv * dt / stride ) % 1;
+		const amp = Math.min( 1, gv / 0.3 );
+		const duty = running ? 0.35 : 0.6;
+		const A = running ? 0.85 : 0.5 * amp;
+		const offs = running ? { fL: 0.5, fR: 0.58, hL: 0, hR: 0.08 } : { hL: 0, fL: 0.25, hR: 0.5, fR: 0.75 };
 		for ( const s of [ 'L', 'R' ] ) {
 
-			const k = s === 'L' ? 1 : - 1;
-			B.get( 'f' + s ).rotation.x = m.sit * 1.3 + gait * 0.7 * k;
-			B.get( 'h' + s ).rotation.x = m.sit * 0.9 - gait * 0.6 * k;
+			for ( const fr of [ 'f', 'h' ] ) {
+
+				const { swing, lift } = legCycle( m.gph + offs[ fr + s ], duty );
+				const base = fr === 'f' ? m.sit * 1.3 : m.sit * 0.9;
+				B.get( fr + s ).rotation.x = base - swing * A - lift * A * 0.35;
+
+			}
 
 		}
 
-		// the tail flicks up as it runs
-		B.get( 'tail' ).rotation.x = m.sit * 0.8 + Math.sin( time * 2 + m.phase ) * 0.05 - ( m.state === 'dive' || m.state === 'enter' ? 0.5 : 0 );
+		// the spine flexes in the bound; walking, it rolls from side to side
+		const flex = running ? Math.sin( m.gph * Math.PI * 2 ) : 0;
+		B.get( 'body' ).rotation.x = - m.sit * 0.8 + flex * 0.16;
+		B.get( 'body' ).rotation.z = running ? 0 : Math.sin( m.gph * Math.PI * 2 ) * 0.07 * amp;
+		B.get( 'chest' ).rotation.x = - m.sit * 0.55 - flex * 0.1;
+		B.get( 'body' ).position.y = m.rest.get( 'body' ).y + ( running ? Math.max( 0, Math.sin( m.gph * Math.PI * 2 ) ) * 0.03 : ( 0.5 + 0.5 * Math.cos( m.gph * Math.PI * 4 ) ) * 0.006 * amp );
+
+		// ---- head: grazing in bouts, looking up and about; the sentinel's head snaps from
+		// one thing to the next and keeps coming back to you ----
+		const toCam = THREE.MathUtils.clamp( wrapAngle( Math.atan2( cam.x - m.pos.x, cam.z - m.pos.z ) - m.heading ), - 1.0, 1.0 );
+		const watching = ( m.state === 'sentinel' && dist < 30 ) ? toCam : null;
+		const look = m.gaze.update( dt, watching );
+		const nib = m.nib.update( dt );
+		const grazing = m.state === 'forage' && ! m.lookUp;
+		const head = B.get( 'head' );
+		head.rotation.x = m.sit * 1.2 + ( grazing ? 0.45 + nib * 0.07 * Math.max( 0, Math.sin( time * 13 + m.phase ) ) : look.pitch );
+		head.rotation.y = grazing ? look.yaw * 0.2 : ( m.state === 'sentinel' || m.lookUp ? look.yaw : look.yaw * 0.3 );
+
+		// the tail follows through: it swings up as the body brakes and lags as it sets off
+		const accel = ( m.v - v0 ) / Math.max( dt, 1e-3 );
+		const tailT = m.sit * 0.8 - ( running ? 0.55 : 0 ) + THREE.MathUtils.clamp( - accel * 0.06, - 0.3, 0.4 );
+		B.get( 'tail' ).rotation.x = m.tailS.update( tailT, dt ) + Math.sin( m.gph * Math.PI * 2 ) * 0.1 * amp;
 
 	}
 
@@ -844,8 +943,32 @@ export class Mammals {
 
 		}
 
+		h.gaze ??= new Gaze( rng, { yaw: 0.9, pitch: 0.25, hold: [ 0.8, 3 ], speed: 8 } );
+		h.nib ??= new Bouts( rng, [ 0.5, 1.8 ], [ 0.3, 1.2 ] );
+		h.earGL ??= new Gaze( rng, { yaw: 0.6, pitch: 0.4, hold: [ 0.4, 2.5 ], speed: 6, centre: 0.2 } );
+		h.earGR ??= new Gaze( rng, { yaw: 0.6, pitch: 0.4, hold: [ 0.4, 2.5 ], speed: 6, centre: 0.2 } );
+		h.v ??= 0;
+		if ( h.state === 'feed' ) {
+
+			// feeding, it creeps on with a small hop every few seconds
+			h.creep = ( h.creep ?? rng.range( 1, 4 ) ) - dt;
+			if ( h.creep < 0 ) {
+
+				speed = 0.55;
+				if ( h.creep < - 0.42 ) {
+
+					h.creep = rng.range( 2, 6 );
+					h.heading += rng.range( - 0.5, 0.5 );
+
+				}
+
+			}
+
+		}
+
+		h.v = approach( h.v, speed, speed > 3 ? 14 : 5, 9, dt );
 		// never into the water
-		const nx = h.pos.x + Math.sin( h.heading ) * speed * dt, nz = h.pos.z + Math.cos( h.heading ) * speed * dt;
+		const nx = h.pos.x + Math.sin( h.heading ) * h.v * dt, nz = h.pos.z + Math.cos( h.heading ) * h.v * dt;
 		if ( this.terrain.heightAt( nx, nz ) > 0.9 ) {
 
 			h.pos.x = nx;
@@ -858,33 +981,46 @@ export class Mammals {
 
 		}
 
-		// the gait: bounds, hind feet landing ahead of the forefeet
-		const moving = speed > 0;
-		if ( moving ) h.hop = ( h.hop + dt * ( speed > 3 ? 3.2 : 2.6 ) ) % 1;
-		else h.hop = 0;
+		// the gait: bounds by distance travelled, the hind feet landing ahead of the forefeet
+		const fast = h.v > 3;
+		const moving = h.v > 0.05;
+		const stride = fast ? 2.3 : 0.42;
+		if ( moving ) h.hop = ( h.hop + h.v * dt / stride ) % 1;
+		else h.hop = damp( h.hop, h.hop > 0.5 ? 1 : 0, 10, dt ) % 1;
 		const p = h.hop;
-		const air = moving ? Math.max( 0, Math.sin( p * Math.PI * 2 ) ) : 0;
-		const lift = air * ( speed > 3 ? 0.18 : 0.07 );
+		const ampM = Math.min( 1, h.v / 0.4 );
+		const air = moving ? Math.max( 0, Math.sin( p * Math.PI * 2 ) ) * ampM : 0;
+		const lift = air * ( fast ? 0.18 : 0.06 );
 		h.sit = damp( h.sit, sitT, 5, dt );
-		const pitch = moving ? Math.cos( p * Math.PI * 2 ) * ( speed > 3 ? 0.35 : 0.2 ) : 0;
+		const pitch = moving ? Math.cos( p * Math.PI * 2 ) * ( fast ? 0.35 : 0.2 ) * ampM : 0;
 		h.pitch = damp( h.pitch, pitch, 12, dt );
 		const g = this._ground( h.pos );
 		h.mesh.position.set( h.pos.x, g + lift, h.pos.z );
 		h.mesh.rotation.set( h.pitch - h.sit * 0.35, h.heading, 0, 'YXZ' );
 		const B = h.bones;
 		B.get( 'chest' ).rotation.x = - h.sit * 0.35;
-		B.get( 'head' ).rotation.x = damp( B.get( 'head' ).rotation.x, headT + h.sit * 0.5, 6, dt );
+		// head: nibbling in bouts while it feeds; sitting up, it looks about and watches you
+		const toCam = THREE.MathUtils.clamp( wrapAngle( Math.atan2( dx, dz ) - h.heading ), - 1.2, 1.2 );
+		const look = h.gaze.update( dt, h.state === 'alert' && dist < 40 ? toCam : null );
+		const nib = h.state === 'feed' ? h.nib.update( dt ) : 0;
+		const head = B.get( 'head' );
+		head.rotation.x = damp( head.rotation.x, headT + h.sit * 0.5 + ( h.state === 'feed' ? 0 : look.pitch ), 6, dt ) + nib * 0.05 * Math.max( 0, Math.sin( time * 15 + h.phase ) );
+		head.rotation.y = h.state === 'feed' ? look.yaw * 0.15 : look.yaw;
+		const eg = { L: h.earGL.update( dt ), R: h.earGR.update( dt ) };
 		for ( const [ s, sd ] of [ [ 'L', 1 ], [ 'R', - 1 ] ] ) {
 
-			B.get( 'ear' + s ).rotation.x = damp( B.get( 'ear' + s ).rotation.x, earT, 6, dt );
-			B.get( 'ear' + s ).rotation.z = Math.sin( time * 0.7 + h.phase + sd ) * 0.08;
+			// each ear turns on its own, toward whatever it is listening to
+			const ear = B.get( 'ear' + s );
+			const free = h.state === 'flee' ? 0 : 1;
+			ear.rotation.x = damp( ear.rotation.x, earT + eg[ s ].pitch * 0.5 * free, 6, dt );
+			ear.rotation.z = eg[ s ].yaw * 0.35 * sd * free;
 			// forelegs reach on landing, hind legs thrust on take-off
-			B.get( 'f' + s ).rotation.x = moving ? - Math.sin( p * Math.PI * 2 + 0.6 ) * 0.9 : h.sit * 0.2;
-			B.get( 'h' + s ).rotation.x = moving ? Math.sin( p * Math.PI * 2 - 0.4 ) * 0.9 : 0;
+			B.get( 'f' + s ).rotation.x = moving ? - Math.sin( p * Math.PI * 2 + 0.6 ) * 0.9 * ampM : h.sit * 0.2;
+			B.get( 'h' + s ).rotation.x = moving ? Math.sin( p * Math.PI * 2 - 0.4 ) * 0.9 * ampM : 0;
 
 		}
 
-		B.get( 'tail' ).rotation.x = moving ? - 0.4 : 0;
+		B.get( 'tail' ).rotation.x = moving ? - 0.4 * ampM : 0;
 
 	}
 
@@ -981,7 +1117,14 @@ export class Mammals {
 
 		}
 
-		b.speed = damp( b.speed, speedT, 2, dt );
+		b.gaze ??= new Gaze( rng, { yaw: 0.8, pitch: 0.3, hold: [ 1.5, 4.5 ], speed: 2.5 } );
+		b.dig ??= new Bouts( rng, [ 1, 3 ], [ 0.8, 2.5 ] );
+		b.sniff ??= new Bouts( rng, [ 0.4, 1.2 ], [ 0.8, 2.5 ], 20 );
+		b.neckS ??= new Spring( 0.35, 0.8 );
+		b.headS ??= new Spring( 0.25, 1.1 );
+		b.yawS ??= new Spring( 0, 0.9 );
+		// a heavy animal: slow to get going, slow to stop
+		b.speed = approach( b.speed, speedT, 0.6, 1.0, dt );
 		const nx = b.pos.x + Math.sin( b.heading ) * b.speed * dt, nz = b.pos.z + Math.cos( b.heading ) * b.speed * dt;
 		if ( this.terrain.heightAt( nx, nz ) > 1.0 ) {
 
@@ -996,27 +1139,30 @@ export class Mammals {
 		b.mesh.rotation.set( 0, b.heading, 0 );
 		const B = b.bones;
 		B.get( 'body' ).rotation.x = - Math.atan( slope / 0.8 ) * 0.7;
-		// a pacing walk: the legs on each side move nearly together, the whole body rolls
-		const stride = 1.6;
+		// a pacing walk: the legs on each side move nearly together, each foot planted flat
+		// through its stance, and the whole body rolls over onto the side bearing the weight
+		const stride = 1.25;
 		b.phase = ( b.phase + b.speed * dt / stride ) % 1;
-		const amp = Math.min( 1, b.speed / 0.95 );
+		const amp = Math.min( 1, b.speed / 0.6 );
+		const duty = 0.65;
+		const hipA = stanceAngle( stride, duty, 0.68 ) * amp;
 		for ( const [ side, off ] of [ [ 'L', 0 ], [ 'R', 0.5 ] ] ) {
 
-			for ( const [ front, o ] of [ [ true, off + 0.12 ], [ false, off ] ] ) {
+			for ( const [ front, o ] of [ [ true, off + 0.1 ], [ false, off ] ] ) {
 
-				const ph = ( b.phase + o ) * Math.PI * 2;
-				const swing = Math.sin( ph ), lift = Math.max( 0, Math.cos( ph ) );
+				const { swing, lift } = legCycle( b.phase + o, duty );
+				const L = lift * amp;
 				if ( front ) {
 
-					B.get( 'fS' + side ).rotation.x = - swing * 0.35 * amp;
-					B.get( 'fE' + side ).rotation.x = lift * 0.5 * amp;
-					B.get( 'fF' + side ).rotation.x = - lift * 0.4 * amp;
+					B.get( 'fS' + side ).rotation.x = - swing * hipA;
+					B.get( 'fE' + side ).rotation.x = L * 0.55;
+					B.get( 'fF' + side ).rotation.x = - L * 0.45;
 
 				} else {
 
-					B.get( 'hH' + side ).rotation.x = - swing * 0.3 * amp;
-					B.get( 'hK' + side ).rotation.x = - lift * 0.45 * amp;
-					B.get( 'hF' + side ).rotation.x = lift * 0.4 * amp;
+					B.get( 'hH' + side ).rotation.x = - swing * hipA * 0.9;
+					B.get( 'hK' + side ).rotation.x = - L * 0.5;
+					B.get( 'hF' + side ).rotation.x = L * 0.45;
 
 				}
 
@@ -1024,13 +1170,39 @@ export class Mammals {
 
 		}
 
-		B.get( 'body' ).rotation.z = Math.sin( b.phase * Math.PI * 2 ) * 0.05 * amp;
-		B.get( 'body' ).position.y = b.rest.get( 'body' ).y + Math.abs( Math.sin( b.phase * Math.PI * 2 ) ) * 0.025 * amp;
-		b.neck = damp( b.neck, neckT, 2, dt );
-		b.headP = damp( b.headP, headT, 2.5, dt );
-		b.yaw = damp( b.yaw, yawT, 2, dt );
-		B.get( 'neck' ).rotation.set( b.neck * 0.6, b.yaw * 0.5, 0, 'YXZ' );
-		B.get( 'head' ).rotation.set( b.headP, b.yaw * 0.5, 0, 'YXZ' );
+		B.get( 'body' ).rotation.z = Math.sin( b.phase * Math.PI * 2 ) * 0.055 * amp;
+		B.get( 'body' ).position.y = b.rest.get( 'body' ).y + ( 0.5 - 0.5 * Math.cos( b.phase * Math.PI * 4 ) ) * 0.022 * amp;
+		// head: low and swinging as it walks; rooting in bouts as it forages; raised,
+		// scenting the air in short bursts, when it stops to look
+		const look = b.gaze.update( dt, null );
+		const dig = b.dig.update( dt ), sniff = b.sniff.update( dt );
+		if ( b.state === 'forage' ) {
+
+			neckT = 1.0;
+			headT = 0.55 + dig * 0.14 * ( 0.5 + 0.5 * Math.sin( time * 4.5 ) );
+			yawT = look.yaw * 0.45;
+
+		} else if ( b.state === 'look' ) {
+
+			neckT = - 0.05;
+			headT = - 0.25 + look.pitch * 0.6 - sniff * 0.08 * ( 0.5 + 0.5 * Math.sin( time * 11 ) );
+			yawT = look.yaw;
+
+		} else {
+
+			neckT = 0.5;
+			headT = 0.25;
+			yawT = Math.sin( b.phase * Math.PI * 2 ) * 0.14 * amp + look.yaw * 0.2;
+
+		}
+
+		b.neck = b.neckS.update( neckT, dt );
+		b.headP = b.headS.update( headT, dt );
+		b.yaw = b.yawS.update( yawT, dt );
+		// the head bobs with the forelegs as they take the weight
+		const nod = Math.sin( b.phase * Math.PI * 4 + 0.6 ) * 0.035 * amp;
+		B.get( 'neck' ).rotation.set( b.neck * 0.6 + nod, b.yaw * 0.5, 0, 'YXZ' );
+		B.get( 'head' ).rotation.set( b.headP - nod * 0.5, b.yaw * 0.5, 0, 'YXZ' );
 
 	}
 
@@ -1140,10 +1312,19 @@ export class Mammals {
 
 		}
 
+		q.gaze ??= new Gaze( rng, { yaw: 1.1, pitch: 0.35, hold: [ 0.3, 1.8 ], speed: 14, centre: 0.25 } );
+		q.nib ??= new Bouts( rng, [ 0.5, 1.6 ], [ 0.2, 1.0 ], 20 );
+		q.flickB ??= new Bouts( rng, [ 0.25, 0.6 ], [ 1.5, 6 ], 30 );
+		q.tailS ??= new Spring( 0, 2.2, 0.4 );
 		const g = this._ground( q.pos );
 		const B = q.bones;
-		const hopPh = q.state === 'hop' ? ( q.hop * 3 ) % 1 : 0;
-		const hopY = q.state === 'hop' ? Math.sin( hopPh * Math.PI ) * 0.1 : 0;
+		// bounds of about 40 cm, however far the dash
+		const len = q.state === 'hop' ? q.from.distanceTo( q.to ) : 0;
+		const bounds = Math.max( 1, Math.round( len / 0.38 ) );
+		const hopPh = q.state === 'hop' ? ( q.hop * bounds ) % 1 : 0;
+		const hopY = q.state === 'hop' ? Math.sin( hopPh * Math.PI ) * 0.07 : 0;
+		// the spine stretches out in the air and bunches as the hind feet come through
+		const flex = q.state === 'hop' ? Math.cos( hopPh * Math.PI * 2 ) : 0;
 		if ( q.climb > 0 ) {
 
 			const a = Math.atan2( q.pos.x - t.x, q.pos.z - t.z ) + q.climb * 0.25;
@@ -1161,22 +1342,30 @@ export class Mammals {
 			const sit = q.sit;
 			q.mesh.position.set( q.pos.x, y + hopY + sit * 0.028, q.pos.z );
 			q.mesh.rotation.set( 0, q.heading, 0, 'YXZ' );
-			B.get( 'body' ).rotation.x = - sit * 0.98;
-			B.get( 'chest' ).rotation.x = - sit * 0.18;
-			B.get( 'head' ).rotation.x = sit * 1.02 + Math.sin( time * 14 ) * 0.03 * sit;
+			B.get( 'body' ).rotation.x = - sit * 0.98 + flex * 0.15;
+			B.get( 'chest' ).rotation.x = - sit * 0.18 - flex * 0.1;
+			// sitting, it nibbles in quick bouts and its head snaps from one look to the next
+			const look = q.gaze.update( dt, null );
+			const nib = q.state === 'forage' ? q.nib.update( dt ) : 0;
+			const head = B.get( 'head' );
+			head.rotation.x = sit * 1.02 + sit * look.pitch * 0.6 + nib * 0.035 * Math.sin( time * 26 );
+			head.rotation.y = look.yaw * ( q.state === 'forage' ? 0.8 : 0.2 );
 			for ( const s of [ 'L', 'R' ] ) {
 
-				B.get( 'f' + s ).rotation.x = - sit * 0.75 + ( q.state === 'hop' ? Math.sin( hopPh * Math.PI * 2 ) * 0.8 : 0 );
-				B.get( 'h' + s ).rotation.x = sit * 0.82;
+				// the forepaws turn the food as it eats; bounding, forelegs reach, hind legs thrust
+				B.get( 'f' + s ).rotation.x = - sit * 0.75 + nib * 0.1 * Math.sin( time * 9 ) + ( q.state === 'hop' ? - Math.sin( hopPh * Math.PI * 2 + 0.6 ) * 0.9 : 0 );
+				B.get( 'h' + s ).rotation.x = sit * 0.82 + ( q.state === 'hop' ? Math.sin( hopPh * Math.PI * 2 - 0.4 ) * 0.9 : 0 );
 
 			}
 
 		}
 
-		// the tail flows and flicks (laid up along the back while it sits)
-		B.get( 'tail1' ).rotation.x = q.state === 'hop' ? - 0.5 : ( q.sit ?? 0 ) * 1.35 + Math.sin( time * 1.3 ) * 0.05;
-		B.get( 'tail2' ).rotation.x = Math.sin( time * 2.1 + 1 ) * 0.1;
-		B.get( 'tail3' ).rotation.x = Math.sin( time * 2.7 + 2 ) * 0.15 + ( Math.sin( time * 0.9 ) > 0.95 ? 0.4 : 0 );
+		// the tail follows through, and flicks now and then (a squirrel's signal)
+		const fl = q.flickB.update( dt );
+		const tailT = q.state === 'hop' ? - 0.45 + flex * 0.3 : ( q.sit ?? 0 ) * 1.35;
+		B.get( 'tail1' ).rotation.x = q.tailS.update( tailT, dt );
+		B.get( 'tail2' ).rotation.x = fl * 0.45 * Math.sin( time * 24 ) + Math.sin( time * 2.1 + 1 ) * 0.06;
+		B.get( 'tail3' ).rotation.x = fl * 0.7 * Math.sin( time * 24 + 0.8 ) + Math.sin( time * 2.7 + 2 ) * 0.1;
 
 	}
 
