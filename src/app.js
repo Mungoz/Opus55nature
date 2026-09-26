@@ -343,6 +343,7 @@ export class App {
 		const f = this.options.follow;
 		let p = null, h = 2.2, back = 1.4;
 		if ( f === 'minnows' ) { p = this.shallows.groups[ 0 ].pos[ 0 ]; h = 6.5; back = 1.2; }
+		if ( f === 'perch' || f === 'char' ) { const g = this.shallows.groups.find( ( s ) => s.mesh.name === f ); p = g.pos[ 0 ]; h = 1.2; back = 2.2; }
 		if ( f === 'trout' ) { p = this.shallows.groups[ 2 ].pos[ 0 ]; h = 3; back = 2.5; }
 		if ( f === 'duck' ) { const b = this.waterfowl.birds[ 2 ]; p = b.pos.clone().setY( 0.12 ); h = 0.12; back = 1.3; this._followHeading = b.heading; }
 		if ( f === 'swan' ) { const b = this.waterfowl.birds[ 0 ]; p = b.pos.clone().setY( 0.5 ); h = 0.3; back = 4.5; this._followHeading = b.heading; }
