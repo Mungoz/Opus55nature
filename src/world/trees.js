@@ -248,17 +248,27 @@ void main() {
 	vec3 wp = ( im * vec4( position, 1.0 ) ).xyz;
 	vec3 n = normalize( mat3( im ) * normal );
 	#ifndef BAKE
+		// Wind: every tree leans the same way, downwind. Gust fronts roll through the wood
+		// with the wind, so neighbours lean and swing together, each a little in its own time.
 		float hm = max( wp.y - origin.y, 0.0 );
 		vec2 wdir = normalize( uWind.xy + 1e-4 );
+		vec3 fdir = vec3( wdir.x, 0.0, wdir.y );
 		float gust = textureLod( uNoiseTex, origin.xz / 420.0 - wdir * uTime * 0.018, 0.0 ).g;
 		float strength = uWind.z * ( 0.3 + 1.1 * smoothstep( 0.35, 0.8, gust ) );
-		float sway = strength * hm * hm * 0.0007 + sin( uTime * ( 0.8 + rnd * 0.4 ) + rnd * 6.283 ) * hm * hm * 0.00022 * uWind.z;
-		wp.xz += wdir * sway;
+		float along = dot( origin.xz, wdir );
+		float swing = sin( uTime * 1.05 - along * 0.045 + rnd * 1.1 );
+		float bend = ( strength * 0.0007 + swing * 0.00017 * uWind.z ) * hm * hm;
+		// a bend, not a shear: the top moves downwind and drops a little
+		wp.xz += wdir * bend;
+		wp.y -= bend * bend / ( 2.0 * max( hm, 1.0 ) ) * 0.9;
+		// branches flex downwind and bob with the gusts (never in and out along their normals)
 		float flex = aWind.y;
-		float fl = sin( uTime * ( 2.1 + rnd ) + aInfo.z * 6.283 + dot( wp.xz, vec2( 0.31, 0.27 ) ) ) * flex * ( 0.03 + 0.07 * strength );
-		wp += n * fl;
+		float bob = sin( uTime * ( 2.0 + rnd * 0.5 ) - along * 0.08 + aInfo.z * 6.283 );
+		wp += fdir * flex * ( 0.05 + 0.09 * strength ) * ( 0.65 + 0.35 * bob );
+		wp.y -= flex * 0.025 * strength * ( 0.6 + 0.4 * bob );
+		// leaves flutter: quick and small, whatever the wind (aspens most)
 		bool aspen = abs( aInfo.x - 8.0 ) < 0.5;
-		if ( aInfo.x > 4.5 && abs( aInfo.x - 7.0 ) > 0.5 ) wp += n * sin( uTime * ( aspen ? 12.0 : 7.0 ) + aInfo.z * 40.0 ) * ( aspen ? 0.04 : 0.02 ) * ( aspen ? 0.4 + strength : strength );
+		if ( aInfo.x > 4.5 && abs( aInfo.x - 7.0 ) > 0.5 ) wp += n * sin( uTime * ( aspen ? 12.0 : 7.0 ) + aInfo.z * 40.0 ) * ( aspen ? 0.03 : 0.012 ) * min( aspen ? 0.5 + strength : strength, 1.2 );
 	#endif
 	vWorldPos = wp;
 	vNormal = n;
@@ -407,7 +417,8 @@ void main() {
 	// gentle sway
 	vec2 wdir = normalize( uWind.xy + 1e-4 );
 	float rnd = hash12( floor( o.xz * 3.0 ) );
-	wp.xz += wdir * position.y * position.y * s * uWind.z * ( 0.25 + 0.12 * sin( uTime + rnd * 6.28 ) );
+	// the same lean and the same rolling swing as the near trees
+	wp.xz += wdir * position.y * position.y * s * uWind.z * ( 0.25 + 0.1 * sin( uTime * 1.05 - dot( o.xz, wdir ) * 0.045 + rnd * 1.1 ) );
 	vec4 cell = uCell[ vi ];
 	vUv = cell.xy + vec2( 0.5 + position.x * flip, position.y ) * cell.zw;
 	vWorldPos = wp;
