@@ -62,12 +62,35 @@ vec3 sculptedWood( float kind, vec3 wp, vec3 N, vec3 axis, vec3 origin, vec2 bk,
 	rough = 0.88;
 	bumpH = 0.0;
 	mossM = 0.0;
+	if ( bk.y > 3.5 ) {
+		// roots torn out of the ground: dark, earth-caked, pale where the bark has scuffed off
+		float sc = gnoise3( wp * 14.0 ) * 0.5 + 0.5;
+		c = mix( vec3( 0.07, 0.05, 0.035 ), vec3( 0.2, 0.15, 0.1 ), smoothstep( 0.3, 0.9, sc ) );
+		c = mix( c, vec3( 0.1, 0.075, 0.05 ), smoothstep( 0.4, 0.9, gnoise3( wp * 4.0 + 7.0 ) ) * 0.5 );
+		bumpH = sc * 0.5;
+		mossM = 0.0;
+		return c;
+	}
+	if ( bk.y > 2.5 ) {
+		// the old forest floor on the plate's trunk side: a mat of turf, moss and needles
+		float tn = gnoise3( wp * 7.0 ) * 0.5 + 0.5, tf = gnoise3( wp * 30.0 ) * 0.5 + 0.5;
+		c = mix( vec3( 0.03, 0.04, 0.014 ), vec3( 0.11, 0.115, 0.04 ), smoothstep( 0.2, 0.9, tn ) );
+		// dead grass and needle litter, and earth showing through
+		c = mix( c, vec3( 0.17, 0.13, 0.07 ), smoothstep( 0.5, 0.85, tf ) * 0.55 );
+		c = mix( c, vec3( 0.06, 0.045, 0.03 ), smoothstep( 0.6, 0.85, gnoise3( wp * 3.0 + 2.0 ) * 0.5 + 0.5 ) * 0.6 );
+		bumpH = tn * 0.6 + tf * 0.4;
+		mossM = 0.35;
+		return c;
+	}
 	if ( bk.y > 1.5 ) {
 		// the soil and stones held in an upturned root plate
+		// dark humus, with patches of paler, sandy mineral soil torn up from below, and stones
 		float clod = gnoise3( wp * 5.0 ) * 0.5 + 0.5;
 		float grit = gnoise3( wp * 38.0 ) * 0.5 + 0.5;
-		c = mix( vec3( 0.06, 0.045, 0.032 ), vec3( 0.16, 0.13, 0.095 ), smoothstep( 0.35, 0.8, clod ) );
-		c = mix( c, vec3( 0.3, 0.28, 0.25 ), step( 0.82, grit ) * 0.65 );
+		float sand = smoothstep( 0.55, 0.8, gnoise3( wp * 1.7 + 4.0 ) * 0.5 + 0.5 );
+		c = mix( vec3( 0.045, 0.034, 0.024 ), vec3( 0.11, 0.085, 0.06 ), smoothstep( 0.35, 0.8, clod ) );
+		c = mix( c, mix( vec3( 0.16, 0.12, 0.08 ), vec3( 0.24, 0.19, 0.13 ), clod ), sand * 0.8 );
+		c = mix( c, vec3( 0.22, 0.21, 0.19 ), step( 0.84, grit ) * 0.6 );
 		c = mix( c, vec3( 0.13, 0.1, 0.075 ), smoothstep( 0.6, 0.9, abs( gnoise3( wp * vec3( 9.0, 2.5, 9.0 ) ) ) ) * 0.6 );
 		bumpH = clod * 0.9 + grit * 0.4;
 		mossM = 0.0;
@@ -106,8 +129,10 @@ vec3 sculptedWood( float kind, vec3 wp, vec3 N, vec3 axis, vec3 origin, vec2 bk,
 		rough = mix( 0.8, 0.92, b );
 	}
 	// moss cushions on what faces the sky; on stumps it creeps down the sides as well
+	// (ringR, on the sides of a log, carries how mossy this one is: + rotten, - fresh-sawn)
+	float mossX = bk.y < 0.5 && kind < -10.5 ? ringR : 0.0;
 	float mn = gnoise3( wp * 1.3 + rnd * 9.0 ) + 0.4 * gnoise3( wp * 5.0 + 3.1 ) + 0.18 * gnoise3( wp * 17.0 );
-	float m = smoothstep( 0.25, 0.7, N.y + 0.5 * mn );
+	float m = smoothstep( 0.25, 0.7, N.y + 0.5 * mn + mossX * 1.6 );
 	if ( kind > -8.5 ) m = max( m, smoothstep( 0.3, 0.65, mn + 0.3 * N.y ) );
 	m *= smoothstep( -0.65, -0.2, gnoise3( wp * 0.3 + rnd * 13.0 ) );
 	float lump = gnoise3( wp * 16.0 ) * 0.5 + 0.5, fuzz = gnoise3( wp * 65.0 ) * 0.5 + 0.5;
@@ -841,7 +866,7 @@ export class Forest {
 		}
 
 		// driftwood: bleached trunks and branches washed up on the strand near the start
-		const logs = this.props.log.variants.map( ( v, i ) => ( { v, i } ) ).filter( ( e ) => ! e.v.plate );
+		const logs = this.props.log.variants.map( ( v, i ) => ( { v, i } ) ).filter( ( e ) => ! e.v.plate && ! e.v.rotten && ! e.v.branchy );
 		for ( let k = 0, placed = 0; k < 3000 && placed < 16; k ++ ) {
 
 			const px = - 5 + rng.range( - 320, 320 ), pz = rng.range( 330, 520 );

@@ -185,20 +185,31 @@ function stumpBake( rng, opts = {} ) {
 
 function logBake( rng, opts = {} ) {
 
-	const L = opts.L ?? rng.range( 4.5, 9 );
+	// kinds of fallen wood, after photographs of mountain forest floors:
+	//  (default) a snapped trunk, broken or sawn ends, a few branch stubs
+	//  sawn: a short section left by the foresters, both ends sawn square
+	//  rotten: long down, sagging and sunk into the ground, bark mostly gone, under moss
+	//  branchy: a fallen spruce still carrying its dead lower branches, many snapped short
+	//  plate: wind-thrown, the root plate torn out of the ground and standing on edge
+	const sawn = !! opts.sawn, rotten = !! opts.rotten, branchy = !! opts.branchy;
+	const L = opts.L ?? ( sawn ? rng.range( 1.6, 3.2 ) : rng.range( 4.5, 9 ) );
 	const R0 = opts.R ?? rng.range( 0.2, 0.34 );
-	const bend = rng.range( - 0.25, 0.25 );
+	const bend = rng.range( - 0.25, 0.25 ) * ( sawn ? 0.2 : 1 );
 	const seed = rng.next() * 100;
 	const plate = opts.plate ?? rng.next() < 0.35;
-	const endKind = [ plate ? 'plate' : ( rng.next() < 0.5 ? 'sawn' : 'broken' ), rng.next() < 0.4 ? 'sawn' : 'broken' ];
-	const endTilt = [ rng.range( - 0.2, 0.2 ), rng.range( - 0.25, 0.25 ) ];
-	const Rat = ( t ) => R0 * ( 1.08 - 0.38 * t );
-	const cyAt = ( t ) => Rat( t ) * 0.8;
+	const endKind = sawn ? [ 'sawn', 'sawn' ] : [ plate ? 'plate' : ( rng.next() < 0.5 ? 'sawn' : 'broken' ), rotten ? 'broken' : ( rng.next() < 0.4 ? 'sawn' : 'broken' ) ];
+	const endTilt = [ rng.range( - 0.2, 0.2 ), rng.range( - 0.25, 0.25 ) ].map( ( v ) => v * ( sawn ? 0.3 : 1 ) );
+	const Rat = ( t ) => R0 * ( sawn ? 1 - 0.08 * t : 1.08 - 0.38 * t );
+	// a rotten log has slumped: flattened, sagging into the ground along its length
+	const sink = rotten ? 0.45 : 0;
+	const cyAt = ( t ) => Rat( t ) * ( 0.8 - sink * ( 0.6 + 0.4 * Math.sin( Math.PI * t ) ) );
 	const czAt = ( t ) => bend * Math.sin( Math.PI * t );
+	const squash = rotten ? 0.78 : 1;
 
-	// snapped-off branch stubs, a few short broken spikes of wood
+	// branch stubs: a few short broken spikes of wood - or, on a branchy spruce, whorls of
+	// long dead branches, the ones underneath snapped off where the trunk hit the ground
 	const stubs = [];
-	const ns = rng.int( 2, 5 );
+	const ns = branchy ? 0 : sawn ? rng.int( 0, 2 ) : rng.int( 2, 5 );
 	for ( let k = 0; k < ns; k ++ ) {
 
 		const t = rng.range( 0.3, 0.92 );
@@ -213,22 +224,84 @@ function logBake( rng, opts = {} ) {
 
 	}
 
-	// the root plate of a wind-thrown tree: a wall of soil and roots standing on edge
-	const Rp = R0 * rng.range( 3.2, 4.2 );
-	const pc = [ - L / 2 - 0.12, Rp * 0.55, 0 ];
+	if ( branchy ) {
+
+		for ( let t = 0.32; t < 0.97; t += rng.range( 0.07, 0.11 ) ) {
+
+			const x = ( t - 0.5 ) * L, r = Rat( t );
+			const nw = rng.int( 3, 5 ), a0 = rng.next() * Math.PI * 2;
+			for ( let w = 0; w < nw; w ++ ) {
+
+				const a = a0 + w / nw * Math.PI * 2 + rng.range( - 0.3, 0.3 );
+				const up = Math.sin( a );
+				// branches pointing down broke off against the ground; the rest reach out and up
+				const len = up < - 0.3 ? r + rng.range( 0.05, 0.15 ) : r + ( 1 - t ) * rng.range( 0.6, 1.6 );
+				const dir = [ rng.range( 0.4, 0.9 ), up + 0.25, Math.cos( a ) ];
+				const dl = Math.hypot( ...dir );
+				const o = [ x, cyAt( t ), czAt( t ) ];
+				stubs.push( { a: o, b: [ o[ 0 ] + dir[ 0 ] / dl * len, o[ 1 ] + dir[ 1 ] / dl * len, o[ 2 ] + dir[ 2 ] / dl * len ], r: Math.max( 0.045, r * rng.range( 0.16, 0.24 ) * ( 1.1 - t * 0.5 ) ) } );
+
+			}
+
+		}
+
+	}
+
+	// the root plate of a wind-thrown tree, after photographs of windthrow: a thick, ragged
+	// disc of earth standing on edge where the trunk tore it out of the ground. The side that
+	// was the forest floor faces the trunk, still covered in turf and moss; the underside
+	// faces away, bare soil with stones, and roots radiate out past its rim in a tangle,
+	// the thick ones snapped off, the fine ones hanging.
+	const Rp = R0 * rng.range( 3.4, 4.4 );
+	const pc = [ - L / 2 - 0.05, Rp * 0.62, 0 ];
+	const T = 0.26 + R0 * 0.6; // thickness of the plate
+	const outline = ( a ) => Rp * ( 1 + 0.16 * Math.sin( 3 * a + seed ) + 0.1 * Math.sin( 5 * a + seed * 2 ) + 0.07 * Math.sin( 9 * a + seed * 3 ) );
 	const plateRoots = [];
 	if ( plate ) {
 
-		for ( let k = 0; k < 16; k ++ ) {
+		// a root: a chain of tapering segments that wanders and droops under its own weight
+		const root = ( o, dir, len, r, depth ) => {
 
-			const a = k / 16 * Math.PI * 2 + rng.range( - 0.15, 0.15 );
-			const len = Rp * rng.range( 0.95, 1.35 );
+			let p = o.slice(), d = dir.slice();
+			const n = 4;
+			for ( let s2 = 0; s2 < n; s2 ++ ) {
+
+				const seg = len / n;
+				d = [ d[ 0 ] + rng.range( - 0.25, 0.25 ), d[ 1 ] + rng.range( - 0.3, 0.2 ) - 0.12 * s2, d[ 2 ] + rng.range( - 0.3, 0.3 ) ];
+				const dl = Math.hypot( ...d );
+				d = d.map( ( c ) => c / dl );
+				const q = [ p[ 0 ] + d[ 0 ] * seg, p[ 1 ] + d[ 1 ] * seg, p[ 2 ] + d[ 2 ] * seg ];
+				const ra = Math.max( 0.035, r * ( 1 - s2 / n * 0.75 ) );
+				plateRoots.push( { a: p, b: q, r: ra } );
+				// side roots
+				if ( depth < 1 && s2 > 0 && rng.next() < 0.45 ) root( q, [ d[ 0 ] + rng.range( - 0.6, 0.6 ), d[ 1 ] + rng.range( - 0.6, 0.3 ), d[ 2 ] + rng.range( - 0.8, 0.8 ) ], len * 0.4, ra * 0.7, depth + 1 );
+				p = q;
+
+			}
+
+		};
+
+		// main roots: from the root ball out across the underside and past the rim
+		const nm = 14 + rng.int( 0, 6 );
+		for ( let k = 0; k < nm; k ++ ) {
+
+			const a = k / nm * Math.PI * 2 + rng.range( - 0.15, 0.15 );
 			const ca = Math.cos( a ), sa = Math.sin( a );
-			plateRoots.push( {
-				a: [ pc[ 0 ], pc[ 1 ] + sa * Rp * 0.5, pc[ 2 ] + ca * Rp * 0.5 ],
-				b: [ pc[ 0 ] - rng.range( 0.05, 0.5 ), pc[ 1 ] + sa * len, pc[ 2 ] + ca * len ],
-				r: rng.range( 0.035, 0.075 ),
-			} );
+			const r0 = rng.range( 0.15, 0.55 ) * Rp;
+			const o = [ pc[ 0 ] - T * 0.45, pc[ 1 ] + sa * r0, pc[ 2 ] + ca * r0 ];
+			const reach = outline( a ) - r0 + rng.range( 0.2, 0.9 );
+			root( o, [ - rng.range( 0.1, 0.45 ), sa, ca ], reach, Math.max( 0.04, rng.range( 0.035, 0.07 ) * ( R0 / 0.27 ) ), 0 );
+
+		}
+
+		// fine roots hanging off the rim and sticking out of the soil face
+		for ( let k = 0; k < 40; k ++ ) {
+
+			const a = rng.next() * Math.PI * 2, ca = Math.cos( a ), sa = Math.sin( a );
+			const r0 = outline( a ) * rng.range( 0.3, 1.0 );
+			const o = [ pc[ 0 ] - T * rng.range( 0.3, 0.6 ), pc[ 1 ] + sa * r0, pc[ 2 ] + ca * r0 ];
+			const len = rng.range( 0.15, 0.55 );
+			plateRoots.push( { a: o, b: [ o[ 0 ] - len * rng.range( 0.2, 0.8 ), o[ 1 ] + sa * len * 0.5 - len * rng.range( 0.1, 0.6 ), o[ 2 ] + ca * len * 0.5 ], r: rng.range( 0.03, 0.045 ) } );
 
 		}
 
@@ -248,7 +321,7 @@ function logBake( rng, opts = {} ) {
 
 		const t = Math.max( 0, Math.min( 1, ( x + L / 2 ) / L ) );
 		const r = Rat( t ) * ( 1 + 0.05 * noise3( x * 1.3 + seed, y * 2, z * 2 ) );
-		let d = ( Math.hypot( y - cyAt( t ), z - czAt( t ) ) - r ) * 0.85;
+		let d = ( Math.hypot( ( y - cyAt( t ) ) / squash, z - czAt( t ) ) * ( rotten ? 0.9 : 1 ) - r ) * 0.85;
 		d += 0.014 * fissure( x, y, z ) + ( barkMask( x, y, z ) ? 0 : 0.01 );
 		// the two ends
 		if ( endKind[ 0 ] !== 'plate' ) d = Math.max( d, ( - ( x + L / 2 ) - endJag( 0, y, z ) ) * 0.8 );
@@ -257,16 +330,32 @@ function logBake( rng, opts = {} ) {
 
 	};
 
-	const plateField = ( x, y, z ) => {
+	// the disc of earth: flat-ish on the turf side, bulging lumpy clods on the underside
+	const plateDisc = ( x, y, z ) => {
 
-		const lx = ( x - pc[ 0 ] ) / 0.32, ly = ( y - pc[ 1 ] ) / Rp, lz = ( z - pc[ 2 ] ) / ( Rp * 1.08 );
-		const k = Math.hypot( lx, ly, lz );
-		// lumpy clods of earth
-		let d = ( k - 1 ) * Math.min( 0.32, Rp ) + 0.09 * noise3( x * 3.5 + seed, y * 3.5, z * 3.5 ) + 0.04 * noise3( x * 9, y * 9, z * 9 + seed );
-		for ( const rt of plateRoots ) d = smin( d, capsule( x, y, z, rt.a, rt.b, rt.r, rt.r * 0.3 ), 0.06 );
+		const dy = y - pc[ 1 ], dz = z - pc[ 2 ];
+		const a = Math.atan2( dy, dz ), rr = Math.hypot( dy, dz );
+		const edge = rr - outline( a );
+		const u = x - pc[ 0 ];
+		// thicker at the middle, where the root ball was
+		const bulge = T * 0.5 + 0.25 * T * Math.max( 0, 1 - rr / Rp ) + 0.12 * noise3( y * 2.5 + seed, z * 2.5, 1.0 );
+		const faces = Math.max( u - T * 0.35, - u - bulge );
+		let d = Math.max( edge, faces );
+		// round the rim a little and break it into clods
+		d += 0.08 * noise3( x * 3 + seed, y * 3, z * 3 ) + 0.035 * noise3( x * 9, y * 9, z * 9 + seed );
 		return d;
 
 	};
+
+	const plateRootsField = ( x, y, z ) => {
+
+		let d = 1e9;
+		for ( const rt of plateRoots ) d = smin( d, capsule( x, y, z, rt.a, rt.b, rt.r, rt.r * 0.3 ), 0.03 );
+		return d;
+
+	};
+
+	const plateField = ( x, y, z ) => smin( plateDisc( x, y, z ), plateRootsField( x, y, z ), 0.05 );
 
 	const sdf = ( x, y, z ) => {
 
@@ -285,29 +374,40 @@ function logBake( rng, opts = {} ) {
 		// the plate only matters near it
 		if ( plate && Math.hypot( ( x - pc[ 0 ] ) * 2, y - pc[ 1 ], z - pc[ 2 ] ) < Rp * 1.6 + 0.4 + d ) d = smin( d, plateField( x, y, z ), 0.18 );
 		// settled into the ground
-		d = Math.max( d, - ( y + ( plate && x < - L / 2 + 0.6 ? 0.6 : 0.1 ) ) );
+		d = Math.max( d, - ( y + ( plate && x < - L / 2 + 0.6 ? 0.6 : rotten ? 0.02 : 0.1 ) ) );
 		return d;
 
 	};
 
 	const info = ( x, y, z, nx, ny, nz ) => {
 
-		if ( plate && x < pc[ 0 ] + 1.2 && plateField( x, y, z ) < trunk( x, y, z ) - 0.02 ) return [ 0, 2, 0 ];
+		if ( plate && x < pc[ 0 ] + 1.2 && plateField( x, y, z ) < trunk( x, y, z ) - 0.02 ) {
+
+			// roots, then the turf on what was the forest floor, then the soil of the underside
+			if ( plateRootsField( x, y, z ) < plateDisc( x, y, z ) + 0.005 ) return [ 1, 4, 0 ];
+			return [ 0, nx > 0.35 && x > pc[ 0 ] ? 3 : 2, 0 ];
+
+		}
+
 		const t = Math.max( 0, Math.min( 1, ( x + L / 2 ) / L ) );
 		const ringR = Math.hypot( y - cyAt( t ), z - czAt( t ) ) / Rat( t );
 		const end = ( x < - L / 2 + 0.4 && nx < - 0.55 && endKind[ 0 ] !== 'plate' ) || ( x > L / 2 - 0.4 && nx > 0.55 );
-		return [ barkMask( x, y, z ), end ? 1 : 0, ringR ];
+		// on the sides, the third channel carries extra moss: a rotten log is swallowed by it,
+		// a fresh-sawn one has none
+		const mossX = rotten ? 0.75 : sawn ? - 0.6 : 0;
+		return [ rotten ? barkMask( x, y, z ) * 0.3 : barkMask( x, y, z ), end ? 1 : 0, end ? ringR : mossX ];
 
 	};
 
-	const x0 = plate ? pc[ 0 ] - 0.9 : - L / 2 - 0.45;
-	const ext = plate ? Rp * 1.45 : R0 + 0.45;
-	const min = [ x0, - 0.65, - Math.max( ext, R0 + Math.abs( bend ) + 0.45 ) ];
-	const max = [ L / 2 + 0.5, plate ? pc[ 1 ] + Rp * 1.4 : R0 * 2.4 + 0.45, Math.max( ext, R0 + Math.abs( bend ) + 0.45 ) ];
+	const reachB = branchy ? 1.9 : 0.45;
+	const x0 = plate ? pc[ 0 ] - T - 0.9 : - L / 2 - 0.45;
+	const ext = plate ? Rp * 1.6 + 0.9 : R0 + reachB;
+	const min = [ x0, - 0.65, - Math.max( ext, R0 + Math.abs( bend ) + reachB ) ];
+	const max = [ L / 2 + 0.5, plate ? pc[ 1 ] + Rp * 1.6 + 0.9 : R0 * 2.4 + reachB, Math.max( ext, R0 + Math.abs( bend ) + reachB ) ];
 	return {
 		hi: bake( sdf, min, max, 0.045, KIND.LOG_WOOD, info ),
 		lo: bake( sdf, min, max, 0.1, KIND.LOG_WOOD, info ),
-		meta: { height: R0 * 2, radius: L / 2 + ( plate ? Rp : 0.5 ), halfLen: L / 2, plate, species: 'log' },
+		meta: { height: R0 * 2, radius: L / 2 + ( plate ? Rp : 0.5 ) + ( branchy ? 1.5 : 0 ), halfLen: L / 2, plate, rotten, branchy, sawn, species: 'log' },
 	};
 
 }
@@ -328,6 +428,10 @@ export const DEADWOOD = [
 	{ type: 'log', seed: 32, opts: { plate: true, R: 0.3 } },
 	{ type: 'log', seed: 33, opts: { plate: false } },
 	{ type: 'log', seed: 34, opts: { plate: false } },
+	{ type: 'log', seed: 35, opts: { plate: false, sawn: true } },
+	{ type: 'log', seed: 36, opts: { plate: false, sawn: true, R: 0.3 } },
+	{ type: 'log', seed: 37, opts: { plate: false, rotten: true, R: 0.32 } },
+	{ type: 'log', seed: 38, opts: { plate: false, branchy: true, R: 0.24 } },
 	{ type: 'stump', seed: 41, opts: { broken: false } },
 	{ type: 'stump', seed: 42, opts: { broken: true } },
 	{ type: 'stump', seed: 43, opts: { broken: true } },
