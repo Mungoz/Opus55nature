@@ -162,12 +162,12 @@ export function buildSquirrel( material ) {
 
 		const n = noise3( x * 90, y * 90, z * 90 );
 		// rufous, browner and greyer along the back, as in autumn
-		const c = new THREE.Color( '#a4683f' ).lerp( new THREE.Color( '#7a5a45' ), ss( 0.2, 0.7, n ) * 0.55 );
-		return c.lerp( new THREE.Color( '#80604a' ), ss( 0.085, 0.1, y ) * 0.45 );
+		const c = new THREE.Color( '#9a6640' ).lerp( new THREE.Color( '#76594a' ), ss( 0.2, 0.7, n ) * 0.55 );
+		return c.lerp( new THREE.Color( '#7a6250' ), ss( 0.085, 0.1, y ) * 0.5 );
 
 	};
 
-	const tip = ( x, y, z ) => redTip( x, y, z ).lerp( new THREE.Color( '#f3ece0' ), white( x, y, z ) );
+	const tip = ( x, y, z ) => redTip( x, y, z ).lerp( new THREE.Color( '#e4d9c6' ), white( x, y, z ) * 0.92 );
 	const fur = ( len ) => ( { color: root, tip, fur: len, mat: MAT.FUR } );
 	// the legs are red all the way down (the white is the chest and belly only)
 	const legFur = ( len ) => ( { color: '#5e3620', tip: redTip, fur: len, mat: MAT.FUR } );
@@ -175,27 +175,27 @@ export function buildSquirrel( material ) {
 	S.ellipsoid( [ 0, 0.062, - 0.035 ], [ 0.034, 0.038, 0.052 ], F( 'body', 0.025, fur( 0.012 ) ) );
 	S.ellipsoid( [ 0, 0.068, 0.03 ], [ 0.027, 0.031, 0.04 ], F( 'chest', 0.025, fur( 0.01 ) ) );
 	// head: round crown, big eyes in pale rings, short muzzle
-	const eyeC = [ 0.021, 0.106, 0.103 ];
+	const eyeC = [ 0.022, 0.107, 0.104 ];
 	const eyeD = ( x, y, z ) => Math.hypot( Math.abs( x ) - eyeC[ 0 ], y - eyeC[ 1 ], z - eyeC[ 2 ] );
 	const ring = ( x, y, z ) => ss( 0.016, 0.0085, eyeD( x, y, z ) ) * 0.75;
 	const lid = ( x, y, z ) => ss( 0.0105, 0.0078, eyeD( x, y, z ) );
 	const headTip = ( x, y, z ) => new THREE.Color( '#ab6a3d' ).lerp( new THREE.Color( '#d8bf9b' ), ring( x, y, z ) ).lerp( new THREE.Color( '#2a1a10' ), lid( x, y, z ) ).lerp( new THREE.Color( '#f0e6d6' ), ss( 0.088, 0.08, y ) * ss( 0.1, 0.12, z ) );
 	const head = ( len ) => ( { color: '#5e3620', tip: headTip, fur: len, mat: MAT.FUR } );
-	S.ellipsoid( [ 0, 0.1, 0.092 ], [ 0.024, 0.025, 0.03 ], F( 'head', 0.015, head( 0.006 ) ) );
+	S.ellipsoid( [ 0, 0.1, 0.093 ], [ 0.026, 0.027, 0.031 ], F( 'head', 0.015, head( 0.006 ) ) );
 	S.ellipsoid( [ 0, 0.093, 0.12 ], [ 0.014, 0.014, 0.018 ], F( 'head', 0.012, head( 0.004 ) ) );
 	S.ellipsoid( [ 0, 0.094, 0.137 ], [ 0.006, 0.005, 0.004 ], F( 'head', 0.004, { color: '#3a2620', mat: MAT.BILL } ) );
 	for ( const [ sd, s ] of SIDES ) {
 
 		// tall ears with long dark tufts
-		S.cone( [ sd * 0.014, 0.116, 0.086 ], [ sd * 0.018, 0.146, 0.08 ], 0.008, 0.003, F( 'head', 0.006, { color: '#5a2e1a', tip: ( x, y ) => new THREE.Color( '#a05f36' ).lerp( new THREE.Color( '#6b3f28' ), ss( 0.13, 0.15, y ) ), fur: ( x, y ) => 0.003 + 0.017 * ss( 0.13, 0.146, y ), comb: [ 0, 1, - 0.2 ], mat: MAT.FUR } ) );
+		S.cone( [ sd * 0.015, 0.118, 0.085 ], [ sd * 0.02, 0.153, 0.078 ], 0.0095, 0.0035, F( 'head', 0.006, { color: '#5a2e1a', tip: ( x, y ) => new THREE.Color( '#9c6038' ).lerp( new THREE.Color( '#5e3a26' ), ss( 0.135, 0.155, y ) ), fur: ( x, y ) => 0.003 + 0.022 * ss( 0.135, 0.153, y ), comb: [ 0, 1, - 0.25 ], mat: MAT.FUR } ) );
 		S.cone( [ sd * 0.019, 0.06, 0.07 ], [ sd * 0.017, 0.012, 0.084 ], 0.0085, 0.006, F( 'f' + s, 0.01, legFur( 0.005 ) ) );
 		S.ellipsoid( [ sd * 0.028, 0.045, - 0.035 ], [ 0.017, 0.027, 0.031 ], F( 'h' + s, 0.014, fur( 0.009 ) ) );
-		S.ellipsoid( [ sd * 0.028, 0.008, 0.0 ], [ 0.009, 0.007, 0.03 ], F( 'h' + s, 0.008, { color: '#5c2c17', tip: '#a8572b', fur: 0.003, mat: MAT.FUR } ) );
+		S.ellipsoid( [ sd * 0.028, 0.008, 0.0 ], [ 0.009, 0.007, 0.03 ], F( 'h' + s, 0.008, { color: '#5a3622', tip: '#946446', fur: 0.003, mat: MAT.FUR } ) );
 
 	}
 
 	// the plume: a thin curling core under long hair that splays out sideways
-	const tailTip = ( x, y, z ) => new THREE.Color( '#a8683c' ).lerp( new THREE.Color( '#744830' ), ss( 0.3, 0.8, noise3( x * 40, y * 40, z * 40 ) ) * 0.5 ).lerp( new THREE.Color( '#c99a70' ), ss( 0.009, 0.015, Math.abs( x ) ) * 0.5 );
+	const tailTip = ( x, y, z ) => new THREE.Color( '#9a6440' ).lerp( new THREE.Color( '#6e4a34' ), ss( 0.3, 0.8, noise3( x * 40, y * 40, z * 40 ) ) * 0.5 ).lerp( new THREE.Color( '#c4ad90' ), ss( 0.16, 0.24, y ) * 0.65 ).lerp( new THREE.Color( '#c99a70' ), ss( 0.009, 0.015, Math.abs( x ) ) * 0.3 );
 	const tailO = { color: '#5a321c', tip: tailTip, mat: MAT.FUR, comb: ( x ) => [ Math.sign( x || 1 ) * 0.9, 0, 0 ] };
 	const T = [ [ 0, 0.068, - 0.085 ], [ 0, 0.1, - 0.13 ], [ 0, 0.155, - 0.15 ], [ 0, 0.205, - 0.138 ], [ 0, 0.238, - 0.105 ], [ 0, 0.245, - 0.075 ] ];
 	const tb = [ 'tail1', 'tail2', 'tail2', 'tail3', 'tail3' ];
@@ -210,8 +210,9 @@ export function buildSquirrel( material ) {
 	const { mesh, bones } = S.mesh( material, 0.004 );
 	for ( const [ sd ] of SIDES ) {
 
-		const e = eye( 0.0072, material );
-		e.position.set( sd * eyeC[ 0 ], eyeC[ 1 ] - 0.1, eyeC[ 2 ] - 0.09 );
+		const e = eye( 0.0082, material );
+		// set into the head, not perched on it
+		e.position.set( sd * ( eyeC[ 0 ] - 0.0022 ), eyeC[ 1 ] - 0.1, eyeC[ 2 ] - 0.09 );
 		bones.get( 'head' ).add( e );
 
 	}

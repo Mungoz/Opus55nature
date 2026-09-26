@@ -1155,20 +1155,26 @@ export class Mammals {
 
 			let y = q.onPerch ? q.perch.top : g;
 			if ( q.state === 'hop' && q.fromY !== undefined ) y = THREE.MathUtils.lerp( q.fromY, q.toY, q.hop ) + Math.sin( q.hop * Math.PI ) * Math.abs( q.toY - q.fromY ) * 0.6;
-			q.mesh.position.set( q.pos.x, y + hopY, q.pos.z );
+			// forage: it sits bolt upright on its haunches, nibbling what it holds to its mouth,
+			// the long hind feet flat on the ground and the tail laid up along its back
+			q.sit = damp( q.sit ?? 0, q.state === 'forage' ? 1 : 0, 8, dt );
+			const sit = q.sit;
+			q.mesh.position.set( q.pos.x, y + hopY + sit * 0.028, q.pos.z );
 			q.mesh.rotation.set( 0, q.heading, 0, 'YXZ' );
-			// forage: sit up with paws to the mouth, nibbling
-			const sit = q.state === 'forage' ? 1 : 0;
-			// sits on its haunches: only the chest rears up
-			B.get( 'body' ).rotation.x = 0;
-			B.get( 'chest' ).rotation.x = - sit * 0.7;
-			B.get( 'head' ).rotation.x = sit * 0.7 + Math.sin( time * 14 ) * 0.03 * sit;
-			for ( const s of [ 'L', 'R' ] ) B.get( 'f' + s ).rotation.x = - sit * 1.3 + ( q.state === 'hop' ? Math.sin( hopPh * Math.PI * 2 ) * 0.8 : 0 );
+			B.get( 'body' ).rotation.x = - sit * 0.98;
+			B.get( 'chest' ).rotation.x = - sit * 0.18;
+			B.get( 'head' ).rotation.x = sit * 1.02 + Math.sin( time * 14 ) * 0.03 * sit;
+			for ( const s of [ 'L', 'R' ] ) {
+
+				B.get( 'f' + s ).rotation.x = - sit * 0.75 + ( q.state === 'hop' ? Math.sin( hopPh * Math.PI * 2 ) * 0.8 : 0 );
+				B.get( 'h' + s ).rotation.x = sit * 0.82;
+
+			}
 
 		}
 
-		// the tail flows and flicks
-		B.get( 'tail1' ).rotation.x = q.state === 'hop' ? - 0.5 : Math.sin( time * 1.3 ) * 0.05;
+		// the tail flows and flicks (laid up along the back while it sits)
+		B.get( 'tail1' ).rotation.x = q.state === 'hop' ? - 0.5 : ( q.sit ?? 0 ) * 1.35 + Math.sin( time * 1.3 ) * 0.05;
 		B.get( 'tail2' ).rotation.x = Math.sin( time * 2.1 + 1 ) * 0.1;
 		B.get( 'tail3' ).rotation.x = Math.sin( time * 2.7 + 2 ) * 0.15 + ( Math.sin( time * 0.9 ) > 0.95 ? 0.4 : 0 );
 
