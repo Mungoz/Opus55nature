@@ -82,19 +82,20 @@ export function buildMarmot( material ) {
 	S.ellipsoid( [ 0, 0.16, 0.14 ], [ 0.06, 0.058, 0.055 ], F( 'chest', 0.05, fur( 0.02 ) ) );
 
 	// head: broad, flat-topped skull; grey crown, paler grey face, pale muzzle and cheeks
-	const headRoot = ( x, y, z ) => coatMix( '#4d4943', [ [ '#8f877b', ss( 0.215, 0.24, z ) * ss( 0.2, 0.18, y ) ] ], x, y, z, 0.1 );
+	const headRoot = ( x, y, z ) => coatMix( '#4b443b', [ [ '#8a7e6c', ss( 0.215, 0.24, z ) * ss( 0.2, 0.18, y ) ] ], x, y, z, 0.1 );
 	const headTip = ( x, y, z ) => {
 
-		const c = new THREE.Color( '#8c8882' );
-		c.lerp( new THREE.Color( '#5b5750' ), ss( 0.205, 0.225, y ) * ss( 0.22, 0.17, z ) );
-		c.lerp( new THREE.Color( '#d2c9b8' ), ss( 0.225, 0.25, z ) * ss( 0.195, 0.175, y ) );
-		c.lerp( new THREE.Color( '#c7b9a0' ), ss( 0.185, 0.165, y ) * ss( 0.16, 0.2, z ) );
+		const c = new THREE.Color( '#86796a' );
+		c.lerp( new THREE.Color( '#554a3f' ), ss( 0.205, 0.225, y ) * ss( 0.22, 0.17, z ) );
+		c.lerp( new THREE.Color( '#bba98e' ), ss( 0.225, 0.25, z ) * ss( 0.195, 0.175, y ) );
+		c.lerp( new THREE.Color( '#ab9a7e' ), ss( 0.185, 0.165, y ) * ss( 0.16, 0.2, z ) );
 		return c.multiplyScalar( 1 + noise3( x * 70, y * 70, z * 70 ) * 0.12 );
 
 	};
 
 	const head = ( len ) => ( { color: headRoot, tip: headTip, fur: len, mat: MAT.FUR } );
-	S.ellipsoid( [ 0, 0.182, 0.185 ], [ 0.058, 0.047, 0.062 ], F( 'head', 0.04, head( 0.01 ) ) );
+	const aroundEye = ( x, y, z ) => 0.01 * ss( 0.008, 0.022, Math.hypot( Math.abs( x ) - 0.047, y - 0.2, z - 0.214 ) );
+	S.ellipsoid( [ 0, 0.182, 0.185 ], [ 0.058, 0.047, 0.062 ], F( 'head', 0.04, head( aroundEye ) ) );
 	S.ellipsoid( [ 0, 0.2, 0.17 ], [ 0.052, 0.03, 0.05 ], F( 'head', 0.03, head( 0.009 ) ) );
 	S.ellipsoid( [ 0, 0.168, 0.24 ], [ 0.034, 0.031, 0.034 ], F( 'head', 0.03, head( 0.005 ) ) );
 	for ( const [ sd ] of SIDES ) S.ellipsoid( [ sd * 0.03, 0.163, 0.222 ], [ 0.029, 0.026, 0.028 ], F( 'head', 0.025, head( 0.007 ) ) );
@@ -104,7 +105,7 @@ export function buildMarmot( material ) {
 	for ( const [ sd, s ] of SIDES ) {
 
 		// small round ears, low on the sides of the head
-		S.ellipsoid( [ sd * 0.05, 0.208, 0.158 ], [ 0.017, 0.016, 0.007 ], F( 'head', 0.008, { color: '#3f3a33', tip: '#6e645a', fur: 0.004, mat: MAT.FUR } ), Sculpt.frame( [ 0, 1, 0 ], [ sd, 0.1, 0.4 ] ) );
+		S.ellipsoid( [ sd * 0.051, 0.211, 0.158 ], [ 0.021, 0.02, 0.009 ], F( 'head', 0.008, { color: '#4a4036', tip: '#7c6d5c', fur: 0.004, mat: MAT.FUR } ), Sculpt.frame( [ 0, 1, 0 ], [ sd, 0.1, 0.4 ] ) );
 		// short, thick forelegs; dark feet with pale claws
 		S.cone( [ sd * 0.052, 0.11, 0.1 ], [ sd * 0.055, 0.02, 0.122 ], 0.027, 0.019, F( 'f' + s, 0.03, { color: '#3b3128', tip: '#7e6549', fur: 0.012, mat: MAT.FUR } ) );
 		S.ellipsoid( [ sd * 0.056, 0.01, 0.137 ], [ 0.019, 0.01, 0.027 ], F( 'f' + s, 0.01, { color: ( x, y, z ) => ( z > 0.158 ? '#9a8f80' : '#2b241d' ), fur: 0.002, tip: '#3d342b', mat: MAT.FUR } ) );
@@ -121,8 +122,8 @@ export function buildMarmot( material ) {
 	const { mesh, bones } = S.mesh( material, 0.0075 );
 	for ( const [ sd ] of SIDES ) {
 
-		const e = eye( 0.0095, material );
-		e.position.set( sd * 0.046, 0.2 - 0.18, 0.214 - 0.17 );
+		const e = eye( 0.0105, material );
+		e.position.set( sd * 0.047, 0.2 - 0.18, 0.216 - 0.17 );
 		bones.get( 'head' ).add( e );
 
 	}
@@ -154,44 +155,52 @@ export function buildSquirrel( material ) {
 	}
 
 	const white = ( x, y, z ) => ss( 0.058, 0.048, y ) * ss( - 0.04, - 0.01, z ) * ss( 0.028, 0.018, Math.abs( x ) );
-	const root = ( x, y, z ) => new THREE.Color( '#7a4424' ).lerp( new THREE.Color( '#d8cdbd' ), white( x, y, z ) );
-	const tip = ( x, y, z ) => {
+	const root = ( x, y, z ) => new THREE.Color( '#5e3620' ).lerp( new THREE.Color( '#d8cdbd' ), white( x, y, z ) );
+	const redTip = ( x, y, z ) => {
 
 		const n = noise3( x * 90, y * 90, z * 90 );
-		const c = new THREE.Color( '#c47a42' ).lerp( new THREE.Color( '#8f6446' ), ss( 0.2, 0.7, n ) * 0.5 );
-		c.lerp( new THREE.Color( '#a45a30' ), ss( 0.085, 0.1, y ) * 0.35 );
-		return c.lerp( new THREE.Color( '#f3ece0' ), white( x, y, z ) );
+		const c = new THREE.Color( '#ad6a3c' ).lerp( new THREE.Color( '#7e573f' ), ss( 0.2, 0.7, n ) * 0.5 );
+		return c.lerp( new THREE.Color( '#935233' ), ss( 0.085, 0.1, y ) * 0.35 );
 
 	};
 
+	const tip = ( x, y, z ) => redTip( x, y, z ).lerp( new THREE.Color( '#f3ece0' ), white( x, y, z ) );
 	const fur = ( len ) => ( { color: root, tip, fur: len, mat: MAT.FUR } );
+	// the legs are red all the way down (the white is the chest and belly only)
+	const legFur = ( len ) => ( { color: '#5e3620', tip: redTip, fur: len, mat: MAT.FUR } );
 	const F = ( bone, k, o ) => ( { bone, k, ...o } );
 	S.ellipsoid( [ 0, 0.062, - 0.035 ], [ 0.034, 0.038, 0.052 ], F( 'body', 0.025, fur( 0.012 ) ) );
 	S.ellipsoid( [ 0, 0.068, 0.03 ], [ 0.027, 0.031, 0.04 ], F( 'chest', 0.025, fur( 0.01 ) ) );
 	// head: round crown, big eyes in pale rings, short muzzle
 	const eyeC = [ 0.021, 0.106, 0.103 ];
 	const ring = ( x, y, z ) => ss( 0.011, 0.007, Math.hypot( Math.abs( x ) - eyeC[ 0 ], y - eyeC[ 1 ], z - eyeC[ 2 ] ) );
-	const headTip = ( x, y, z ) => new THREE.Color( '#c27640' ).lerp( new THREE.Color( '#e8d6bd' ), ring( x, y, z ) * 0.9 ).lerp( new THREE.Color( '#f0e6d6' ), ss( 0.088, 0.08, y ) * ss( 0.1, 0.12, z ) );
-	const head = ( len ) => ( { color: '#7a4424', tip: headTip, fur: len, mat: MAT.FUR } );
+	const headTip = ( x, y, z ) => new THREE.Color( '#ab6a3d' ).lerp( new THREE.Color( '#e8d6bd' ), ring( x, y, z ) * 0.9 ).lerp( new THREE.Color( '#f0e6d6' ), ss( 0.088, 0.08, y ) * ss( 0.1, 0.12, z ) );
+	const head = ( len ) => ( { color: '#5e3620', tip: headTip, fur: len, mat: MAT.FUR } );
 	S.ellipsoid( [ 0, 0.1, 0.092 ], [ 0.024, 0.025, 0.03 ], F( 'head', 0.015, head( 0.006 ) ) );
 	S.ellipsoid( [ 0, 0.093, 0.12 ], [ 0.014, 0.014, 0.018 ], F( 'head', 0.012, head( 0.004 ) ) );
 	S.ellipsoid( [ 0, 0.094, 0.137 ], [ 0.006, 0.005, 0.004 ], F( 'head', 0.004, { color: '#3a2620', mat: MAT.BILL } ) );
 	for ( const [ sd, s ] of SIDES ) {
 
 		// tall ears with long dark tufts
-		S.cone( [ sd * 0.014, 0.116, 0.086 ], [ sd * 0.018, 0.146, 0.08 ], 0.008, 0.003, F( 'head', 0.006, { color: '#5a2a16', tip: ( x, y ) => ( y > 0.135 ? '#4a2414' : '#b3602f' ), fur: ( x, y ) => 0.003 + 0.02 * ss( 0.13, 0.146, y ), comb: [ 0, 1, - 0.2 ], mat: MAT.FUR } ) );
-		S.cone( [ sd * 0.019, 0.06, 0.07 ], [ sd * 0.017, 0.012, 0.084 ], 0.0085, 0.006, F( 'f' + s, 0.01, fur( 0.005 ) ) );
+		S.cone( [ sd * 0.014, 0.116, 0.086 ], [ sd * 0.018, 0.146, 0.08 ], 0.008, 0.003, F( 'head', 0.006, { color: '#5a2e1a', tip: ( x, y ) => new THREE.Color( '#a05f36' ).lerp( new THREE.Color( '#6b3f28' ), ss( 0.13, 0.15, y ) ), fur: ( x, y ) => 0.003 + 0.017 * ss( 0.13, 0.146, y ), comb: [ 0, 1, - 0.2 ], mat: MAT.FUR } ) );
+		S.cone( [ sd * 0.019, 0.06, 0.07 ], [ sd * 0.017, 0.012, 0.084 ], 0.0085, 0.006, F( 'f' + s, 0.01, legFur( 0.005 ) ) );
 		S.ellipsoid( [ sd * 0.028, 0.045, - 0.035 ], [ 0.017, 0.027, 0.031 ], F( 'h' + s, 0.014, fur( 0.009 ) ) );
 		S.ellipsoid( [ sd * 0.028, 0.008, 0.0 ], [ 0.009, 0.007, 0.03 ], F( 'h' + s, 0.008, { color: '#5c2c17', tip: '#a8572b', fur: 0.003, mat: MAT.FUR } ) );
 
 	}
 
 	// the plume: a thin curling core under long hair that splays out sideways
-	const tailTip = ( x, y, z ) => new THREE.Color( '#c47a42' ).lerp( new THREE.Color( '#86502e' ), ss( 0.3, 0.8, noise3( x * 40, y * 40, z * 40 ) ) * 0.5 ).lerp( new THREE.Color( '#dcae82' ), ss( 0.18, 0.26, y ) * 0.45 );
-	const tailO = { color: '#6a3a1f', tip: tailTip, fur: 0.042, mat: MAT.FUR, comb: ( x ) => [ Math.sign( x || 1 ) * 0.9, 0, 0 ] };
+	const tailTip = ( x, y, z ) => new THREE.Color( '#a8683c' ).lerp( new THREE.Color( '#744830' ), ss( 0.3, 0.8, noise3( x * 40, y * 40, z * 40 ) ) * 0.5 ).lerp( new THREE.Color( '#c99a70' ), ss( 0.009, 0.015, Math.abs( x ) ) * 0.5 );
+	const tailO = { color: '#5a321c', tip: tailTip, mat: MAT.FUR, comb: ( x ) => [ Math.sign( x || 1 ) * 0.9, 0, 0 ] };
 	const T = [ [ 0, 0.068, - 0.085 ], [ 0, 0.1, - 0.13 ], [ 0, 0.155, - 0.15 ], [ 0, 0.205, - 0.138 ], [ 0, 0.238, - 0.105 ], [ 0, 0.245, - 0.075 ] ];
 	const tb = [ 'tail1', 'tail2', 'tail2', 'tail3', 'tail3' ];
-	for ( let i = 0; i < T.length - 1; i ++ ) S.cone( T[ i ], T[ i + 1 ], 0.017 - i * 0.0016, 0.0152 - i * 0.0016, F( tb[ i ], 0.014, { ...tailO, fur: 0.024 + 0.007 * Math.sin( i / 4 * Math.PI ) } ) );
+	for ( let i = 0; i < T.length - 1; i ++ ) {
+
+		const full = 0.04 + 0.014 * Math.sin( i / 4 * Math.PI );
+		// long hair all round the core, longest out to either side
+		S.cone( T[ i ], T[ i + 1 ], 0.014 - i * 0.0013, 0.0125 - i * 0.0013, F( tb[ i ], 0.012, { ...tailO, fur: ( x ) => full * ( 0.72 + 0.28 * ss( 0.003, 0.011, Math.abs( x ) ) ) } ) );
+
+	}
 
 	const { mesh, bones } = S.mesh( material, 0.004 );
 	for ( const [ sd ] of SIDES ) {
@@ -279,7 +288,7 @@ export function buildHare( material ) {
 		S.ellipsoid( [ sd * 0.03, 0.008, 0.15 ], [ 0.011, 0.008, 0.022 ], F( 'f' + s, 0.008, { color: '#8a7f70', tip: '#c9c0b0', fur: 0.004, mat: MAT.FUR } ) );
 		// haunches folded, and the long hind feet flat on the ground
 		S.ellipsoid( [ sd * 0.055, 0.11, - 0.1 ], [ 0.036, 0.07, 0.085 ], F( 'h' + s, 0.035, fur( 0.02 ) ) );
-		S.ellipsoid( [ sd * 0.05, 0.014, - 0.04 ], [ 0.018, 0.013, 0.075 ], F( 'h' + s, 0.012, { color: '#7d7263', tip: '#c9c0b0', fur: 0.006, mat: MAT.FUR } ) );
+		S.ellipsoid( [ sd * 0.05, 0.015, - 0.04 ], [ 0.018, 0.015, 0.075 ], F( 'h' + s, 0.012, { color: '#6f6457', tip: '#a39a8c', fur: 0.006, mat: MAT.FUR } ) );
 
 	}
 
@@ -331,14 +340,15 @@ export function buildBear( material ) {
 
 	}
 
-	const root = ( x, y, z ) => coatMix( '#4a3a2c', [ [ '#33271d', ss( 0.5, 0.2, y ) ] ], x, y, z, 0.1 );
+	const root = ( x, y, z ) => coatMix( '#45352a', [ [ '#2e231a', ss( 0.5, 0.2, y ) ] ], x, y, z, 0.1 );
 	const tip = ( x, y, z ) => {
 
 		const n = noise3( x * 18, y * 18, z * 18 ) * 0.6 + noise3( x * 55, y * 55, z * 55 ) * 0.4;
-		const c = new THREE.Color( '#86684c' ).lerp( new THREE.Color( '#6b5039' ), ss( - 0.3, 0.5, n ) * 0.6 );
-		// grizzled paler tips over the hump and shoulders, darker legs and belly
-		c.lerp( new THREE.Color( '#b9a283' ), ss( 0.85, 1.15, y ) * ss( - 0.2, 0.3, z ) * ( 0.55 + 0.35 * n ) );
-		c.lerp( new THREE.Color( '#4a3423' ), ss( 0.5, 0.25, y ) * 0.8 );
+		const c = new THREE.Color( '#7c634a' ).lerp( new THREE.Color( '#5c4431' ), ss( - 0.3, 0.5, n ) * 0.6 );
+		// grizzled paler tips over the hump and shoulders (patchy, lock by lock), darker legs and belly
+		const g = noise3( x * 30 + 4, y * 30, z * 30 ) * 0.5 + 0.5;
+		c.lerp( new THREE.Color( '#977d5f' ), ss( 0.85, 1.15, y ) * ss( - 0.2, 0.3, z ) * ss( 0.35, 0.75, g ) * 0.6 );
+		c.lerp( new THREE.Color( '#3f2e20' ), ss( 0.5, 0.25, y ) * 0.8 );
 		return c;
 
 	};
@@ -346,36 +356,44 @@ export function buildBear( material ) {
 	const fur = ( len, comb ) => ( { color: root, tip, fur: len, comb, mat: MAT.FUR } );
 	const F = ( bone, k, o ) => ( { bone, k, ...o } );
 	// barrel of a body, the rump a little lower than the hump
-	S.ellipsoid( [ 0, 0.78, - 0.45 ], [ 0.29, 0.31, 0.33 ], F( 'body', 0.18, fur( 0.07 ) ) );
-	S.ellipsoid( [ 0, 0.74, - 0.06 ], [ 0.31, 0.33, 0.42 ], F( 'body', 0.2, fur( 0.075 ) ) );
-	S.ellipsoid( [ 0, 0.74, 0.3 ], [ 0.27, 0.31, 0.24 ], F( 'chest', 0.16, fur( 0.07 ) ) );
-	S.ellipsoid( [ 0, 0.97, 0.24 ], [ 0.22, 0.17, 0.25 ], F( 'chest', 0.14, fur( 0.09, [ 0, - 0.6, - 0.6 ] ) ) );
+	// the long coat hangs: combed back along the top, down over the flanks and belly
+	const hang = ( x, y ) => [ 0, - 0.3 - 0.7 * ss( 0.85, 0.55, y ), - 0.9 + 0.5 * ss( 0.85, 0.55, y ) ];
+	const coat = ( x, y, z ) => 0.085 + 0.03 * ss( 0.75, 0.45, y );
+	S.ellipsoid( [ 0, 0.78, - 0.45 ], [ 0.3, 0.32, 0.34 ], F( 'body', 0.18, { ...fur( coat ), comb: ( x, y ) => hang( x, y ) } ) );
+	S.ellipsoid( [ 0, 0.74, - 0.06 ], [ 0.31, 0.33, 0.42 ], F( 'body', 0.2, { ...fur( coat ), comb: ( x, y ) => hang( x, y ) } ) );
+	S.ellipsoid( [ 0, 0.74, 0.3 ], [ 0.27, 0.31, 0.24 ], F( 'chest', 0.16, { ...fur( coat ), comb: ( x, y ) => hang( x, y ) } ) );
+	// the shoulder hump, standing well above the line of the back
+	S.ellipsoid( [ 0, 1.0, 0.22 ], [ 0.23, 0.19, 0.27 ], F( 'chest', 0.14, fur( 0.11, [ 0, - 0.6, - 0.7 ] ) ) );
 	// thick neck, head held low and forward
 	S.cone( [ 0, 0.86, 0.45 ], [ 0, 0.82, 0.68 ], 0.22, 0.17, F( 'neck', 0.12, fur( 0.07, [ 0, - 0.5, - 0.8 ] ) ) );
-	const face = ( x, y, z ) => new THREE.Color( '#8a6e52' ).lerp( new THREE.Color( '#a88d6e' ), ss( 0.86, 0.96, z ) * 0.8 ).lerp( new THREE.Color( '#5a412c' ), ss( 0.08, 0.14, Math.abs( x ) ) * ss( 0.86, 0.8, z ) * 0.5 );
+	// the face grizzled paler than the body, the muzzle tan, darker round the eyes
+	const face = ( x, y, z ) => new THREE.Color( '#76593f' ).lerp( new THREE.Color( '#9a8062' ), ss( 0.95, 1.05, z ) * 0.85 ).lerp( new THREE.Color( '#4e3826' ), ss( 0.06, 0.12, Math.abs( x ) ) * ss( 0.97, 0.88, z ) * ss( 0.82, 0.92, y ) * 0.7 );
 	const headO = ( len ) => ( { color: '#5a412c', tip: face, fur: len, comb: [ 0, 0.2, - 1 ], mat: MAT.FUR } );
-	// broad skull with full cheeks, the forehead rising steeply above a longish muzzle
-	S.ellipsoid( [ 0, 0.84, 0.78 ], [ 0.185, 0.165, 0.175 ], F( 'head', 0.09, headO( 0.04 ) ) );
-	for ( const [ sd ] of SIDES ) S.ellipsoid( [ sd * 0.1, 0.78, 0.8 ], [ 0.1, 0.1, 0.11 ], F( 'head', 0.07, headO( 0.045 ) ) );
-	S.cone( [ 0, 0.8, 0.88 ], [ 0, 0.745, 1.07 ], 0.1, 0.066, F( 'head', 0.06, headO( 0.012 ) ) );
-	S.ellipsoid( [ 0, 0.752, 1.085 ], [ 0.05, 0.036, 0.03 ], F( 'head', 0.015, { color: '#15110e', mat: MAT.BILL } ) );
+	const crown = ( x, y, z ) => 0.014 + 0.036 * ss( 0.92, 0.8, z );
+	// broad skull with full cheeks, the forehead rising steeply above a medium muzzle
+	S.ellipsoid( [ 0, 0.86, 0.78 ], [ 0.21, 0.19, 0.19 ], F( 'head', 0.09, headO( crown ) ) );
+	for ( const [ sd ] of SIDES ) S.ellipsoid( [ sd * 0.12, 0.79, 0.78 ], [ 0.12, 0.12, 0.12 ], F( 'head', 0.07, { ...headO( 0.06 ), comb: [ sd * 0.6, - 0.3, - 0.7 ] } ) );
+	// (a round cone: its tip is a sphere of the end radius, so the nose pad sits just beyond it)
+	S.cone( [ 0, 0.825, 0.87 ], [ 0, 0.772, 1.05 ], 0.108, 0.05, F( 'head', 0.06, headO( 0.013 ) ) );
+	S.ellipsoid( [ 0, 0.74, 0.98 ], [ 0.064, 0.038, 0.09 ], F( 'head', 0.03, headO( 0.011 ) ) );
+	S.ellipsoid( [ 0, 0.784, 1.094 ], [ 0.054, 0.034, 0.022 ], F( 'head', 0.012, { color: '#1a1512', mat: MAT.BILL } ) );
 	for ( const [ sd, s ] of SIDES ) {
 
 		// small round ears, furred
-		S.ellipsoid( [ sd * 0.13, 0.99, 0.73 ], [ 0.065, 0.062, 0.026 ], F( 'head', 0.02, { color: '#2e2117', tip: '#6a4d33', fur: 0.03, mat: MAT.FUR } ), Sculpt.frame( [ sd * 0.3, 1, 0 ], [ 0, 0.1, 1 ] ) );
+		S.ellipsoid( [ sd * 0.155, 1.03, 0.73 ], [ 0.078, 0.075, 0.042 ], F( 'head', 0.03, { color: '#4d3a29', tip: '#8a6c4e', fur: 0.03, mat: MAT.FUR } ), Sculpt.frame( [ sd * 0.35, 1, 0 ], [ 0, 0.15, 1 ] ) );
 		// massive forelegs
-		S.cone( J[ 'fS' + s ], J[ 'fE' + s ], 0.135, 0.105, F( 'fS' + s, 0.1, fur( 0.06, [ 0, - 1, 0 ] ) ) );
-		S.cone( J[ 'fE' + s ], J[ 'fF' + s ], 0.105, 0.085, F( 'fE' + s, 0.06, fur( 0.05, [ 0, - 1, 0 ] ) ) );
+		S.cone( J[ 'fS' + s ], J[ 'fE' + s ], 0.14, 0.11, F( 'fS' + s, 0.1, fur( 0.085, [ 0, - 1, - 0.3 ] ) ) );
+		S.cone( J[ 'fE' + s ], J[ 'fF' + s ], 0.11, 0.09, F( 'fE' + s, 0.06, fur( 0.06, [ 0, - 1, - 0.2 ] ) ) );
 		S.ellipsoid( J[ 'fF' + s ].clone().add( V( 0, - 0.05, 0.07 ) ), [ 0.085, 0.05, 0.13 ], F( 'fF' + s, 0.04, { color: '#221810', tip: '#3a2a1d', fur: 0.025, mat: MAT.FUR } ) );
 		// hind legs: heavy thighs, long plantigrade feet
-		S.ellipsoid( [ sd * 0.19, 0.66, - 0.5 ], [ 0.13, 0.24, 0.2 ], F( 'hH' + s, 0.1, fur( 0.065, [ 0, - 1, 0 ] ) ) );
+		S.ellipsoid( [ sd * 0.19, 0.66, - 0.5 ], [ 0.14, 0.25, 0.21 ], F( 'hH' + s, 0.1, fur( 0.085, [ 0, - 1, - 0.3 ] ) ) );
 		S.cone( J[ 'hK' + s ], J[ 'hF' + s ], 0.11, 0.085, F( 'hK' + s, 0.06, fur( 0.05, [ 0, - 1, 0 ] ) ) );
 		S.ellipsoid( J[ 'hF' + s ].clone().add( V( 0, - 0.07, 0.12 ) ), [ 0.08, 0.05, 0.17 ], F( 'hF' + s, 0.04, { color: '#221810', tip: '#3a2a1d', fur: 0.025, mat: MAT.FUR } ) );
 		// pale claws
 		for ( let c = - 2; c <= 2; c ++ ) {
 
 			const cx = J[ 'fF' + s ].x + c * 0.03, cz = J[ 'fF' + s ].z + 0.19;
-			S.cone( [ cx, 0.05, cz ], [ cx, 0.015, cz + 0.05 ], 0.011, 0.004, F( 'fF' + s, 0.006, { color: '#b8ad9a', mat: MAT.BILL } ) );
+			S.cone( [ cx, 0.045, cz ], [ cx, 0.015, cz + 0.045 ], 0.008, 0.003, F( 'fF' + s, 0.005, { color: '#6e6456', mat: MAT.BILL } ) );
 
 		}
 
@@ -385,12 +403,12 @@ export function buildBear( material ) {
 	const { mesh, bones } = S.mesh( material, 0.024 );
 	for ( const [ sd ] of SIDES ) {
 
-		const e = eye( 0.012, material );
-		e.position.set( sd * 0.085, 0.885 - 0.8, 0.905 - 0.74 );
+		const e = eye( 0.016, material );
+		e.position.set( sd * 0.09, 0.9 - 0.8, 0.948 - 0.74 );
 		bones.get( 'head' ).add( e );
 
 	}
 
-	return { mesh, bones, fur: { density: 70 } };
+	return { mesh, bones, fur: { density: 70, shells: 1.75 } };
 
 }

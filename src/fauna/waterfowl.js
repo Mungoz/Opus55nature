@@ -95,12 +95,12 @@ export class Waterfowl {
 
 		};
 
-		const lead = new Paddler( duck( drakeGeo ), 40, 420, 0.55, rng );
+		const lead = new Paddler( duck( drakeGeo ), 14, 436, 0.55, rng );
 		this.birds.push( lead );
 		for ( let i = 0; i < 4; i ++ ) {
 
 			const off = new THREE.Vector3( rng.range( - 3, 3 ), 0, - 1.5 - i * 1.3 );
-			this.birds.push( new Paddler( duck( i % 2 ? drakeGeo : henGeo ), 40 + off.x, 420 + off.z, 0.55, rng, lead, off ) );
+			this.birds.push( new Paddler( duck( i % 2 ? drakeGeo : henGeo ), 14 + off.x, 436 + off.z, 0.55, rng, lead, off ) );
 
 		}
 

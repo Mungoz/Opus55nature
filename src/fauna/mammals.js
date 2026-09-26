@@ -75,8 +75,9 @@ export class Mammals {
 		for ( const [ p, far ] of [ [ stagProto, 28 ], [ hindProto, 28 ], [ marmotProto, 16 ], [ squirrelProto, 10 ], [ hareProto, 16 ], [ bearProto, 45 ] ] ) {
 
 			if ( ! p.fur || ! shells ) continue;
-			p.furGeo = furGeometry( p.mesh.geometry, shells );
-			p.furMat = furMaterial( { density: p.fur.density, shells } );
+			const n = Math.round( shells * ( p.fur.shells ?? 1 ) );
+			p.furGeo = furGeometry( p.mesh.geometry, n );
+			p.furMat = furMaterial( { density: p.fur.density, shells: n } );
 			p.furFar = far;
 
 		}
@@ -187,7 +188,7 @@ export class Mammals {
 
 		// --- mountain hares in the meadows round the start
 		this.hares = [];
-		for ( const [ x, z ] of [ [ 34, 532 ], [ - 42, 574 ], [ 58, 598 ] ] ) {
+		for ( const [ x, z ] of [ [ 26, 543 ], [ - 34, 552 ], [ 58, 528 ] ] ) {
 
 			const h = instance( hareProto );
 			h.pos = this._dryPoint( x, z, 0, 6 );
@@ -212,11 +213,13 @@ export class Mammals {
 
 			const b = instance( bearProto );
 			b.home = new THREE.Vector2( - 115, 625 );
-			b.pos = this._dryPoint( b.home.x, b.home.y, 0, 20 );
+			b.route = [ [ - 112, 622 ], [ - 74, 552 ], [ - 58, 518 ], [ - 88, 505 ], [ - 96, 575 ], [ - 132, 590 ] ].map( ( [ x, z ] ) => new THREE.Vector2( x, z ) );
+			b.leg = 1;
+			b.pos = this._dryPoint( - 88, 560, 0, 10 );
 			b.heading = rng.next() * Math.PI * 2;
 			b.state = 'walk';
-			b.timer = rng.range( 6, 12 );
-			b.target = this._dryPoint( b.home.x, b.home.y, 10, 60 );
+			b.timer = rng.range( 30, 60 );
+			b.target = this._dryPoint( b.route[ 1 ].x, b.route[ 1 ].y, 0, 5 );
 			b.speed = 0;
 			b.phase = 0;
 			b.neck = 0.3;
@@ -290,8 +293,8 @@ export class Mammals {
 			// studio-<animal>[-<pose>]
 			const [ k, pose ] = name.slice( 7 ).split( '-' );
 			const a = k === 'stag' ? this.deer[ 0 ] : k === 'hind' ? this.deer[ 1 ] : k === 'marmot' ? this.marmots[ 0 ] : k === 'hare' ? this.hares[ 0 ] : k === 'bear' ? this.bears[ 0 ] : this.squirrels[ 0 ];
-			if ( k === 'hare' ) { a.forced = pose || 'feed'; return { p: at( a, 0.14 ), h: 0.0, back: 0.9, heading: a.heading }; }
-			if ( k === 'bear' ) { a.forced = pose || 'look'; return { p: at( a, 0.7 ), h: 0.0, back: 4.2, heading: a.heading }; }
+			if ( k === 'hare' ) { a.forced = pose || 'feed'; return { p: at( a, 0.14 ), h: 0.0, back: 0.9, heading: a.heading, animal: a }; }
+			if ( k === 'bear' ) { a.forced = pose || 'look'; return { p: at( a, 0.7 ), h: 0.0, back: 4.2, heading: a.heading, animal: a }; }
 			a.forced = k === 'stag' || k === 'hind' ? ( pose || 'stagup' ) : ( k === 'marmot' ? ( pose || 'forage' ) : undefined );
 			if ( k === 'squirrel' ) {
 
@@ -302,7 +305,7 @@ export class Mammals {
 
 			}
 			const big = k === 'stag' || k === 'hind';
-			return { p: at( a, big ? 0.95 : ( k === 'marmot' ? 0.14 : 0.1 ) ), h: 0.0, back: big ? 3.6 : ( k === 'marmot' ? 1.0 : 0.55 ), heading: a.heading };
+			return { p: at( a, big ? 0.95 : ( k === 'marmot' ? 0.14 : 0.1 ) ), h: 0.0, back: big ? 3.6 : ( k === 'marmot' ? 1.0 : 0.55 ), heading: a.heading, animal: a };
 
 		}
 		if ( name === 'deer' ) return { p: at( this.deer[ 1 ], 0.9 ), h: 1.2, back: 3.8 };
@@ -886,6 +889,15 @@ export class Mammals {
 	}
 
 	// ------------------------------------------------------------------ bears
+	// the next stop on the bear's round
+	_bearNext( b ) {
+
+		b.leg = ( b.leg + 1 ) % b.route.length;
+		const p = b.route[ b.leg ];
+		return this._dryPoint( p.x, p.y, 0, 5 );
+
+	}
+
 	_updateBear( b, dt, time, cam ) {
 
 		const rng = this.rng;
@@ -945,9 +957,9 @@ export class Mammals {
 				yawT = Math.sin( time * 0.6 ) * 0.25;
 				if ( b.timer <= 0 ) {
 
-					b.state = rng.next() < 0.5 ? 'look' : 'walk';
-					b.timer = rng.range( 6, 14 );
-					b.target.copy( this._dryPoint( b.home.x, b.home.y, 10, 70 ) );
+					b.state = rng.next() < 0.3 ? 'look' : 'walk';
+					b.timer = rng.range( 40, 80 );
+					b.target.copy( this._bearNext( b ) );
 
 				}
 
@@ -960,8 +972,8 @@ export class Mammals {
 				if ( b.timer <= 0 ) {
 
 					b.state = 'walk';
-					b.timer = rng.range( 8, 16 );
-					b.target.copy( this._dryPoint( b.home.x, b.home.y, 10, 70 ) );
+					b.timer = rng.range( 40, 80 );
+					b.target.copy( this._bearNext( b ) );
 
 				}
 

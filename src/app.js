@@ -334,7 +334,10 @@ export class App {
 		if ( f === 'trout' ) { p = this.shallows.groups[ 2 ].pos[ 0 ]; h = 3; back = 2.5; }
 		if ( f === 'duck' ) { const b = this.waterfowl.birds[ 2 ]; p = b.pos.clone().setY( 0.12 ); h = 0.12; back = 1.3; this._followHeading = b.heading; }
 		if ( f === 'swan' ) { const b = this.waterfowl.birds[ 0 ]; p = b.pos.clone().setY( 0.5 ); h = 0.3; back = 4.5; this._followHeading = b.heading; }
-		if ( this.mammals && this.mammals.debugTarget ) { const d = this.mammals.debugTarget( f ); if ( d ) { p = d.p; h = d.h; back = d.back; this._followHeading = d.heading; } }
+		// the heron held in its fishing freeze, the grebe swimming on the surface
+		if ( f === 'heron' ) { const b = this.moreBirds.herons[ 0 ]; b.state = 'freeze'; b.timer = 1e9; p = b.pos.clone().setY( 0.55 ); h = 0.2; back = 2.4; this._followHeading = b.heading - Math.PI / 2; }
+		if ( f === 'grebe' ) { const b = this.moreBirds.grebes[ 0 ]; b.state = 'swim'; b.timer = 1e9; p = b.pos.clone().setY( 0.12 ); h = 0.12; back = 1.0; this._followHeading = b.heading - Math.PI / 2; }
+		if ( this.mammals && this.mammals.debugTarget ) { const d = this.mammals.debugTarget( f ); if ( d ) { p = d.p; h = d.h; back = d.back; this._followHeading = d.heading; if ( this.options.bone && d.animal?.bones.get( this.options.bone ) ) p = d.animal.bones.get( this.options.bone ).getWorldPosition( new THREE.Vector3() ); } }
 		if ( ! p ) return;
 		if ( this.options.back ) back = this.options.back;
 		if ( this.options.h !== undefined ) h = this.options.h;

@@ -201,6 +201,8 @@ attribute vec3 aComb;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 varying vec3 vRoot;
+varying vec3 vLie;   // the way the hair lies along the skin (object space, bind pose)
+varying vec3 vHairT; // the strand's direction at this height (world)
 varying vec3 vRootCol;
 varying vec3 vTipCol;
 varying float vH;
@@ -210,16 +212,24 @@ void main() {
 	float h = ( float( gl_InstanceID ) + 1.0 ) / uShells;
 	float len = aFur.w * uFurScale;
 	vec3 n = normalize( normal );
+	// the lie of the coat: the comb with any part pointing into or out of the skin removed
+	vec3 lie = aComb - n * dot( aComb, n );
 	// hairs rise off the skin, then lie over along the comb as they lengthen
 	vec3 transformed = position + n * len * h * 0.8 + aComb * len * h * h * 0.55;
 	vec3 objectNormal = normal;
+	vec3 hairT = n * 0.8 + lie * 1.1 * h;
 	#include <skinbase_vertex>
 	#include <skinnormal_vertex>
+	#ifdef USE_SKINNING
+		hairT = ( skinMatrix * vec4( hairT, 0.0 ) ).xyz;
+	#endif
 	#include <skinning_vertex>
 	vec4 wp = modelMatrix * vec4( transformed, 1.0 );
 	vWorldPos = wp.xyz;
 	vNormal = normalize( mat3( modelMatrix ) * objectNormal );
+	vHairT = mat3( modelMatrix ) * hairT;
 	vRoot = position;
+	vLie = lie;
 	vRootCol = color;
 	vTipCol = aFur.rgb;
 	vH = h;
@@ -231,9 +241,12 @@ void main() {
 const furFrag = /* glsl */ `
 ${commonParsGLSL}
 uniform float uDensity;
+uniform float uShells;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 varying vec3 vRoot;
+varying vec3 vLie;
+varying vec3 vHairT;
 varying vec3 vRootCol;
 varying vec3 vTipCol;
 varying float vH;
@@ -242,15 +255,29 @@ void main() {
 	// bare skin (hooves, nose): no hair
 	if ( vLen < 0.0012 ) discard;
 	float h = vH;
-	// long hair falls in coarser, softer locks
+	// Strand space: the root position, drawn out along the lie of the coat so that hairs and
+	// locks run with the fur instead of sitting in round tufts. Long coats are drawn out
+	// further, into shaggy locks.
+	float longCoat = smoothstep( 0.015, 0.08, vLen );
 	vec3 q = vRoot * uDensity / ( 1.0 + vLen * 30.0 );
-	// clumped strands: a coarse clump field and finer hairs within it
-	float n = ( gnoise3( q ) * 0.5 + 0.5 ) * 0.6 + ( gnoise3( q * 2.6 + 11.0 ) * 0.5 + 0.5 ) * 0.4;
-	float thr = mix( 0.3, 0.78, pow( h, 0.85 ) );
-	// where a strand is smaller than a pixel, stop drawing strands: inner layers solid,
-	// outer layers gone (no sparkle)
+	float ll = length( vLie );
+	vec3 lie = ll > 1e-3 ? vLie / ll : vec3( 0.0 );
+	q -= lie * dot( q, lie ) * ( 1.0 - mix( 0.42, 0.22, longCoat ) );
+	// locks, and the finer hairs within them; toward the tips the hairs gather into the locks
+	// Each scale fades to its average where it is finer than a pixel (no sparkle): single hairs
+	// first, leaving the locks to carry the texture, then the locks too, leaving a solid
+	// undercoat and no loose outer layers.
 	float fw = length( fwidth( q ) );
-	thr = mix( thr, h > 0.45 ? 2.0 : -1.0, smoothstep( 0.9, 2.4, fw ) );
+	float hairVis = 1.0 - smoothstep( 0.45, 1.1, fw * 2.4 );
+	float lockVis = 1.0 - smoothstep( 1.2, 2.6, fw * 0.55 );
+	float lock = mix( 0.5, gnoise3( q * 0.55 ) * 0.5 + 0.5, lockVis );
+	float hair = mix( 0.5, gnoise3( q * 2.4 + 11.0 ) * 0.5 + 0.5, hairVis );
+	float n = mix( hair, lock, mix( 0.3, 0.6, h ) * mix( 0.6, 1.0, longCoat ) + ( 1.0 - hairVis ) * 0.3 );
+	// the innermost layer is solid underfur (no skin showing through), the tips thin out
+	float thr = mix( 0.0, 0.8, pow( h, 0.8 ) );
+	// a fine jitter, fixed to the skin, so the layers' edges do not line up into contour rings
+	thr += gnoise3( vRoot * 900.0 ) * 0.6 / uShells;
+	thr = mix( h > 0.45 ? 2.0 : -1.0, thr, lockVis );
 	if ( n < thr ) discard;
 	vec3 N = normalize( vNormal );
 	if ( ! gl_FrontFacing ) N = -N;
@@ -258,15 +285,26 @@ void main() {
 	// the root colour already carries the skin's ambient occlusion; tips pick it up partly
 	float aoRoot = clamp( luma( vRootCol ) / max( luma( vTipCol ) * 0.75, 1e-3 ), 0.35, 1.0 );
 	vec3 alb = mix( vRootCol * 0.7, vTipCol * mix( aoRoot, 1.0, 0.5 ), smoothstep( 0.0, 0.55, h ) );
-	alb *= 0.82 + 0.36 * n;
-	float ao = mix( 0.4, 1.0, pow( h, 0.7 ) );
+	// each lock a little lighter or darker (grizzling), each hair a little different again
+	float tone = gnoise3( q * 0.21 + 5.0 );
+	alb *= ( 0.86 + 0.28 * hair ) * ( 1.0 + tone * mix( 0.12, 0.22, longCoat ) * h );
+	float ao = mix( 0.35, 1.0, pow( h, 0.7 ) );
 	float sh = sunShadow( vWorldPos, N );
 	vec3 L = uSunDir;
 	float wrap = saturate( ( dot( N, L ) + 0.4 ) / 1.4 );
 	vec3 col = alb / PI * ( uSunColor * sh * wrap * ( 0.55 + 0.45 * ao ) + skyIrradiance( N ) * ao );
+	// hair sheen (Kajiya-Kay): a highlight along the strands, a white one and a coloured one
+	// shifted toward the root
+	vec3 T = normalize( vHairT + 1e-5 );
+	vec3 Hv = normalize( L + V );
+	float t1 = dot( normalize( T + N * 0.12 ), Hv ), t2 = dot( normalize( T - N * 0.2 ), Hv );
+	float s1 = pow( sqrt( max( 0.0, 1.0 - t1 * t1 ) ), 90.0 ), s2 = pow( sqrt( max( 0.0, 1.0 - t2 * t2 ) ), 36.0 );
+	float lit = smoothstep( - 0.15, 0.35, dot( N, L ) ) * sh * ao;
+	col += uSunColor * lit * ( s1 * 0.008 + s2 * alb * 0.05 ) * h;
 	// light glancing through the tips of the fur at the silhouette
 	float rim = pow( 1.0 - saturate( dot( N, V ) ), 2.5 ) * h;
-	col += alb * ( uSunColor * sh * ( 0.25 + pow( saturate( dot( -V, L ) ), 3.0 ) ) * 0.5 + skyIrradiance( N ) * 0.1 ) * rim;
+	float reach = saturate( ( dot( N, L ) + 0.35 ) / 1.35 );
+	col += alb * ( uSunColor * sh * ( 0.25 * reach + pow( saturate( dot( -V, L ) ), 3.0 ) ) * 0.5 + skyIrradiance( N ) * 0.1 ) * rim;
 	col *= underwaterLight( vWorldPos );
 	col = applyAtmosphere( col, vWorldPos );
 	gl_FragColor = vec4( col, 1.0 );

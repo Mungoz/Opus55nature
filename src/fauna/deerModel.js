@@ -77,7 +77,7 @@ export function buildDeer( stag, material ) {
 
 		const ax = Math.abs( x );
 		// the pale caudal (rump) patch: a tall oval around the tail, softly edged darker
-		const rp = Math.hypot( ax / 0.13, ( y - 0.97 ) / 0.22 );
+		const rp = Math.hypot( ax / 0.095, ( y - 0.98 ) / 0.16 );
 		const behind = ss( - 0.5, - 0.62, z );
 		const patch = behind * ( 1 - ss( 0.7, 1.05, rp + 0.15 * noise3( x * 20, y * 20, z * 20 ) ) );
 		const rim = behind * ss( 0.8, 1.0, rp ) * ( 1 - ss( 1.05, 1.3, rp ) );
@@ -85,7 +85,7 @@ export function buildDeer( stag, material ) {
 		const top = ss( 1.04, 1.16, y );
 		const toNeck = ss( 0.3, 0.5, z ) * ss( 0.95, 1.1, y );
 		const toLeg = ss( 0.72, 0.56, y );
-		return coatMix( red, [ [ back, top * 0.8 ], [ belly, under ], [ neckC, toNeck ], [ legC, toLeg ], [ '#4a3626', rim * 0.3 * ss( 0.04, 0.1, ax ) ], [ '#cdb58f', patch ] ], x, y, z );
+		return coatMix( red, [ [ back, top * 0.8 ], [ belly, under ], [ neckC, toNeck ], [ legC, toLeg ], [ '#4a3626', rim * 0.3 * ss( 0.04, 0.1, ax ) ], [ '#b89f7c', patch * 0.9 ] ], x, y, z );
 
 	};
 
@@ -167,7 +167,7 @@ function antlers( material ) {
 
 	const b = new PartBuilder();
 	const base = V( 0, 1.58 - 1.46, 0.8 - 0.8 );
-	const col = ( x, y ) => ( y > 0.6 ? '#e3dac6' : '#4a3b2c' );
+	const col = ( x, y ) => new THREE.Color( '#4a3b2c' ).lerp( new THREE.Color( '#6b5842' ), ss( 0.2, 0.7, y ) ).lerp( new THREE.Color( '#ddd2bb' ), ss( 0.88, 0.95, y ) );
 	for ( const [ sd ] of SIDES ) {
 
 		const o = base.clone().add( V( sd * 0.05, 0, 0 ) );
@@ -182,7 +182,7 @@ function antlers( material ) {
 			const dir = V( sd * d[ 0 ], d[ 1 ], d[ 2 ] ).normalize();
 			const p1 = p0.clone().addScaledVector( dir, len * 0.55 );
 			const p2 = p0.clone().addScaledVector( dir, len ).add( V( 0, bend, 0 ) );
-			b.add( taperedTube( new THREE.CatmullRomCurve3( [ p0, p1, p2 ] ), ( t ) => THREE.MathUtils.lerp( 0.018, 0.004, t ), 10, 6 ), ( x, y, z ) => ( p2.distanceTo( V( x, y, z ) ) < len * 0.35 ? '#e3dac6' : '#4a3b2c' ), null, 0, MAT.BILL );
+			b.add( taperedTube( new THREE.CatmullRomCurve3( [ p0, p1, p2 ] ), ( t ) => THREE.MathUtils.lerp( 0.018, 0.004, t ), 10, 6 ), ( x, y, z ) => new THREE.Color( '#5a4836' ).lerp( new THREE.Color( '#ddd2bb' ), ss( len * 0.3, len * 0.12, p2.distanceTo( V( x, y, z ) ) ) ), null, 0, MAT.BILL );
 
 		};
 

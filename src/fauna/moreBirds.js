@@ -55,15 +55,15 @@ function heronGeometry() {
 		// neck and face: white, a black stripe from the eye back over the crown
 		if ( y > 0.74 ) {
 
-			if ( y > 0.9 && z > 0.1 ) {
+			if ( y > 1.0 && z > 0.1 ) {
 
-				const stripe = ss( 0.018, 0.024, ax ) * ss( 1.01, 0.98, y ) * ss( 0.26, 0.2, z );
-				return white.clone().lerp( black, stripe );
+				const stripe = ss( 0.016, 0.022, ax ) * ss( 1.1, 1.07, y ) * ss( 0.3, 0.24, z );
+				return white.clone().lerp( black, stripe ).lerp( grey, ss( 1.08, 1.1, y ) * 0.3 );
 
 			}
 
 			// streaks down the front of the neck
-			const front = ss( 0.0, 0.03, z - ( 0.14 + ( y - 0.75 ) * 0.4 ) );
+			const front = ss( 0.0, 0.025, z - ( 0.15 + ( y - 0.75 ) * 0.12 ) );
 			const streak = front * ss( 0.6, 0.9, Math.sin( y * 180 + Math.sin( x * 400 ) ) ) * ss( 0.012, 0.004, ax );
 			return white.clone().lerp( black, streak * 0.8 ).lerp( grey, ss( 0.76, 0.74, y ) * 0.5 );
 
@@ -78,24 +78,24 @@ function heronGeometry() {
 	};
 
 	const P = ( k, extra = {} ) => ( { bone: 'body', color: col, k, mat: MAT.FEATHER, ...extra } );
-	// slim body, folded wings making the back broad and flat
-	S.ellipsoid( [ 0, 0.62, - 0.02 ], [ 0.1, 0.22, 0.1 ], P( 0.05 ), Sculpt.frame( [ 0, 0.35, - 1 ], [ 0, 1, 0 ] ) );
-	for ( const sd of [ - 1, 1 ] ) S.ellipsoid( [ sd * 0.07, 0.635, - 0.08 ], [ 0.085, 0.24, 0.03 ], P( 0.02, { pat: [ 0, 0.4, 0 ] } ), Sculpt.frame( [ 0, 0.4, - 1 ], [ sd, 0.3, 0 ] ) );
-	S.cone( [ 0, 0.57, - 0.2 ], [ 0, 0.5, - 0.32 ], 0.05, 0.02, P( 0.03 ) );
+	// slim body carried breast-up, the folded wings drooping behind it past the tail
+	S.ellipsoid( [ 0, 0.64, 0.0 ], [ 0.095, 0.2, 0.095 ], P( 0.05 ), Sculpt.frame( [ 0, - 0.55, - 1 ], [ 0, 1, 0 ] ) );
+	for ( const sd of [ - 1, 1 ] ) S.ellipsoid( [ sd * 0.065, 0.61, - 0.1 ], [ 0.08, 0.26, 0.028 ], P( 0.02, { pat: [ 0, 0.4, 0 ] } ), Sculpt.frame( [ 0, - 0.6, - 1 ], [ sd, 0.3, 0 ] ) );
+	S.cone( [ 0, 0.56, - 0.18 ], [ 0, 0.46, - 0.33 ], 0.045, 0.018, P( 0.03 ) );
 	// breast plumes hanging from the lower neck
-	S.cone( [ 0, 0.74, 0.15 ], [ 0, 0.6, 0.17 ], 0.05, 0.03, P( 0.04 ) );
-	// the neck: an S, thick at the base, slender to the head
-	const neck = [ [ [ 0, 0.7, 0.12 ], 0.05 ], [ [ 0, 0.8, 0.17 ], 0.036 ], [ [ 0, 0.87, 0.14 ], 0.03 ], [ [ 0, 0.93, 0.16 ], 0.028 ] ];
-	for ( let i = 0; i < neck.length - 1; i ++ ) S.cone( neck[ i ][ 0 ], neck[ i + 1 ][ 0 ], neck[ i ][ 1 ], neck[ i + 1 ][ 1 ], P( 0.03 ) );
+	S.cone( [ 0, 0.78, 0.16 ], [ 0, 0.64, 0.17 ], 0.045, 0.028, P( 0.04 ) );
+	// the neck: a long slender S, the head held high
+	const neck = [ [ [ 0, 0.74, 0.12 ], 0.042 ], [ [ 0, 0.84, 0.19 ], 0.03 ], [ [ 0, 0.93, 0.15 ], 0.024 ], [ [ 0, 1.02, 0.16 ], 0.022 ], [ [ 0, 1.06, 0.19 ], 0.022 ] ];
+	for ( let i = 0; i < neck.length - 1; i ++ ) S.cone( neck[ i ][ 0 ], neck[ i + 1 ][ 0 ], neck[ i ][ 1 ], neck[ i + 1 ][ 1 ], P( 0.02 ) );
 	// head, flat-crowned, and the long plumes off the back of the crown
-	S.ellipsoid( [ 0, 0.955, 0.195 ], [ 0.028, 0.03, 0.05 ], P( 0.02 ) );
-	S.cone( [ 0, 0.975, 0.16 ], [ 0, 0.94, 0.04 ], 0.007, 0.002, { bone: 'body', color: '#1b1b1d', k: 0.005, mat: MAT.FEATHER } );
+	S.ellipsoid( [ 0, 1.075, 0.215 ], [ 0.026, 0.028, 0.048 ], P( 0.02 ) );
+	S.cone( [ 0, 1.095, 0.18 ], [ 0, 1.06, 0.06 ], 0.006, 0.0015, { bone: 'body', color: '#1b1b1d', k: 0.005, mat: MAT.FEATHER } );
 	// the dagger of a bill
-	S.cone( [ 0, 0.952, 0.225 ], [ 0, 0.94, 0.355 ], 0.016, 0.003, { bone: 'body', color: ( x, y, z ) => ( z > 0.33 ? '#c9a042' : '#d6a54a' ), k: 0.008, mat: MAT.BILL } );
+	S.cone( [ 0, 1.072, 0.245 ], [ 0, 1.058, 0.375 ], 0.015, 0.0025, { bone: 'body', color: ( x, y, z ) => ( z > 0.35 ? '#c9a042' : '#d6a54a' ), k: 0.008, mat: MAT.BILL } );
 	// legs: long, yellowish-brown, thighs feathered grey
 	for ( const sd of [ - 1, 1 ] ) {
 
-		S.cone( [ sd * 0.04, 0.56, 0.0 ], [ sd * 0.045, 0.45, 0.01 ], 0.024, 0.012, P( 0.02 ) );
+		S.cone( [ sd * 0.04, 0.58, 0.0 ], [ sd * 0.045, 0.45, 0.01 ], 0.022, 0.011, P( 0.02 ) );
 		S.cone( [ sd * 0.045, 0.46, 0.01 ], [ sd * 0.05, 0.03, 0.02 ], 0.009, 0.007, { bone: 'body', color: '#8a7a55', k: 0.006, mat: MAT.BILL } );
 		for ( const a of [ - 0.5, 0, 0.5 ] ) S.cone( [ sd * 0.05, 0.02, 0.02 ], [ sd * 0.05 + Math.sin( a ) * 0.09, 0.008, 0.02 + Math.cos( a ) * 0.09 ], 0.005, 0.003, { bone: 'body', color: '#7a6a48', k: 0.004, mat: MAT.BILL } );
 
@@ -151,7 +151,7 @@ function grebeGeometry() {
 
 	const S = new Sculpt();
 	S.bone( 'body', [ 0, 0.05, 0 ] );
-	const back = new THREE.Color( '#4d463f' ), white = new THREE.Color( '#ecebe6' ), chest = new THREE.Color( '#a7784e' ), dark = new THREE.Color( '#26211d' );
+	const back = new THREE.Color( '#72695e' ), white = new THREE.Color( '#ecebe6' ), chest = new THREE.Color( '#9c866d' ), dark = new THREE.Color( '#2c2621' );
 	const col = ( x, y, z ) => {
 
 		if ( y > 0.14 ) {
@@ -159,7 +159,10 @@ function grebeGeometry() {
 			// crown and crest dark; a chestnut and black tippet at the back of the jaw
 			if ( y > 0.285 ) return dark.clone();
 			const tippet = ss( 0.018, 0.028, Math.abs( x ) ) * ss( 0.22, 0.24, y ) * ss( 0.28, 0.26, y ) * ss( 0.15, 0.13, z );
-			return white.clone().lerp( chest, tippet * 0.8 ).lerp( dark, ss( 0.255, 0.275, y ) * ss( 0.14, 0.12, z ) * 0.8 );
+			// the back of the neck is dark, the front and sides silky white
+			const neckZ = 0.11 + ( y - 0.07 ) * 0.17;
+			const hind = ss( neckZ + 0.004, neckZ - 0.01, z ) * ss( 0.26, 0.24, y );
+			return white.clone().lerp( chest, tippet * 0.8 ).lerp( dark, ss( 0.255, 0.275, y ) * ss( 0.14, 0.12, z ) * 0.8 ).lerp( back, hind * 0.9 );
 
 		}
 
@@ -173,7 +176,7 @@ function grebeGeometry() {
 	S.ellipsoid( [ 0, 0.02, - 0.02 ], [ 0.085, 0.06, 0.17 ], P( 0.04, { pat: [ 0, 0.5, 0 ] } ) );
 	S.ellipsoid( [ 0, 0.05, 0.08 ], [ 0.07, 0.065, 0.07 ], P( 0.04 ) );
 	// the slim upright neck and head
-	S.cone( [ 0, 0.07, 0.11 ], [ 0, 0.25, 0.14 ], 0.035, 0.022, P( 0.03 ) );
+	S.cone( [ 0, 0.07, 0.11 ], [ 0, 0.25, 0.14 ], 0.028, 0.017, P( 0.025 ) );
 	S.ellipsoid( [ 0, 0.265, 0.155 ], [ 0.024, 0.026, 0.038 ], P( 0.015 ) );
 	// short crest at the back of the crown
 	S.ellipsoid( [ 0, 0.29, 0.13 ], [ 0.018, 0.016, 0.022 ], P( 0.01, { color: '#26211d' } ) );
@@ -238,7 +241,7 @@ export class MoreBirds {
 		const stand = heronGeometry(), fly = heronFlightGeometry();
 		this.flyMat = creatureMaterial( { flapSpeed: 2.3, flapAmp: 0.55 } );
 		this.herons = [];
-		for ( const [ x, z ] of [ [ - 70, 452 ], [ 120, 400 ] ] ) {
+		for ( const [ x, z ] of [ [ 28, 452 ], [ - 48, 452 ] ] ) {
 
 			const spot = this._shallow( x, z, 0.12, 0.35 );
 			const h = {
@@ -247,7 +250,7 @@ export class MoreBirds {
 				stand: new THREE.Mesh( stand, this.material ), fly: new THREE.Mesh( fly, this.flyMat ),
 				vel: new THREE.Vector3(), flyT: 0,
 			};
-			h.stand.add( eyes( this.material, 0.006, [ 0.022, 0.962, 0.2 ], '#d8b030' ) );
+			h.stand.add( eyes( this.material, 0.006, [ 0.022, 1.082, 0.225 ], '#d8b030' ) );
 			h.stand.castShadow = h.fly.castShadow = true;
 			h.fly.visible = false;
 			this.group.add( h.stand, h.fly );
@@ -260,9 +263,9 @@ export class MoreBirds {
 		this.grebes = [];
 		for ( let i = 0; i < 3; i ++ ) {
 
-			const spot = this._deep( - 40 + i * 70, 360 - i * 40, 2.5 );
+			const spot = this._deep( - 55 + i * 42, 418 - i * 6, 2.5 );
 			const g = {
-				pos: spot.clone(), heading: rng.next() * Math.PI * 2, state: 'swim', timer: rng.range( 4, 12 ),
+				home: spot.clone(), pos: spot.clone(), heading: rng.next() * Math.PI * 2, state: 'swim', timer: rng.range( 4, 12 ),
 				target: spot.clone(), mesh: new THREE.Mesh( grebe, this.material ), dive: 0, phase: rng.next() * 10,
 			};
 			g.mesh.add( eyes( this.material, 0.004, [ 0.02, 0.27, 0.17 ], '#b01818' ) );
@@ -275,7 +278,7 @@ export class MoreBirds {
 		// choughs: a flock round the crags above the western wood
 		this.choughMat = creatureMaterial( { flapSpeed: 9, flapAmp: 0.7, glide: 0.6 } );
 		const n = 14;
-		this.chough = { n, mesh: new THREE.InstancedMesh( choughGeometry(), this.choughMat, n ), c: V( - 360, 170, 760 ), birds: [] };
+		this.chough = { n, mesh: new THREE.InstancedMesh( choughGeometry(), this.choughMat, n ), crag: V( - 360, 170, 760 ), c: V( - 120, 60, 560 ), goal: V( - 120, 60, 560 ), timer: rng.range( 20, 40 ), out: true, spread: 0.6, birds: [] };
 		this.chough.mesh.frustumCulled = false;
 		for ( let i = 0; i < n; i ++ ) this.chough.birds.push( { ph: rng.next() * 6.28, r: rng.range( 25, 70 ), w: rng.range( 0.25, 0.45 ) * ( rng.next() < 0.8 ? 1 : - 1 ), y: rng.range( - 15, 15 ), tumble: 0 } );
 		this.group.add( this.chough.mesh );
@@ -451,7 +454,8 @@ export class MoreBirds {
 				g.heading = turn( g.heading, Math.atan2( tx, tz ), dt * 0.8 );
 				g.pos.x += Math.sin( g.heading ) * 0.35 * dt;
 				g.pos.z += Math.cos( g.heading ) * 0.35 * dt;
-				if ( Math.hypot( tx, tz ) < 3 ) g.target.copy( this._deep( g.pos.x + rng.range( - 40, 40 ), g.pos.z + rng.range( - 40, 40 ), 2 ) );
+				// wander about the bay, never far from where they fish
+				if ( Math.hypot( tx, tz ) < 3 ) g.target.copy( this._deep( g.home.x + rng.range( - 35, 35 ), g.home.z + rng.range( - 30, 30 ), 2 ) );
 				if ( g.timer <= 0 ) {
 
 					// a smooth forward roll under, and gone
@@ -489,14 +493,38 @@ export class MoreBirds {
 
 		// ---- choughs: loose circles round the crags, with sudden dives and tumbles ----
 		const C = this.chough, m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3( 1.25, 1.25, 1.25 );
+		C.timer -= dt;
+		if ( C.timer <= 0 ) {
+
+			C.out = ! C.out;
+			if ( C.out ) {
+
+				const spots = [ [ 5, 40, 545 ], [ - 55, 34, 455 ], [ 45, 45, 470 ], [ - 80, 50, 560 ] ];
+				C.goal.set( ...spots[ Math.floor( rng.next() * spots.length ) ] );
+				C.timer = rng.range( 25, 45 );
+
+			} else {
+
+				C.goal.copy( C.crag );
+				C.timer = rng.range( 60, 120 );
+
+			}
+
+		}
+
+		// the centre of the flock travels at about the birds' cruising speed
+		const toGoal = C.goal.clone().sub( C.c ), dg = toGoal.length();
+		if ( dg > 0.5 ) C.c.addScaledVector( toGoal, Math.min( 1, 13 * dt / dg ) );
+		C.spread = damp( C.spread, C.out && dg < 40 ? 0.55 : 1, 0.5, dt );
 		C.birds.forEach( ( b, i ) => {
 
 			const a = time * b.w + b.ph;
-			const lift = Math.sin( time * 0.3 + b.ph * 2 ) * 20 + b.y;
+			const lift = ( Math.sin( time * 0.3 + b.ph * 2 ) * 20 + b.y ) * C.spread;
 			if ( b.tumble <= 0 && rng.next() < dt * 0.05 ) b.tumble = 1.4;
 			b.tumble = Math.max( 0, b.tumble - dt );
 			const drop = b.tumble > 0 ? Math.sin( ( 1.4 - b.tumble ) / 1.4 * Math.PI ) * 18 : 0;
-			const p = new THREE.Vector3( C.c.x + Math.cos( a ) * b.r + Math.sin( time * 0.07 + i ) * 30, C.c.y + lift - drop, C.c.z + Math.sin( a ) * b.r );
+			const r = b.r * C.spread;
+			const p = new THREE.Vector3( C.c.x + Math.cos( a ) * r + Math.sin( time * 0.07 + i ) * 30 * C.spread, C.c.y + lift - drop * C.spread, C.c.z + Math.sin( a ) * r );
 			const heading = Math.atan2( - Math.sin( a ) * Math.sign( b.w ), Math.cos( a ) * Math.sign( b.w ) );
 			e.set( b.tumble > 0 ? 0.6 : - 0.05, heading, - Math.sign( b.w ) * 0.5 + ( b.tumble > 0 ? Math.sin( b.tumble * 9 ) * 1.2 : 0 ), 'YXZ' );
 			q.setFromEuler( e );
