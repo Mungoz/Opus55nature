@@ -95,12 +95,17 @@ export class Waterfowl {
 
 		};
 
-		const lead = new Paddler( duck( drakeGeo ), 14, 436, 0.55, rng );
-		this.birds.push( lead );
-		for ( let i = 0; i < 4; i ++ ) {
+		// mallards: a party in front of the start, another in the west bay, a pair by the mouth
+		for ( const [ x, z, n ] of [ [ 14, 436, 5 ], [ - 70, 425, 7 ], [ 52, 418, 2 ] ] ) {
 
-			const off = new THREE.Vector3( rng.range( - 3, 3 ), 0, - 1.5 - i * 1.3 );
-			this.birds.push( new Paddler( duck( i % 2 ? drakeGeo : henGeo ), 14 + off.x, 436 + off.z, 0.55, rng, lead, off ) );
+			const lead = new Paddler( duck( drakeGeo ), x, z, 0.55, rng );
+			this.birds.push( lead );
+			for ( let i = 0; i < n - 1; i ++ ) {
+
+				const off = new THREE.Vector3( rng.range( - 3, 3 ), 0, - 1.5 - i * 1.3 );
+				this.birds.push( new Paddler( duck( i % 2 ? drakeGeo : henGeo ), x + off.x, z + off.z, 0.55, rng, lead, off ) );
+
+			}
 
 		}
 

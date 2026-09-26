@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 const out = process.argv[ 2 ];
-const queries = [ [ 'perch', 'European perch Perca fluviatilis', 3 ], [ 'char', 'Arctic char Salvelinus alpinus', 3 ] ];
+const queries = [ [ 'siskin', 'Spinus spinus', 2 ], [ 'redpoll', 'Acanthis flammea', 2 ], [ 'wagtail', 'Motacilla alba', 2 ], [ 'dipper', 'Cinclus cinclus', 2 ], [ 'buzzard', 'Buteo buteo flight', 2 ], [ 'raven', 'Corvus corax flight', 2 ] ];
 const UA = { 'User-Agent': 'LarchmereRefBot/1.0 (personal research)' };
 const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 for ( const [ name, q, n ] of queries ) {

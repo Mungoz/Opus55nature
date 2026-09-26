@@ -316,7 +316,7 @@ export class GeeseFlight {
 		this.mesh.name = 'geese';
 		this.mesh.count = 0;
 		this.rng = new RNG( 17 );
-		this.timer = 20;
+		this.timer = 12;
 		this.flight = null;
 
 	}
@@ -346,7 +346,7 @@ export class GeeseFlight {
 		if ( ! this.flight && this.timer <= 0 && visible ) {
 
 			this._launch( camera );
-			this.timer = this.rng.range( 45, 90 );
+			this.timer = this.rng.range( 25, 55 );
 
 		}
 
@@ -401,15 +401,35 @@ export class Eagles {
 	constructor( terrain ) {
 
 		this.terrain = terrain;
-		const geo = birdGeometry( { body: '#3a2a1c', belly: '#4a3522', wing: '#35271b', span: 1.2, chord: 0.42, tail: 0.18 } );
-		this.material = creatureMaterial( { flapSpeed: 3, flapAmp: 0.35, glide: 1 } );
-		this.birds = [
-			{ c: new THREE.Vector3( - 650, 520, - 900 ), r: 130, w: 0.085, ph: 0 },
-			{ c: new THREE.Vector3( 700, 430, - 300 ), r: 95, w: - 0.11, ph: 2 },
+		// golden eagles high over the ridges; common buzzards (brown, pale-barred beneath, a
+		// shorter tail) circling over the meadows; a pair of ravens along the cliffs,
+		// wedge-tailed, flying together and now and then tumbling
+		const kinds = [
+			{ name: 'eagles', geo: { body: '#3a2a1c', belly: '#4a3522', wing: '#35271b', span: 1.2, chord: 0.42, tail: 0.18 }, flap: [ 3, 0.35, 1 ], scale: 2.1, birds: [
+				{ c: new THREE.Vector3( - 380, 470, - 500 ), r: 130, w: 0.085, ph: 0, drift: 110 },
+				{ c: new THREE.Vector3( 360, 420, - 150 ), r: 95, w: - 0.11, ph: 2, drift: 110 },
+			] },
+			{ name: 'buzzards', geo: { body: '#5a4230', belly: '#b8a488', wing: '#4e3a2a', span: 1.05, chord: 0.46, tail: 0.2 }, flap: [ 3.6, 0.4, 0.85 ], scale: 1.25, birds: [
+				{ c: new THREE.Vector3( 40, 150, 560 ), r: 55, w: 0.16, ph: 1, drift: 60 },
+				{ c: new THREE.Vector3( - 150, 175, 320 ), r: 70, w: - 0.13, ph: 3, drift: 70 },
+				{ c: new THREE.Vector3( 140, 190, 180 ), r: 60, w: 0.15, ph: 5, drift: 60 },
+			] },
+			{ name: 'ravens', geo: { body: '#101012', belly: '#18181a', wing: '#0e0e10', span: 1.0, chord: 0.36, tail: 0.16 }, flap: [ 4.5, 0.5, 0.55 ], scale: 1.15, pair: true, birds: [
+				{ c: new THREE.Vector3( - 230, 140, 700 ), r: 80, w: 0.12, ph: 0, drift: 90 },
+				{ c: new THREE.Vector3( - 230, 140, 700 ), r: 80, w: 0.12, ph: 0.12, drift: 90, follow: true },
+			] },
 		];
-		this.mesh = new THREE.InstancedMesh( geo, this.material, this.birds.length );
-		this.mesh.frustumCulled = false;
-		this.mesh.name = 'eagles';
+		this.kinds = kinds.map( ( k ) => {
+
+			const mesh = new THREE.InstancedMesh( birdGeometry( k.geo ), creatureMaterial( { flapSpeed: k.flap[ 0 ], flapAmp: k.flap[ 1 ], glide: k.flap[ 2 ] } ), k.birds.length );
+			mesh.frustumCulled = false;
+			mesh.name = k.name;
+			return { ...k, mesh };
+
+		} );
+		this.mesh = new THREE.Group();
+		this.mesh.name = 'soaring';
+		for ( const k of this.kinds ) this.mesh.add( k.mesh );
 
 	}
 
@@ -417,17 +437,32 @@ export class Eagles {
 
 		this.mesh.visible = visible;
 		if ( ! visible ) return;
-		this.birds.forEach( ( b, i ) => {
+		for ( const k of this.kinds ) {
 
-			const a = time * b.w + b.ph;
-			const drift = new THREE.Vector3( Math.sin( time * 0.011 + i ) * 150, Math.sin( time * 0.05 + i ) * 40, Math.cos( time * 0.009 + i ) * 150 );
-			_p.set( b.c.x + Math.cos( a ) * b.r, b.c.y, b.c.z + Math.sin( a ) * b.r ).add( drift );
-			const vel = _s.set( - Math.sin( a ) * b.w, 0.01, Math.cos( a ) * b.w ).normalize();
-			orient( _p, vel, Math.sign( b.w ) * 0.35, 2.1, _m );
-			this.mesh.setMatrixAt( i, _m );
+			k.birds.forEach( ( b, i ) => {
 
-		} );
-		this.mesh.instanceMatrix.needsUpdate = true;
+				const a = time * b.w + b.ph;
+				const j = b.follow ? 0 : i;
+				const drift = new THREE.Vector3( Math.sin( time * 0.011 + j ) * b.drift, Math.sin( time * 0.05 + j ) * 25, Math.cos( time * 0.009 + j ) * b.drift );
+				_p.set( b.c.x + Math.cos( a ) * b.r, b.c.y, b.c.z + Math.sin( a ) * b.r ).add( drift );
+				// ravens: now and then one rolls right over, the way they play in the wind
+				let roll = Math.sign( b.w ) * 0.35;
+				if ( k.pair ) {
+
+					_p.y += b.follow ? 3 + Math.sin( time * 0.7 ) * 2 : 0;
+					const tumble = Math.max( 0, Math.sin( time * 0.21 + i * 2 ) - 0.97 ) / 0.03;
+					roll += tumble * Math.PI * 2 * ( ( time * 0.21 / ( Math.PI * 2 ) ) % 1 );
+
+				}
+
+				const vel = _s.set( - Math.sin( a ) * b.w, 0.01, Math.cos( a ) * b.w ).normalize();
+				orient( _p, vel, roll, k.scale, _m );
+				k.mesh.setMatrixAt( i, _m );
+
+			} );
+			k.mesh.instanceMatrix.needsUpdate = true;
+
+		}
 
 	}
 

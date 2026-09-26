@@ -304,7 +304,7 @@ export class MoreBirds {
 
 		// choughs: a flock round the crags above the western wood
 		this.choughMat = creatureMaterial( { flapSpeed: 9, flapAmp: 0.7, glide: 0.6 } );
-		const n = 14;
+		const n = 26;
 		this.chough = { n, mesh: new THREE.InstancedMesh( choughGeometry(), this.choughMat, n ), crag: V( - 360, 170, 760 ), c: V( - 120, 60, 560 ), goal: V( - 120, 60, 560 ), timer: rng.range( 20, 40 ), out: true, spread: 0.6, birds: [] };
 		this.chough.mesh.frustumCulled = false;
 		for ( let i = 0; i < n; i ++ ) this.chough.birds.push( { ph: rng.next() * 6.28, r: rng.range( 25, 70 ), w: rng.range( 0.25, 0.45 ) * ( rng.next() < 0.8 ? 1 : - 1 ), y: rng.range( - 15, 15 ), tumble: 0 } );
@@ -390,13 +390,14 @@ export class MoreBirds {
 
 			const dist = Math.hypot( cam.x - h.pos.x, cam.z - h.pos.z );
 			h.timer -= dt;
-			if ( dist < 22 && h.state !== 'fly' && h.state !== 'land' ) {
+			if ( dist < 12 && h.state !== 'fly' && h.state !== 'land' ) {
 
 				// takes off with a croak, flies along the shore and settles further on
 				h.state = 'fly';
 				h.flyT = 0;
 				const away = Math.atan2( h.pos.x - cam.x, h.pos.z - cam.z ) + rng.range( - 0.6, 0.6 );
-				h.dest = this._shallow( h.pos.x + Math.sin( away ) * rng.range( 90, 160 ), h.pos.z + Math.cos( away ) * rng.range( 90, 160 ), 0.12, 0.35 );
+				const hop = rng.range( 35, 65 );
+				h.dest = this._shallow( h.pos.x + Math.sin( away ) * hop, h.pos.z + Math.cos( away ) * hop, 0.12, 0.35 );
 				h.start = h.pos.clone();
 
 			}
@@ -567,7 +568,7 @@ export class MoreBirds {
 			} else {
 
 				C.goal.copy( C.crag );
-				C.timer = rng.range( 60, 120 );
+				C.timer = rng.range( 30, 70 );
 
 			}
 

@@ -189,7 +189,7 @@ export class Mammals {
 
 		// --- mountain hares in the meadows round the start
 		this.hares = [];
-		for ( const [ x, z ] of [ [ 26, 543 ], [ - 34, 552 ], [ 58, 528 ] ] ) {
+		for ( const [ x, z ] of [ [ 26, 543 ], [ - 34, 552 ], [ 58, 528 ], [ - 58, 505 ], [ 88, 497 ], [ 8, 578 ], [ - 92, 548 ], [ 40, 598 ] ] ) {
 
 			const h = instance( hareProto );
 			h.pos = this._dryPoint( x, z, 0, 6 );
@@ -355,14 +355,14 @@ export class Mammals {
 			d.fleeDir = d.heading;
 			d.target.set( d.pos.x + Math.sin( d.heading ) * 50, 0, d.pos.z + Math.cos( d.heading ) * 50 );
 
-		} else if ( dist < 24 && d.state !== 'flee' ) {
+		} else if ( dist < 16 && d.state !== 'flee' ) {
 
 			d.state = 'flee';
 			d.timer = rng.range( 6, 9 );
 			d.fleeDir = Math.atan2( - dx, - dz ) + rng.range( - 0.4, 0.4 );
 			if ( d.stag ) this.audio?.bark?.( d.pos );
 
-		} else if ( dist < 45 && ( d.state === 'graze' || d.state === 'walk' ) && ! d.wary ) {
+		} else if ( dist < 35 && ( d.state === 'graze' || d.state === 'walk' ) && ! d.wary ) {
 
 			d.wary = true;
 
@@ -861,14 +861,14 @@ export class Mammals {
 			h.state = h.forced;
 			h.timer = 5;
 
-		} else if ( dist < 13 && h.state !== 'flee' ) {
+		} else if ( dist < 8 && h.state !== 'flee' ) {
 
 			h.state = 'flee';
-			h.timer = rng.range( 3, 5 );
+			h.timer = rng.range( 1.8, 3 );
 			h.fleeDir = Math.atan2( - dx, - dz ) + rng.range( - 0.5, 0.5 );
 			h.zig = 0;
 
-		} else if ( dist < 28 && h.state === 'feed' ) {
+		} else if ( dist < 18 && h.state === 'feed' ) {
 
 			h.state = 'alert';
 			h.timer = rng.range( 3, 6 );
@@ -894,7 +894,7 @@ export class Mammals {
 				sitT = 1;
 				headT = - 0.15;
 				if ( dist < 40 ) h.heading = turnToward( h.heading, Math.atan2( dx, dz ) + Math.PI * 0.5, dt * 1.5 );
-				if ( h.timer <= 0 && dist > 22 ) {
+				if ( h.timer <= 0 && dist > 14 ) {
 
 					h.state = 'feed';
 					h.timer = rng.range( 4, 12 );
@@ -1045,7 +1045,7 @@ export class Mammals {
 			b.state = b.forced;
 			b.timer = 5;
 
-		} else if ( dist < 35 && b.state !== 'leave' ) {
+		} else if ( dist < 24 && b.state !== 'leave' ) {
 
 			// a bear that notices you simply walks off
 			b.state = 'leave';
@@ -1213,7 +1213,7 @@ export class Mammals {
 		const t = q.tree;
 		const dist = Math.hypot( cam.x - q.pos.x, cam.z - q.pos.z );
 		q.timer -= dt;
-		if ( dist < ( q.perch ? 6 : 17 ) && q.state !== 'climb' && q.state !== 'up' ) {
+		if ( dist < ( q.perch ? 5 : 9 ) && q.state !== 'climb' && q.state !== 'up' ) {
 
 			q.state = 'climb';
 			q.onPerch = false;

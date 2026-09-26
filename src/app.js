@@ -26,6 +26,7 @@ import { LeapingFish } from './fauna/fish.js';
 import { Shallows } from './fauna/fishSchool.js';
 import { RiverFish } from './fauna/riverFish.js';
 import { MoreBirds } from './fauna/moreBirds.js';
+import { SmallBirds } from './fauna/smallBirds.js';
 import { Mammals } from './fauna/mammals.js';
 import { creatureMaterial, PartBuilder } from './fauna/creature.js';
 import { Soundscape } from './audio.js';
@@ -253,6 +254,8 @@ export class App {
 		this.scene.add( this.riverFish.group );
 		this.moreBirds = new MoreBirds( td, this.water );
 		this.scene.add( this.moreBirds.group );
+		this.smallBirds = new SmallBirds( td, this.forest, td.river );
+		this.scene.add( this.smallBirds.group );
 		this.mammals = new Mammals( td, this.forest, this.audio, this.quality );
 		this.scene.add( this.mammals.group );
 		// marmots crop the turf short around their burrows
@@ -588,6 +591,7 @@ export class App {
 		this.shallows.update( dt, this.camera );
 		this.riverFish.update( dt, t, this.camera );
 		this.moreBirds.update( dt, t, this.options.follow || this.director ? { position: new THREE.Vector3( 1e4, 0, 1e4 ) } : this.camera );
+		this.smallBirds.update( dt, this.camera );
 		// (the debug follow camera must not spook what it films)
 		this.mammals.update( dt, t, this.options.follow || this.director ? { position: new THREE.Vector3( 1e4, 0, 1e4 ) } : this.camera, 1 - Math.min( 1, Math.abs( sunEl + 1 ) / 7 ) );
 		this.mammals.lod( this.camera );
