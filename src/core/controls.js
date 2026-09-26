@@ -240,7 +240,17 @@ export class Controls {
 		const target = _move.multiplyScalar( speed );
 		const a = 1 - Math.exp( - dt * ( this.walk ? 10 : 4 ) );
 		this.velocity.lerp( target, a );
+		const px = cam.position.x, pz = cam.position.z;
 		cam.position.addScaledVector( this.velocity, dt );
+		// keep to the valley: slide along the foot of the slopes rather than climb them
+		const high = ( x, z ) => this.terrain.heightAt( x, z ) > WORLD.reachHeight;
+		if ( high( cam.position.x, cam.position.z ) ) {
+
+			if ( ! high( cam.position.x, pz ) ) cam.position.z = pz;
+			else if ( ! high( px, cam.position.z ) ) cam.position.x = px;
+			else { cam.position.x = px; cam.position.z = pz; }
+
+		}
 
 		// keep inside the world
 		const r = Math.hypot( cam.position.x, cam.position.z - WORLD.lakeCenter[ 1 ] );
@@ -272,7 +282,7 @@ export class Controls {
 
 			}
 
-			cam.position.y = Math.min( cam.position.y, WORLD.maxAltitude + 900 );
+			cam.position.y = Math.min( cam.position.y, WORLD.flyCeiling );
 
 		}
 

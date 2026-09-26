@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { canBeSeen } from '../gen/visibility.js';
 import { commonParsGLSL } from '../shaders/common.glsl.js';
 import { noiseGLSL } from '../shaders/noise.glsl.js';
 import { sharedUniforms, U } from '../core/uniforms.js';
@@ -639,13 +640,25 @@ export class Forest {
 			td.biomeAt( x, z, bio );
 			const forest = bio[ 1 ], grass = bio[ 0 ], rock = bio[ 2 ], shore = bio[ 3 ];
 			if ( rock > 0.5 || shore > 0.4 ) return;
+			// no trees where no one can ever see them
+			if ( ! canBeSeen( x, z ) ) return;
 			td.normalAt( x, z, n, 1.5 );
 			if ( n.y < 0.74 ) return;
 			const treeline = 640 + ( valueNoise( x * 0.004, z * 0.004 ) - 0.5 ) * 160;
 			if ( h > treeline ) return;
 			let p = Math.pow( forest, 1.25 ) * 0.9;
-			// lone trees and small groves in the meadows
-			if ( detailed ) p += grass * 0.012 + ( valueNoise( x * 0.02 + 5, z * 0.02 ) > 0.78 ? grass * 0.05 : 0 );
+			// the walls are wooded thinly, broken by open ground, thinner the higher they go
+			p *= 1 - 0.7 * THREE.MathUtils.smoothstep( h, 45, 280 );
+			if ( detailed && h < 70 ) {
+
+				// the valley floor: copses of mixed wood with open glades between them, lone
+				// trees across the meadows; the marmot meadow in front of the start stays open
+				const copse = THREE.MathUtils.smoothstep( valueNoise( x * 0.013 + 3, z * 0.013 - 9 ), 0.4, 0.6 );
+				const edge = THREE.MathUtils.smoothstep( valueNoise( x * 0.04 - 2, z * 0.04 + 6 ), 0.3, 0.7 );
+				const open = THREE.MathUtils.smoothstep( Math.hypot( x + 5, z - 500 ), 22, 42 );
+				p += grass * ( 0.34 * copse * ( 0.55 + 0.45 * edge ) + 0.025 ) * open;
+
+			} else if ( detailed ) p += grass * 0.012 + ( valueNoise( x * 0.02 + 5, z * 0.02 ) > 0.78 ? grass * 0.05 : 0 );
 			// thin out near the treeline
 			p *= 1 - 0.7 * THREE.MathUtils.smoothstep( h, treeline - 120, treeline );
 			p *= cellArea / 45;

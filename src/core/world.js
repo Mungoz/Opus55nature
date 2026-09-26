@@ -10,6 +10,11 @@ export const WORLD = {
 	latitude: 46.5,
 	// Camera limits (keeps the viewer where the terrain has detail).
 	boundsRadius: 2600,
+	// the player keeps to the valley: never out over ground higher than this (m), and when
+	// flying no higher than flyCeiling; what can never be seen from there is not built
+	// (see tools/bakeVisibility.mjs)
+	reachHeight: 110,
+	flyCeiling: 230,
 	maxAltitude: 1600,
 };
 

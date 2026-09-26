@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { canBeSeen } from '../gen/visibility.js';
 import { commonParsGLSL } from '../shaders/common.glsl.js';
 import { paletteGLSL } from '../shaders/palette.glsl.js';
 import { sharedUniforms } from '../core/uniforms.js';
@@ -37,6 +38,15 @@ function axis( min, max, coreMin, coreMax, s0, growth ) {
 
 export function buildTerrainGeometry( data, spacing = 2, growth = 1.03, extent = 6000 ) {
 
+	// ground that can never be seen from anywhere the player can go is left out
+	const quadSeen = ( xa, xb, za, zb ) => {
+
+		const nx = Math.max( 1, Math.ceil( ( xb - xa ) / 30 ) ), nz = Math.max( 1, Math.ceil( ( zb - za ) / 30 ) );
+		for ( let j = 0; j <= nz; j ++ ) for ( let i = 0; i <= nx; i ++ ) if ( canBeSeen( xa + ( xb - xa ) * i / nx, za + ( zb - za ) * j / nz ) ) return true;
+		return false;
+
+	};
+
 	// full detail over the lake, the meadows and the whole stream up to the falls
 	const xs = axis( - extent, extent, - 440, 400, spacing, growth );
 	const zs = axis( - extent, extent, - 720, 920, spacing, growth );
@@ -62,6 +72,7 @@ export function buildTerrainGeometry( data, spacing = 2, growth = 1.03, extent =
 
 		for ( let i = 0; i < nx - 1; i ++ ) {
 
+			if ( ! quadSeen( xs[ i ], xs[ i + 1 ], zs[ j ], zs[ j + 1 ] ) ) continue;
 			const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
 			// alternate the diagonal for a less directional triangulation
 			if ( ( i + j ) & 1 ) {
@@ -82,7 +93,7 @@ export function buildTerrainGeometry( data, spacing = 2, growth = 1.03, extent =
 
 	const g = new THREE.BufferGeometry();
 	g.setAttribute( 'position', new THREE.BufferAttribute( pos, 3 ) );
-	g.setIndex( new THREE.BufferAttribute( idx, 1 ) );
+	g.setIndex( new THREE.BufferAttribute( idx.slice( 0, k ), 1 ) );
 	g.computeBoundingSphere();
 	g.boundingSphere.radius = extent * 2;
 	return g;
