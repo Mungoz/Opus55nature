@@ -30,9 +30,10 @@ function coatMix( base, layers, x, y, z, mottle = 0.08 ) {
 function eye( r, material ) {
 
 	const b = new PartBuilder();
-	b.add( new THREE.SphereGeometry( r, 12, 10 ), '#0b0806', null, 0, MAT.BILL );
+	b.add( new THREE.SphereGeometry( r, 16, 12 ), '#140c07', null, 0, MAT.EYE );
 	const m = new THREE.Mesh( b.build(), material );
 	m.castShadow = false;
+	m.userData.eye = true;
 	return m;
 
 }
@@ -89,6 +90,7 @@ export function buildMarmot( material ) {
 		c.lerp( new THREE.Color( '#554a3f' ), ss( 0.205, 0.225, y ) * ss( 0.22, 0.17, z ) );
 		c.lerp( new THREE.Color( '#bba98e' ), ss( 0.225, 0.25, z ) * ss( 0.195, 0.175, y ) );
 		c.lerp( new THREE.Color( '#ab9a7e' ), ss( 0.185, 0.165, y ) * ss( 0.16, 0.2, z ) );
+		c.lerp( new THREE.Color( '#241a12' ), ss( 0.0145, 0.011, Math.hypot( Math.abs( x ) - 0.047, y - 0.2, z - 0.216 ) ) );
 		return c.multiplyScalar( 1 + noise3( x * 70, y * 70, z * 70 ) * 0.12 );
 
 	};
@@ -159,8 +161,9 @@ export function buildSquirrel( material ) {
 	const redTip = ( x, y, z ) => {
 
 		const n = noise3( x * 90, y * 90, z * 90 );
-		const c = new THREE.Color( '#ad6a3c' ).lerp( new THREE.Color( '#7e573f' ), ss( 0.2, 0.7, n ) * 0.5 );
-		return c.lerp( new THREE.Color( '#935233' ), ss( 0.085, 0.1, y ) * 0.35 );
+		// rufous, browner and greyer along the back, as in autumn
+		const c = new THREE.Color( '#a4683f' ).lerp( new THREE.Color( '#7a5a45' ), ss( 0.2, 0.7, n ) * 0.55 );
+		return c.lerp( new THREE.Color( '#80604a' ), ss( 0.085, 0.1, y ) * 0.45 );
 
 	};
 
@@ -173,8 +176,10 @@ export function buildSquirrel( material ) {
 	S.ellipsoid( [ 0, 0.068, 0.03 ], [ 0.027, 0.031, 0.04 ], F( 'chest', 0.025, fur( 0.01 ) ) );
 	// head: round crown, big eyes in pale rings, short muzzle
 	const eyeC = [ 0.021, 0.106, 0.103 ];
-	const ring = ( x, y, z ) => ss( 0.011, 0.007, Math.hypot( Math.abs( x ) - eyeC[ 0 ], y - eyeC[ 1 ], z - eyeC[ 2 ] ) );
-	const headTip = ( x, y, z ) => new THREE.Color( '#ab6a3d' ).lerp( new THREE.Color( '#e8d6bd' ), ring( x, y, z ) * 0.9 ).lerp( new THREE.Color( '#f0e6d6' ), ss( 0.088, 0.08, y ) * ss( 0.1, 0.12, z ) );
+	const eyeD = ( x, y, z ) => Math.hypot( Math.abs( x ) - eyeC[ 0 ], y - eyeC[ 1 ], z - eyeC[ 2 ] );
+	const ring = ( x, y, z ) => ss( 0.016, 0.0085, eyeD( x, y, z ) ) * 0.75;
+	const lid = ( x, y, z ) => ss( 0.0105, 0.0078, eyeD( x, y, z ) );
+	const headTip = ( x, y, z ) => new THREE.Color( '#ab6a3d' ).lerp( new THREE.Color( '#d8bf9b' ), ring( x, y, z ) ).lerp( new THREE.Color( '#2a1a10' ), lid( x, y, z ) ).lerp( new THREE.Color( '#f0e6d6' ), ss( 0.088, 0.08, y ) * ss( 0.1, 0.12, z ) );
 	const head = ( len ) => ( { color: '#5e3620', tip: headTip, fur: len, mat: MAT.FUR } );
 	S.ellipsoid( [ 0, 0.1, 0.092 ], [ 0.024, 0.025, 0.03 ], F( 'head', 0.015, head( 0.006 ) ) );
 	S.ellipsoid( [ 0, 0.093, 0.12 ], [ 0.014, 0.014, 0.018 ], F( 'head', 0.012, head( 0.004 ) ) );
@@ -258,8 +263,9 @@ export function buildHare( material ) {
 	const eyeC = [ 0.036, 0.245, 0.178 ];
 	const headTip = ( x, y, z ) => {
 
-		const ring = ss( 0.016, 0.009, Math.hypot( Math.abs( x ) - eyeC[ 0 ], y - eyeC[ 1 ], z - eyeC[ 2 ] ) );
-		return new THREE.Color( '#8e7c64' ).lerp( new THREE.Color( '#a07d58' ), ss( 0.21, 0.19, z ) * 0.4 ).lerp( new THREE.Color( '#ddd5c6' ), Math.max( ring * 0.85, ss( 0.215, 0.2, y ) * ss( 0.2, 0.23, z ) ) );
+		const ed = Math.hypot( Math.abs( x ) - eyeC[ 0 ], y - eyeC[ 1 ], z - eyeC[ 2 ] );
+		const ring = ss( 0.021, 0.011, ed ) * 0.7, lid = ss( 0.0135, 0.0102, ed );
+		return new THREE.Color( '#8e7c64' ).lerp( new THREE.Color( '#a07d58' ), ss( 0.21, 0.19, z ) * 0.4 ).lerp( new THREE.Color( '#cdbfa3' ), Math.max( ring, ss( 0.215, 0.2, y ) * ss( 0.2, 0.23, z ) ) ).lerp( new THREE.Color( '#2b1f16' ), lid );
 
 	};
 

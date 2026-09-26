@@ -1188,12 +1188,50 @@ export class Mammals {
 
 	update( dt, time, camera, dusk ) {
 
+		const all = this._all || ( this._all = [ ...this.deer, ...this.marmots, ...this.squirrels, ...this.hares, ...this.bears ] );
+		// take out last frame's breath before the poses are set again
+		for ( const a of all ) if ( a.breathOff ) a.bones.get( 'chest' ).rotation.x -= a.breathOff;
 		const cam = camera.position;
 		for ( const d of this.deer ) this._updateDeer( d, dt, time, cam, dusk );
 		for ( const m of this.marmots ) this._updateMarmot( m, dt, time, cam );
 		for ( const q of this.squirrels ) this._updateSquirrel( q, dt, time, cam );
 		for ( const h of this.hares ) this._updateHare( h, dt, time, cam );
 		for ( const b of this.bears ) this._updateBear( b, dt, time, cam );
+		this._alive( all, dt );
+
+	}
+
+	// Nothing alive is ever quite still: the chest rises and falls (small animals quickly,
+	// the bear slowly), and the eyes blink every few seconds.
+	_alive( all, dt ) {
+
+		const rates = { stag: 1.4, hind: 1.6, marmot: 2.4, squirrel: 4.4, hare: 3.6, bear: 1.0 };
+		for ( const a of all ) {
+
+			const ch = a.bones.get( 'chest' );
+			if ( ch ) {
+
+				a.breathPh = ( a.breathPh ?? this.rng.next() * 6.28 ) + dt * ( rates[ a.mesh.name ] ?? 2 );
+				const big = a.mesh.name === 'bear' || a.mesh.name === 'stag' || a.mesh.name === 'hind';
+				a.breathOff = Math.sin( a.breathPh ) * ( big ? 0.008 : 0.014 );
+				ch.rotation.x += a.breathOff;
+
+			}
+
+			if ( ! a.eyes ) {
+
+				a.eyes = [];
+				a.mesh.traverse( ( o ) => { if ( o.userData.eye ) a.eyes.push( o ); } );
+				a.blink = 1 + this.rng.next() * 4;
+
+			}
+
+			a.blink -= dt;
+			const shut = a.blink > 0 && a.blink < 0.12;
+			for ( const e of a.eyes ) e.scale.y = shut ? 0.12 : 1;
+			if ( a.blink <= 0 ) a.blink = 2 + this.rng.next() * 5;
+
+		}
 
 	}
 

@@ -4,7 +4,7 @@ import { noiseGLSL } from '../shaders/noise.glsl.js';
 import { sharedUniforms, U } from '../core/uniforms.js';
 
 // Surface kinds stored per vertex (aMat)
-export const MAT = { PLAIN: 0, FEATHER: 1, FUR: 2, SCALES: 3, BILL: 4 };
+export const MAT = { PLAIN: 0, FEATHER: 1, FUR: 2, SCALES: 3, BILL: 4, EYE: 5 };
 
 // Shared material for animals built from coloured parts. Vertices tagged
 // with aFlap (signed, 0 = body, +-1 = wing tip) flap about the body axis;
@@ -144,6 +144,10 @@ void main() {
 		alb += vec3( 0.05, 0.02, 0.06 ) * ( 1.0 - abs( dot( N, V ) ) );
 		rough = 0.3;
 		f0 = 0.08;
+	} else if ( vMat > 4.5 ) {
+		// the eye: wet and glassy
+		rough = 0.06;
+		f0 = 0.03;
 	} else if ( vMat > 3.5 ) {
 		rough = 0.35;
 		f0 = 0.05;
@@ -163,6 +167,14 @@ void main() {
 	// velvety rim / back light
 	float rim = pow( 1.0 - saturate( dot( N, V ) ), 3.0 );
 	col += alb * ( uSunColor * sh * pow( saturate( dot( -V, uSunDir ) ), 4.0 ) * 0.4 + skyIrradiance( N ) * 0.15 ) * rim * sheen * 2.0;
+	if ( vMat > 4.5 ) {
+		// a living eye catches the light: the sky mirrored in the wet cornea, and the sun
+		// as a small bright point
+		vec3 R = reflect( -V, N );
+		float fres = 0.04 + 0.96 * pow( 1.0 - saturate( dot( N, V ) ), 5.0 );
+		col += skyIrradiance( R ) * ( 0.015 + 0.16 * fres ) * smoothstep( 0.0, 0.4, R.y );
+		col += uSunColor * sh * pow( saturate( dot( R, uSunDir ) ), 600.0 ) * 3.0;
+	}
 	col = waterColumn( col, vWorldPos, uSunColor * sh );
 	col = applyAtmosphere( col, vWorldPos );
 	gl_FragColor = vec4( col, 1.0 );
@@ -288,6 +300,11 @@ void main() {
 	// each lock a little lighter or darker (grizzling), each hair a little different again
 	float tone = gnoise3( q * 0.21 + 5.0 );
 	alb *= ( 0.86 + 0.28 * hair ) * ( 1.0 + tone * mix( 0.12, 0.22, longCoat ) * h );
+	// banded hairs: a paler band below the tip; the longest (guard) hairs darker at the tip
+	float guard = smoothstep( 0.68, 0.78, hair ) * hairVis;
+	float band = smoothstep( 0.4, 0.55, h ) * ( 1.0 - smoothstep( 0.72, 0.88, h ) );
+	alb *= 1.0 + 0.2 * band * ( 1.0 - guard ) - 0.32 * guard * smoothstep( 0.6, 0.92, h );
+	alb *= vec3( 1.0 + tone * 0.05, 1.0, 1.0 - tone * 0.06 );
 	float ao = mix( 0.35, 1.0, pow( h, 0.7 ) );
 	float sh = sunShadow( vWorldPos, N );
 	vec3 L = uSunDir;
