@@ -58,6 +58,50 @@ void main() {
 }
 `;
 
+// The splash where the fall hits its pool: droplets and clots of white water flung up and
+// out, arcing back down under gravity, each on its own short loop.
+const splashVert = /* glsl */ `
+uniform float uTime;
+attribute vec4 aSeed; // size, alpha, phase, rate
+attribute vec3 aVel;
+varying float vAlpha;
+varying vec3 vWorldPos;
+void main() {
+	float life = fract( uTime * aSeed.w + aSeed.z );
+	float t = life / aSeed.w;
+	vec3 p = position + aVel * t + vec3( 0.0, -4.9, 0.0 ) * t * t;
+	// gone once it falls back below the surface
+	float under = step( position.y - 0.05, p.y );
+	vAlpha = aSeed.y * under * smoothstep( 0.0, 0.06, life ) * ( 1.0 - smoothstep( 0.6, 1.0, life ) );
+	vec4 wp = modelMatrix * vec4( p, 1.0 );
+	vWorldPos = wp.xyz;
+	vec4 mv = viewMatrix * wp;
+	gl_Position = projectionMatrix * mv;
+	// clots grow as they burst apart
+	gl_PointSize = clamp( aSeed.x * ( 1.0 + life ) * 900.0 / max( -mv.z, 1.0 ), 1.5, 160.0 );
+}
+`;
+
+const splashFrag = /* glsl */ `
+${commonParsGLSL}
+varying float vAlpha;
+varying vec3 vWorldPos;
+void main() {
+	vec2 c = gl_PointCoord * 2.0 - 1.0;
+	float r2 = dot( c, c );
+	if ( r2 > 1.0 || vAlpha < 0.01 ) discard;
+	// soft, ragged clots rather than discs
+	float rag = fract( sin( dot( floor( gl_PointCoord * 5.0 ), vec2( 12.9898, 78.233 ) ) + vAlpha * 31.0 ) * 43758.5453 );
+	float a = pow( 1.0 - r2, 1.8 ) * ( 0.65 + 0.35 * rag ) * vAlpha;
+	vec3 V = normalize( cameraPosition - vWorldPos );
+	float sh = sunShadowFast( vWorldPos );
+	// white water: lit by sky and sun, brightest when the sun is behind it
+	vec3 col = ( skyIrradiance( vec3( 0.0, 1.0, 0.0 ) ) * 0.8 + uSunColor * sh * ( 0.55 + 1.4 * pow( max( dot( -V, uSunDir ), 0.0 ), 4.0 ) ) ) * 0.72 / PI;
+	col = applyAtmosphere( col, vWorldPos );
+	gl_FragColor = vec4( col, a );
+}
+`;
+
 // Water2's shader for a shallow, clear stream: the same, with the ripples bending the
 // view through the water about as much as a few centimetres of water do
 function streamShader() {
@@ -574,6 +618,44 @@ export class Streams {
 		this.group.add( mist );
 		this.poolPos = new THREE.Vector3( foot.x, floorY, foot.y );
 
+		// the splash, all along the line where the curtain hits the pool
+		{
+
+			const n = 1600;
+			const sp = new Float32Array( n * 3 ), sv = new Float32Array( n * 3 ), ss2 = new Float32Array( n * 4 );
+			const R2 = Math.random;
+			const halfW = 7.4;
+			for ( let i = 0; i < n; i ++ ) {
+
+				const u = ( R2() * 2 - 1 ) * halfW * Math.sqrt( R2() );
+				const o = new THREE.Vector3( foot.x, floorY + 0.05, foot.y ).addScaledVector( X, u ).addScaledVector( out3, ( R2() - 0.4 ) * 1.5 );
+				sp.set( [ o.x, o.y, o.z ], i * 3 );
+				// most go up and out from the cliff, some straight up, a few back against the rock
+				const big = R2() < 0.25;
+				const up = big ? 1.5 + R2() * 3 : 3 + R2() * 7;
+				const outv = ( R2() - 0.25 ) * 4;
+				const side = ( R2() - 0.5 ) * 3;
+				sv.set( [ out3.x * outv + X.x * side, up, out3.z * outv + X.z * side ], i * 3 );
+				ss2.set( [ big ? 0.5 + R2() * 0.6 : 0.12 + R2() * 0.16, big ? 0.45 : 0.85, R2(), 0.7 + R2() * 0.9 ], i * 4 );
+
+			}
+
+			const sg = new THREE.BufferGeometry();
+			sg.setAttribute( 'position', new THREE.BufferAttribute( sp, 3 ) );
+			sg.setAttribute( 'aVel', new THREE.BufferAttribute( sv, 3 ) );
+			sg.setAttribute( 'aSeed', new THREE.BufferAttribute( ss2, 4 ) );
+			const splash = new THREE.Points( sg, new THREE.ShaderMaterial( {
+				vertexShader: splashVert, fragmentShader: splashFrag, lights: true, ...blend, uniforms: lightsU(),
+			} ) );
+			splash.frustumCulled = false;
+			splash.renderOrder = 14;
+			splash.layers.set( LAYERS.FX );
+			splash.name = 'splash';
+			this.group.add( splash );
+			this.splash = splash;
+
+		}
+
 	}
 
 	setSize( width, height ) {
@@ -629,7 +711,7 @@ export class Streams {
 
 		}
 
-		this.boil.visible = this.fall.visible;
+		this.boil.visible = this.splash.visible = this.fall.visible;
 		this.fall.visible = camera.position.distanceTo( this.poolPos ) < 900;
 
 	}
