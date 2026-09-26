@@ -757,6 +757,22 @@ export class Forest {
 		this.shrubs = shrubs;
 		this._placeProps( rng );
 		this._placeSpawnVignette();
+		// (an edition may keep ground clear: its paths and the places it builds on)
+		if ( this.keepOut ) {
+
+			const ko = this.keepOut;
+			this.trees = this.trees.filter( ( t ) => ! ko( t.x, t.z, 1.2 + 0.5 * t.s ) );
+			this.shrubs = this.shrubs.filter( ( t ) => ! ko( t.x, t.z, 1.2 * t.s ) );
+			for ( const [ kind, set ] of Object.entries( this.props ) ) set.items = set.items.filter( ( it ) => {
+
+				if ( kind !== 'log' ) return ! ko( it.x, it.z, kind === 'stump' ? 0.5 : 0.35 );
+				const hl = set.variants[ it.variant ].halfLen * it.s, ax = Math.cos( it.rot ), az = - Math.sin( it.rot );
+				for ( let k = - 1; k <= 1; k += 0.25 ) if ( ko( it.x + ax * hl * k, it.z + az * hl * k, 0.4 ) ) return false;
+				return true;
+
+			} );
+
+		}
 		if ( this.showcase ) {
 
 			// debug: a row of every variant in front of the start position

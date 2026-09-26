@@ -12,6 +12,7 @@ import { Water } from './world/water.js';
 import { Streams } from './world/stream.js';
 import { buildDeadwood } from './world/deadwood.js';
 import { LAYERS } from './core/world.js';
+import { STORY_FEATURES } from './core/features.js';
 import { FullscreenPass, passMaterial } from './gen/gpu.js';
 import { WaterPlants } from './world/waterplants.js';
 import { Forest } from './world/trees.js';
@@ -33,6 +34,7 @@ import { Soundscape } from './audio.js';
 import { Tour } from './tour.js';
 import { Weather } from './world/weather.js';
 import { Post } from './fx/post.js';
+/* global __HORROR__ */
 
 const _v = new THREE.Vector3();
 const _ray = new THREE.Ray();
@@ -122,6 +124,8 @@ export class App {
 		this._ftAvg = 16;
 		this._resTimer = 0;
 		this.stones = [];
+		// small mirrors added by an edition (the trough, puddles): drawn like the ponds'
+		this.extraWaters = [];
 		this.onToast = () => {};
 
 		const r = this.renderer = new THREE.WebGLRenderer( {
@@ -177,6 +181,19 @@ export class App {
 		U.uNoiseTex.value = this.textures.noise;
 
 		await step( 0.1, 'Raising the mountains' );
+		// the horror edition lays its route into the valley: banks, the pool at the footbridge
+		if ( __HORROR__ ) {
+
+			this.layout = await import( './story/layout.js' );
+			Object.assign( STORY_FEATURES, this.layout.FEATURES );
+			// the trail and the other marks on the ground, which the plants keep off
+			const { StoryGround } = await import( './story/ground.js' );
+			this.storyGround = new StoryGround( this.layout.routePath(), this.layout.GROUND_BOX );
+			this.layout.paintGround( this.storyGround );
+			this.storyGround.upload();
+
+		}
+
 		this.terrainData = new TerrainData( r );
 		await this.terrainData.generate();
 		const td = this.terrainData;
@@ -211,6 +228,9 @@ export class App {
 
 		await step( 0.5, 'Growing the larches' );
 		this.forest = new Forest( td, this.quality, r, await deadwoodP );
+		// the horror edition keeps its trail and building sites clear
+		const keepOut = this.storyGround ? ( x, z, rr ) => this.storyGround.trailDist( x, z ) < rr + 0.7 || this.storyGround.channel( 3, x, z ) > 0.2 || this.storyGround.channel( 1, x, z ) > 0.35 : null;
+		this.forest.keepOut = keepOut;
 		if ( this.options.showcase ) this.forest.showcase = { x: 30, z: 560, page: this.options.showcasePage || 0 };
 		this.treeCount = this.forest.place();
 		await step( 0.6, 'Turning the larches gold' );
@@ -218,6 +238,7 @@ export class App {
 
 		await step( 0.66, 'Scattering boulders' );
 		this.rocks = new Rocks( td, this.textures );
+		this.rocks.keepOut = keepOut;
 		this.rocks.place( [
 			{ x: - 14, z: 492, s: 2.6, sink: 0.45 }, { x: 52, z: 522, s: 1.5 }, { x: 78, z: 598, s: 4.2 }, { x: - 30, z: 560, s: 1.2 }, { x: 5, z: 500, s: 0.9 },
 		] );
@@ -326,6 +347,16 @@ export class App {
 		// debug: ?hide=name,name hides objects by name
 		for ( const n of ( this.options.hide || '' ).split( ',' ).filter( Boolean ) ) this.scene.traverse( ( o ) => { if ( o.name === n ) o.visible = false; } );
 
+		// the horror edition: the route, its places and props, the figure, the director
+		if ( __HORROR__ ) {
+
+			await step( 0.86, 'Closing the hut for the winter' );
+			const { Story } = await import( './story/story.js' );
+			this.story = new Story( this );
+			await this.story.load();
+
+		}
+
 		await step( 0.9, 'Warming the shaders' );
 		// compile every program up front so the first seconds are smooth
 		this.forest.update( this.camera );
@@ -414,10 +445,20 @@ export class App {
 		this.post.setSize( w * pr, h * pr, this.renderScale );
 		this.water.setSize( w * pr * this.renderScale, h * pr * this.renderScale );
 		this.streams?.setSize( w * pr * this.renderScale, h * pr * this.renderScale );
+		for ( const x of this.extraWaters ) x.setSize( w * pr * this.renderScale, h * pr * this.renderScale );
 		const rw = Math.max( 2, Math.round( w * pr * this.renderScale ) ), rh = Math.max( 2, Math.round( h * pr * this.renderScale ) );
 		if ( ! this.refractRT ) this.refractRT = new THREE.WebGLRenderTarget( rw, rh, { type: THREE.HalfFloatType, depthBuffer: false } );
 		else this.refractRT.setSize( rw, rh );
 		if ( this.streams ) this.streams.refraction.value = this.refractRT.texture;
+
+	}
+
+	addWater( w ) {
+
+		this.extraWaters.push( w );
+		this.scene.add( w.mesh );
+		const pr = this.renderer.getPixelRatio();
+		w.setSize( window.innerWidth * pr * this.renderScale, window.innerHeight * pr * this.renderScale );
 
 	}
 
@@ -563,6 +604,7 @@ export class App {
 	update( dt ) {
 
 		this._ftAvg += ( ( this.realDt ?? dt ) * 1000 - this._ftAvg ) * 0.05;
+		if ( this.paused ) return;
 		this.elapsed += dt;
 		const t = this.elapsed;
 		U.uTime.value = t;
@@ -570,6 +612,7 @@ export class App {
 		if ( this.director ) this.director( dt );
 		else if ( this.tour.active ) this.tour.update( dt );
 		else this.controls.update( dt );
+		this.story?.update( dt );
 		this.camera.updateMatrixWorld();
 
 		const td = this.terrainData;
@@ -635,6 +678,7 @@ export class App {
 		this.particles.update( dt, t, this.camera, wind, this.water );
 		this.water.update( dt );
 		for ( const p of this.streams.ponds ) p.update( dt );
+		for ( const p of this.extraWaters ) p.update( dt );
 		this.streams.update( this.camera, dt );
 
 		// soundscape
@@ -719,7 +763,7 @@ export class App {
 		cam.updateMatrixWorld();
 		this.streams.renderReflection( r, this.scene, cam );
 		_frustum.setFromProjectionMatrix( _m4.multiplyMatrices( cam.projectionMatrix, cam.matrixWorldInverse ) );
-		for ( const w of [ this.water, ...this.streams.ponds ] ) if ( inView( w.mesh ) ) w.renderMirror( r, this.scene, cam );
+		for ( const w of [ this.water, ...this.streams.ponds, ...this.extraWaters ] ) if ( inView( w.mesh ) ) w.renderMirror( r, this.scene, cam );
 
 		// 1. everything but the water
 		r.setRenderTarget( this.post.sceneRT );

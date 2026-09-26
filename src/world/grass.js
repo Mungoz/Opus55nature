@@ -1,3 +1,4 @@
+/* global __HORROR__ */
 import * as THREE from 'three';
 import { commonParsGLSL, terrainUniformsGLSL, terrainLookupFnGLSL } from '../shaders/common.glsl.js';
 import { noiseGLSL } from '../shaders/noise.glsl.js';
@@ -68,6 +69,21 @@ void main() {
 		dens = smoothstep( -0.5, 0.0, depth ) * ( 1.0 - smoothstep( 0.45, 0.85, depth ) );
 		dens *= smoothstep( 0.5, 0.68, textureLod( uNoiseTex, p / 70.0 + 0.3, 0.0 ).r );
 	}
+${ __HORROR__ ? `#if STORY
+	// nothing grows on the trail's tread (nor its braid), the verge is trodden short, and
+	// nothing under the props
+	vec4 sm = storyMap( p );
+	{
+		float ad = abs( sm.x );
+		float rag = gnoise( p * 3.1 ) * 0.09 + gnoise( p * 9.0 ) * 0.045;
+		float halfW = 0.28 + 0.11 * gnoise( p * 0.17 + 4.0 ) + 0.05 * gnoise( p * 0.7 );
+		// tufts lean in over the edge, thinning toward the tread
+		float tread = 1.0 - smoothstep( halfW - 0.12, halfW + 0.22, ad + rag );
+		float side = gnoise( p * 0.019 + 2.0 ) > 0.0 ? 1.0 : -1.0;
+		float braid = smoothstep( 0.05, 0.4, gnoise( p * 0.03 + 7.7 ) ) * ( 1.0 - smoothstep( 0.1, 0.2, abs( sm.x - side * ( 0.95 + 0.3 * gnoise( p * 0.05 + 1.3 ) ) ) + rag ) );
+		dens *= ( 1.0 - max( tread, braid * 0.85 ) ) * ( 1.0 - sm.w ) * ( 1.0 - sm.y * 0.55 );
+	}
+#endif` : '' }
 	float keep = step( r1, dens * uDensity );
 	float scale = keep * fade;
 	if ( scale < 0.01 ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
@@ -77,6 +93,9 @@ void main() {
 	// patches cropped short by grazing deer and marmots
 	float graze = smoothstep( 0.45, 0.7, textureLod( uNoiseTex, p / 57.0 + 0.7, 0.0 ).b );
 	height *= mix( 1.0, 0.45, graze * step( uType, 0.5 ) );
+${ __HORROR__ ? `#if STORY
+	height *= mix( 0.35, 1.0, smoothstep( 0.35, 1.8, abs( sm.x ) ) ) * ( 1.0 - sm.y * 0.5 );
+#endif` : '' }
 	float cropK = 0.0;
 	for ( int i = 0; i < 12; i ++ ) {
 		vec4 cr = uCrop[ i ];

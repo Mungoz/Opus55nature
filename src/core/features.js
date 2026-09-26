@@ -18,6 +18,11 @@ const RIVER_CTRL = [
 	[ 78, 624 ], [ 70, 580 ], [ 84, 540 ], [ 74, 503 ], [ 58, 468 ], [ 48, 438 ],
 ].map( ( [ x, z ] ) => new THREE.Vector3( x, 0, z ) );
 
+// Edition-specific shaping (the horror edition fills this in before the terrain is built):
+// banks: low moraines [ { a: [ x, z ], b: [ x, z ], h, w } ]; pool: a reach of the stream
+// widened and deepened { s0, s1, widen, deepen } (s in metres from the fall)
+export const STORY_FEATURES = { banks: [], pool: null };
+
 export const RIVER_SAMPLES = 160;
 export const RIVER_CHUNK = 8; // segments per bounding box in the shader's coarse pass
 
@@ -71,7 +76,10 @@ export function riverSamples() {
 		const p = path.getPointAt( u );
 		// over its last stretch the stream spreads into a shallow fan and opens into the lake
 		const flare = 1 + 2.2 * THREE.MathUtils.smoothstep( u, 0.86, 1.0 );
-		out.push( { p: new THREE.Vector2( p.x, p.z ), width: THREE.MathUtils.lerp( 2.1, 4.4, Math.pow( u, 0.8 ) ) * flare, s: u * plen } );
+		// (a pool: the channel swells over its reach)
+		const pl = STORY_FEATURES.pool;
+		const pool = pl ? 1 + ( pl.widen - 1 ) * THREE.MathUtils.smoothstep( u * plen, pl.s0, pl.s0 + ( pl.s1 - pl.s0 ) * 0.35 ) * ( 1 - THREE.MathUtils.smoothstep( u * plen, pl.s1 - ( pl.s1 - pl.s0 ) * 0.35, pl.s1 ) ) : 1;
+		out.push( { p: new THREE.Vector2( p.x, p.z ), width: THREE.MathUtils.lerp( 2.1, 4.4, Math.pow( u, 0.8 ) ) * flare * pool, s: u * plen } );
 
 	}
 
@@ -103,6 +111,9 @@ uniform highp sampler2D uRiverTex;
 uniform vec4 uRiverBox;           // bounds of the stream (min x, min z, max x, max z), padded
 uniform vec4 uPonds[ 4 ];         // x, z, radius, surface height (3: the plunge pool)
 uniform float uFeatures;          // 0 during the pre-pass that measures the natural ground
+uniform vec4 uBankSeg[ 4 ];       // moraine banks (edition-specific): segment ends ax, az, bx, bz
+uniform vec4 uBankShape[ 4 ];     // crest height (0: none), half-width, seed
+uniform vec4 uPool;               // a deepened pool on the stream: x, z, radius, extra depth
 const vec2 FALL_BASE = vec2( ${FALL.base.x.toFixed( 3 )}, ${FALL.base.y.toFixed( 3 )} );
 const vec2 FALL_OUT = vec2( ${FALL.out.x.toFixed( 5 )}, ${FALL.out.y.toFixed( 5 )} );
 const float FALL_H = ${FALL.height.toFixed( 1 )};
@@ -178,6 +189,32 @@ float applyFallStep( vec2 p, float h ) {
 	return h + step_ * span;
 }
 
+// Low moraine banks: rounded ridges with a wandering, humped crest and tapering ends.
+float applyBanks( vec2 p, float h ) {
+	for ( int i = 0; i < 4; i ++ ) {
+		vec4 s = uBankShape[ i ];
+		if ( s.x <= 0.0 ) continue;
+		vec4 g = uBankSeg[ i ];
+		vec2 pa = p - g.xy, ba = g.zw - g.xy;
+		float len = length( ba );
+		float t = clamp( dot( pa, ba ) / ( len * len ), 0.0, 1.0 );
+		vec2 side = vec2( -ba.y, ba.x ) / len;
+		// the crest line snakes a little either side of the segment
+		float wander = s.y * 0.35 * gnoise( vec2( t * len / 70.0 + s.z, 1.7 ) );
+		vec2 q = pa - ba * t;
+		float perp = dot( q, side );
+		float d = length( vec2( perp - wander, length( q - side * perp ) ) );
+		float w = s.y * ( 0.8 + 0.3 * gnoise( vec2( t * len / 45.0, s.z + 3.0 ) ) );
+		float x = d / w;
+		if ( x >= 1.0 ) continue;
+		float prof = ( 1.0 - x * x ) * ( 1.0 - x * x );
+		float hump = 0.7 + 0.3 * gnoise( vec2( t * len / 28.0 + s.z * 2.0, 5.0 ) ) + 0.12 * gnoise( p * 0.11 );
+		float taper = smoothstep( 0.0, 0.2, t ) * ( 1.0 - smoothstep( 0.8, 1.0, t ) );
+		h += s.x * prof * hump * sqrt( taper );
+	}
+	return h;
+}
+
 float applyWater( vec2 p, float h ) {
 	if ( uFeatures < 0.5 ) return h;
 	// stream channel with soft banks
@@ -189,6 +226,7 @@ float applyWater( vec2 p, float h ) {
 		// drops gravel on the inside as a low bar
 		float outer = smoothstep( 0.006, 0.035, - bend ), inner = smoothstep( 0.006, 0.035, bend );
 		float depth = ( 0.4 + w * 0.1 ) * ( 1.0 + 0.45 * outer - 0.3 * inner );
+		depth += uPool.w * ( 1.0 - smoothstep( uPool.z * 0.4, uPool.z, length( p - uPool.xy ) ) );
 		float bed = surf - depth * ( 1.0 - pow( clamp( d / w, 0.0, 1.0 ), mix( 2.2, 5.0, outer ) ) ) - 0.05;
 		float lip = ( 0.55 + 0.35 * gnoise( p * 0.045 ) ) * ( 1.0 - 0.75 * inner ) + outer * ( 0.5 + 0.45 * gnoise( p * 0.07 + 2.0 ) );
 		float rise = mix( mix( 1.6, 4.5, inner ), 0.35, outer );

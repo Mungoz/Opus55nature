@@ -3,6 +3,13 @@ import { skyMappingGLSL } from './atmosphere.glsl.js';
 
 // Terrain heightmap / biome lookups, usable from vertex or fragment shaders.
 export const terrainUniformsGLSL = /* glsl */ `
+#ifndef STORY
+#define STORY ${ __HORROR__ ? 1 : 0 }
+#endif
+${ __HORROR__ ? `#if STORY
+uniform sampler2D uStoryMap;
+uniform vec4 uStoryXf;
+#endif` : '' }
 uniform sampler2D uHNear;
 uniform sampler2D uHFar;
 uniform sampler2D uBiomeNear;
@@ -12,6 +19,16 @@ uniform vec4 uFarXf;
 `;
 
 export const terrainLookupFnGLSL = /* glsl */ `
+${ __HORROR__ ? `#if STORY
+// the story's ground marks: x = metres across the trail (signed), y = trodden, z = puddle,
+// w = cleared of plants
+vec4 storyMap( vec2 p ) {
+	vec2 uv = ( p - uStoryXf.xy ) * uStoryXf.zw;
+	if ( uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0 ) return vec4( 6.0, 0.0, 0.0, 0.0 );
+	vec4 s = texture2D( uStoryMap, uv );
+	return vec4( ( s.r - 0.5 ) * 12.0, s.gba );
+}
+#endif` : '' }
 // ---------- terrain lookups ----------
 float nearWeight( vec2 p ) {
 	vec2 uv = ( p - uNearXf.xy ) * uNearXf.z;

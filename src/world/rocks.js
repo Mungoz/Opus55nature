@@ -270,6 +270,8 @@ export class Rocks {
 		}
 
 		for ( const e of extra ) add( e.x, e.z, e.s, e.sink ?? 0.3 );
+		// (an edition may keep ground clear: its paths and the places it builds on)
+		if ( this.keepOut ) this.list = this.list.filter( ( r ) => ! this.keepOut( r.x, r.z, r.s * 0.9 ) );
 
 		const mat = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3();
 		this.matrices = new Float32Array( this.list.length * 16 );

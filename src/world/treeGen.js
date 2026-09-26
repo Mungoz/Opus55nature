@@ -354,7 +354,7 @@ export function makeConifer( rng, species, form = 'normal' ) {
 
 	}
 
-	return { geometry: B.build(), height: H, radius: ( form === 'old' ? R * 1.1 : R ) + 0.4, species };
+	return { geometry: B.build(), height: H, radius: ( form === 'old' ? R * 1.1 : R ) + 0.4, species, trunk: r0 * 1.15 };
 
 }
 
@@ -466,7 +466,7 @@ export function makeBroadleaf( rng, species = 'birch' ) {
 
 	}
 
-	return { geometry: B.build(), height: H, radius: H * c.radius, species };
+	return { geometry: B.build(), height: H, radius: H * c.radius, species, trunk: H * 0.012 + 0.05 };
 
 }
 
@@ -545,7 +545,7 @@ export function makeSnag( rng ) {
 
 	}
 
-	return { geometry: B.build(), height: H * top + 0.5, radius: H * 0.2, species: 'snag' };
+	return { geometry: B.build(), height: H * top + 0.5, radius: H * 0.2, species: 'snag', trunk: r0 * 1.1 };
 
 }
 

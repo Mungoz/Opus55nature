@@ -1,3 +1,4 @@
+/* global __HORROR__ */
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { commonParsGLSL, terrainUniformsGLSL, terrainLookupFnGLSL } from '../shaders/common.glsl.js';
@@ -188,6 +189,12 @@ void main() {
 	}
 	float cotton = wet * smoothstep( 0.55, 0.7, textureLod( uNoiseTex, p / 13.0 + 0.61, 0.0 ).b );
 	float dens = max( bio.r * smoothstep( 0.4, 0.72, patch_ ) * 0.7, cotton * 0.9 );
+${ __HORROR__ ? `#if STORY
+	{
+		vec4 sm = storyMap( p );
+		dens *= smoothstep( 0.45, 1.1, abs( sm.x ) ) * ( 1.0 - sm.w ) * ( 1.0 - sm.y * 0.8 );
+	}
+#endif` : '' }
 	if ( r1 > dens || fade <= 0.0 ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
 	// each drift is mostly one species
 	float kind = cotton > 0.25 ? 5.0 : floor( fract( textureLod( uNoiseTex, p / 31.0, 0.0 ).g * 3.7 + r2 * 0.35 ) * 5.0 );

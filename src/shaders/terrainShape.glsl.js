@@ -147,6 +147,7 @@ float terrainHeight( vec2 p, float detail ) {
 		h += fine * ( 1.0 - wall * 0.6 );
 	}
 
+	h = applyBanks( p, h );
 	h = applyFallStep( p, h );
 
 	// --- Carve the lake ---

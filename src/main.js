@@ -1,13 +1,20 @@
 import './style.css';
 import { App } from './app.js';
-import { initUI } from './ui.js';
-import { Film } from './film.js';
+/* global __HORROR__ */
 
 const params = new URLSearchParams( location.search );
 const num = ( k, d ) => ( params.has( k ) ? parseFloat( params.get( k ) ) : d );
 const filmMode = params.has( 'film' );
 const shotMode = params.has( 'shot' ) || filmMode;
 if ( shotMode ) document.body.classList.add( 'shot' );
+// (the dev server serves both editions: its page starts as the nature one's)
+if ( __HORROR__ && ! document.body.classList.contains( 'horror' ) ) {
+
+	document.body.classList.add( 'horror' );
+	document.querySelector( '#loader .subtitle' ).textContent = 'late October, the last evening of the season';
+	document.getElementById( 'enter' ).textContent = 'Begin';
+
+}
 
 let stored = {};
 try {
@@ -62,12 +69,13 @@ if ( app ) app.load( ( f, text ) => {
 	if ( bar ) bar.style.transform = `scaleX(${f})`;
 	if ( label && text ) label.textContent = text;
 
-} ).then( () => {
+} ).then( async () => {
 
 	if ( filmMode ) {
 
 		// the recorder drives frames itself
 		document.body.classList.add( 'entered' );
+		const { Film } = await import( './film.js' );
 		window.film = new Film( app );
 		window.renderTrailerAudio = async () => ( await import( './trailerAudio.js' ) ).renderTrailerAudio( window.film.shots.map( ( s ) => s.dur ) );
 		window.__filmReady = true;
@@ -75,7 +83,7 @@ if ( app ) app.load( ( f, text ) => {
 
 	}
 
-	const ui = shotMode ? null : initUI( app );
+	const ui = shotMode ? null : __HORROR__ ? ( await import( './story/ui.js' ) ).initStoryUI( app ) : ( await import( './ui.js' ) ).initUI( app );
 	let last = performance.now();
 	let shotFrames = 0;
 	const loop = ( now ) => {
@@ -108,6 +116,7 @@ if ( app ) app.load( ( f, text ) => {
 		app.audio.start();
 		app.audio.setVolume( ui.settings.volume );
 		app.canvas.focus();
+		if ( __HORROR__ ) app.story.begin();
 
 	};
 

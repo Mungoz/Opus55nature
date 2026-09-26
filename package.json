@@ -7,7 +7,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "zip": "node tools/zip.mjs",
-    "release": "vite build && node tools/zip.mjs",
+    "release": "node tools/release.mjs horror",
+    "release:nature": "node tools/release.mjs nature",
     "shot": "node tools/shot.mjs"
   },
   "repository": {

@@ -1,0 +1,107 @@
+/* The horror edition's interface: almost nothing on screen. */
+
+body.horror #toolbar,
+body.horror #dock,
+body.horror #brand,
+body.horror #hint,
+body.horror .panel,
+body.horror #touch-buttons,
+body.horror #toast { display: none !important; }
+
+body.horror #scene { cursor: default; }
+body.horror.locked #scene { cursor: none; }
+
+#story-ui { position: fixed; inset: 0; pointer-events: none; z-index: 12; font-family: var(--serif); color: #efe8dc; }
+
+/* fades to and from black (and the dark before the title) */
+#story-fade { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity 1.5s ease; }
+
+/* captions for key sounds: small, low, bracketed like subtitles */
+#story-caption {
+	position: absolute; left: 50%; bottom: 9vh; transform: translateX(-50%);
+	max-width: min(80vw, 760px); text-align: center;
+	font-family: var(--sans); font-size: 15px; font-weight: 300; letter-spacing: 0.04em;
+	color: rgba(240, 234, 222, 0.86); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+	opacity: 0; transition: opacity 0.8s ease;
+}
+#story-caption.show { opacity: 1; }
+
+/* the dot that says something here can be read or used */
+#story-prompt {
+	position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+	display: flex; flex-direction: column; align-items: center; gap: 10px;
+	opacity: 0; transition: opacity 0.35s ease;
+}
+#story-prompt.show { opacity: 1; }
+#story-prompt i { width: 7px; height: 7px; border-radius: 50%; background: rgba(245, 238, 225, 0.9); box-shadow: 0 0 8px rgba(0, 0, 0, 0.8); }
+#story-prompt span { font-family: var(--sans); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(245, 238, 225, 0.75); text-shadow: 0 1px 4px #000; margin-top: 26px; }
+
+/* a centred title card over black */
+#story-card {
+	position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+	opacity: 0; transition: opacity 2.2s ease;
+}
+#story-card.show { opacity: 1; }
+#story-card h1 { font-weight: 300; letter-spacing: 0.5em; text-transform: uppercase; font-size: clamp(28px, 4.2vw, 54px); margin: 0 0 0 0.5em; }
+#story-card p { font-style: italic; font-weight: 300; font-size: clamp(15px, 1.6vw, 21px); color: rgba(239, 232, 220, 0.72); margin: 18px 0 0; letter-spacing: 0.06em; }
+
+/* the page being read: paper, pencil */
+#story-page {
+	position: absolute; inset: 0; display: grid; place-items: center;
+	background: radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.72));
+	opacity: 0; transition: opacity 0.5s ease; pointer-events: none;
+}
+#story-page.show { opacity: 1; pointer-events: auto; }
+#story-page .paper {
+	position: relative;
+	width: min(88vw, 560px); min-height: min(64vh, 620px); padding: 44px 50px 56px;
+	background:
+		radial-gradient(ellipse at 20% 10%, rgba(255, 255, 255, 0.18), transparent 60%),
+		radial-gradient(ellipse at 80% 90%, rgba(120, 90, 50, 0.22), transparent 55%),
+		linear-gradient(180deg, #d8ccb2, #cdbf9f 60%, #c4b491);
+	box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), inset 0 0 60px rgba(90, 64, 30, 0.35);
+	color: #2b2620;
+	transform: rotate(-0.8deg);
+}
+#story-page .paper::before {
+	/* ruled lines, faded */
+	content: ''; position: absolute; inset: 70px 28px 30px;
+	background: repeating-linear-gradient(180deg, transparent 0 33px, rgba(70, 80, 110, 0.18) 33px 34px);
+	pointer-events: none;
+}
+#story-page .head { font-family: var(--sans); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(60, 50, 38, 0.6); margin-bottom: 22px; }
+#story-page .entry { position: relative; font-family: "Cedarville Cursive", "Reenie Beanie", cursive; font-size: 22px; line-height: 34px; margin: 0 0 10px; white-space: pre-wrap; }
+#story-page .entry.hand1 { font-family: "Cedarville Cursive", cursive; font-size: 21px; }
+#story-page .entry.hand2 { font-family: "Reenie Beanie", cursive; font-size: 27px; }
+#story-page .entry.hand3 { font-family: "Nothing You Could Do", cursive; font-size: 19px; }
+#story-page .entry.faint { opacity: 0.55; }
+#story-page .entry.scrawl { transform: rotate(-2deg); letter-spacing: 0.02em; }
+#story-page .foot { position: absolute; left: 0; right: 0; bottom: -36px; text-align: center; font-family: var(--sans); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(240, 234, 222, 0.6); }
+
+/* the pause menu */
+#story-menu {
+	position: absolute; inset: 0; display: grid; place-items: center;
+	background: rgba(4, 5, 7, 0.72); backdrop-filter: blur(3px);
+	opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+}
+#story-menu.show { opacity: 1; pointer-events: auto; }
+#story-menu .box { width: min(88vw, 400px); font-family: var(--sans); font-weight: 300; }
+#story-menu h2 { font-family: var(--serif); font-weight: 300; letter-spacing: 0.4em; text-transform: uppercase; font-size: 22px; text-align: center; margin: 0 0 26px; }
+#story-menu .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0; font-size: 13px; letter-spacing: 0.05em; color: rgba(239, 232, 220, 0.8); }
+#story-menu input[type=range] { width: 170px; accent-color: #c9b58e; }
+#story-menu .chips { display: flex; gap: 6px; }
+#story-menu .chips button, #story-menu .btn {
+	font: inherit; font-size: 12px; letter-spacing: 0.08em; color: #efe8dc; background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 3px; padding: 6px 10px; cursor: pointer;
+}
+#story-menu .chips button.on { background: rgba(201, 181, 142, 0.28); border-color: rgba(201, 181, 142, 0.6); }
+#story-menu .btn { display: block; width: 100%; margin-top: 10px; padding: 11px; font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; }
+#story-menu .btn.main { background: rgba(201, 181, 142, 0.2); border-color: rgba(201, 181, 142, 0.5); margin-top: 26px; }
+#story-menu .keys { margin-top: 22px; font-size: 11px; line-height: 1.8; color: rgba(239, 232, 220, 0.5); text-align: center; letter-spacing: 0.06em; }
+
+/* the loader's own words for this edition */
+body.horror #loader h1 { letter-spacing: 0.62em; }
+body.horror #loader .enter { letter-spacing: 0.3em; }
+
+/* debug readout (?debug) */
+#story-debug { position: absolute; left: 10px; top: 10px; font: 11px/1.45 monospace; color: #cfe; background: rgba(0, 0, 0, 0.55); padding: 6px 8px; white-space: pre; pointer-events: none; }

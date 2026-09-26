@@ -103,6 +103,8 @@ export class Weather {
 		this.target = WEATHERS.clear;
 		this.name = 'clear';
 		this.dynamic = false;
+		// random strikes in a storm (a director may aim its own instead)
+		this.autoStrikes = true;
 		this.userWind = 1;
 		this.userClouds = null;
 		this.wetness = 0;
@@ -318,7 +320,7 @@ export class Weather {
 
 		// lightning
 		if ( this.flash > 0 ) this.flash = Math.max( 0, this.flash - dt * 3.2 );
-		if ( s.storm > 0.6 ) {
+		if ( s.storm > 0.6 && this.autoStrikes ) {
 
 			this._strikeTimer -= dt;
 			if ( this._strikeTimer <= 0 ) {

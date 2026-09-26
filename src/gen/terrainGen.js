@@ -3,7 +3,7 @@ import { noiseGLSL } from '../shaders/noise.glsl.js';
 import { terrainShapeGLSL } from '../shaders/terrainShape.glsl.js';
 import { FullscreenPass, passMaterial, makeTarget } from './gpu.js';
 import { WORLD, regionOrigin } from '../core/world.js';
-import { riverSamples, PONDS, RIVER_SAMPLES, RIVER_CHUNK } from '../core/features.js';
+import { riverSamples, PONDS, RIVER_SAMPLES, RIVER_CHUNK, STORY_FEATURES } from '../core/features.js';
 
 // The stream data for the shaders, parked far away until the water is measured.
 function riverTexture() {
@@ -288,6 +288,16 @@ export class TerrainData {
 		for ( let pass2 = 0; pass2 < 3; pass2 ++ ) K = K.map( ( v, i ) => ( K[ Math.max( 0, i - 1 ) ] + v * 2 + K[ Math.min( K.length - 1, i + 1 ) ] ) / 4 );
 		samples.forEach( ( smp, i ) => ( smp.k = K[ i ] ) );
 		this.river = samples;
+		// the deepened pool, centred on its reach of the stream
+		const pl = STORY_FEATURES.pool;
+		if ( pl ) {
+
+			const inPool = samples.filter( ( smp ) => smp.s >= pl.s0 && smp.s <= pl.s1 );
+			const c = inPool.reduce( ( a, smp ) => a.add( smp.p ), new THREE.Vector2() ).multiplyScalar( 1 / Math.max( 1, inPool.length ) );
+			this.featureUniforms.uPool.value.set( c.x, c.y, ( pl.s1 - pl.s0 ) * 0.62, pl.deepen );
+			this.pool = { c, r: ( pl.s1 - pl.s0 ) * 0.5 };
+
+		}
 		const rd = this.featureUniforms.uRiverTex.value.image.data;
 		samples.forEach( ( smp, i ) => {
 
@@ -347,6 +357,9 @@ export class TerrainData {
 			uRiverBox: { value: new THREE.Vector4( - 1e6, - 1e6, 1e6, 1e6 ) },
 			uPonds: { value: Array.from( { length: 4 }, () => new THREE.Vector4( 1e6, 1e6, 0, 0 ) ) },
 			uFeatures: { value: 0 },
+			uBankSeg: { value: Array.from( { length: 4 }, ( v, i ) => { const b = STORY_FEATURES.banks[ i ]; return b ? new THREE.Vector4( b.a[ 0 ], b.a[ 1 ], b.b[ 0 ], b.b[ 1 ] ) : new THREE.Vector4(); } ) },
+			uBankShape: { value: Array.from( { length: 4 }, ( v, i ) => { const b = STORY_FEATURES.banks[ i ]; return b ? new THREE.Vector4( b.h, b.w, i * 7.1 + 3.3, 0 ) : new THREE.Vector4(); } ) },
+			uPool: { value: new THREE.Vector4( 1e6, 1e6, 1, 0 ) },
 		};
 		this._measureWater();
 

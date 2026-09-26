@@ -32,6 +32,18 @@ export class Controls {
 		this.touchVertical = 0;
 		this.onStick = null; // ( active, baseX, baseY, dx, dy ) for the on-screen joystick
 		this.eyeHeight = 1.7;
+		// on foot: walking and hurrying speeds (m/s)
+		this.walkSpeed = 3.2;
+		this.runSpeed = 9;
+		// optional hooks (the horror edition): collide( pos, prevX, prevZ ) pushes the viewer out
+		// of obstacles; floorAt( x, z, ground ) gives the height walked on (decks, bridges);
+		// fly = false keeps the viewer on foot
+		this.collide = null;
+		this.floorAt = null;
+		this.canFly = true;
+		this.moveScale = 1;
+		// stride length (m) for a step-by-step head bob; 0 keeps the gentle sway
+		this.stride = 0;
 
 		this._bind();
 
@@ -236,7 +248,7 @@ export class Controls {
 
 		if ( _move.lengthSq() > 1 ) _move.normalize();
 		const fast = k.has( 'ShiftLeft' ) || k.has( 'ShiftRight' );
-		let speed = this.walk ? ( fast ? 9 : 3.2 ) : this.speed * ( fast ? 4 : 1 );
+		let speed = this.walk ? ( fast ? this.runSpeed : this.walkSpeed ) * this.moveScale : this.speed * ( fast ? 4 : 1 );
 		const target = _move.multiplyScalar( speed );
 		const a = 1 - Math.exp( - dt * ( this.walk ? 10 : 4 ) );
 		this.velocity.lerp( target, a );
@@ -252,6 +264,7 @@ export class Controls {
 
 		}
 
+		if ( this.collide ) this.collide( cam.position, px, pz );
 		// keep inside the world
 		const r = Math.hypot( cam.position.x, cam.position.z - WORLD.lakeCenter[ 1 ] );
 		if ( r > WORLD.boundsRadius ) {
@@ -262,13 +275,25 @@ export class Controls {
 
 		}
 
-		const ground = this.terrain.heightAt( cam.position.x, cam.position.z );
+		let ground = this.terrain.heightAt( cam.position.x, cam.position.z );
+		if ( this.floorAt ) ground = this.floorAt( cam.position.x, cam.position.z, ground );
 		const floor = Math.max( ground, WORLD.waterLevel ) ;
 		if ( this.walk ) {
 
 			const moving = Math.hypot( this.velocity.x, this.velocity.z );
-			this.bob += dt * moving * 2.2;
-			const bobY = Math.sin( this.bob ) * 0.035 * Math.min( moving / 3, 1 );
+			let bobY;
+			if ( this.stride ) {
+
+				// a step every pi of the phase: the head rises over each planted foot
+				this.bob += dt * moving * Math.PI / this.stride;
+				bobY = ( Math.abs( Math.sin( this.bob ) ) - 0.64 ) * 0.045 * Math.min( moving / 2.5, 1 );
+
+			} else {
+
+				this.bob += dt * moving * 2.2;
+				bobY = Math.sin( this.bob ) * 0.035 * Math.min( moving / 3, 1 );
+
+			}
 			const want = Math.max( ground, WORLD.waterLevel - 0.4 ) + this.eyeHeight + bobY;
 			cam.position.y += ( want - cam.position.y ) * ( 1 - Math.exp( - dt * 14 ) );
 

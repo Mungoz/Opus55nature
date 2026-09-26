@@ -1,4 +1,4 @@
-// Packs dist/ into larchmere-itch.zip with index.html at the archive root.
+// Packs dist/ into a zip (default larchmere-itch.zip) with index.html at the archive root.
 // (Windows' Compress-Archive writes backslash paths, which itch.io rejects.)
 import { zipSync } from 'fflate';
 import fs from 'node:fs';
@@ -27,7 +27,8 @@ const walk = ( dir ) => {
 
 walk( root );
 const out = zipSync( files );
-fs.writeFileSync( 'larchmere-itch.zip', out );
+const name = process.argv[ 2 ] || 'larchmere-itch.zip';
+fs.writeFileSync( name, out );
 const total = Object.keys( files ).length;
-console.log( `larchmere-itch.zip  ${( out.length / 1024 ).toFixed( 0 )} KB  (${total} files)` );
+console.log( `${name}  ${( out.length / 1024 ).toFixed( 0 )} KB  (${total} files)` );
 for ( const f of Object.keys( files ) ) console.log( '  ' + f );
