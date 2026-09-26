@@ -345,7 +345,7 @@ export class TerrainData {
 			let m = h( k );
 			for ( let j = 1; j <= 24; j ++ ) m = Math.min( m, h( k + j ) );
 			k += 25;
-			return { c: pd.c.clone(), r: pd.r, surf: m - 0.3, plunge: !! pd.plunge };
+			return { c: pd.c.clone(), r: pd.r, surf: m - 0.3, plunge: !! pd.plunge, peat: STORY_FEATURES.peat?.[ PONDS.indexOf( pd ) ] ?? 0 };
 
 		} );
 		// the plunge pool and the stream leaving it share one level

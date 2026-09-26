@@ -156,7 +156,8 @@ export const BANKS = [
 export const BRIDGE_POOL = { s0: 128, s1: 182, widen: 2.1, deepen: 0.9 };
 
 // what the terrain generator shapes for this edition (see core/features.js)
-export const FEATURES = { banks: BANKS, pool: BRIDGE_POOL };
+// (the tarn, pond 1, is peaty: dark enough to mirror)
+export const FEATURES = { banks: BANKS, pool: BRIDGE_POOL, peat: [ 0, 1, 0.4, 0 ] };
 
 // ---------------------------------------------------------------------------
 // Marks on the ground (story/ground.js): yards, landings, clearings under props
@@ -192,6 +193,7 @@ export const GROUND_BOX = [ - 285, 195, 120, 790 ];
 // Open water: no reeds or lily pads on the jetty's line and its berths, round the boats on
 // the west strand, or on the tarn, whose reflections the story needs
 // ---------------------------------------------------------------------------
+const TARN_VIEW = [ - 97, 692 ];
 export function waterClear( x, z, kind ) {
 
 	const j = PLACES.jetty, c = Math.cos( j.yaw ), s = Math.sin( j.yaw );
@@ -203,6 +205,18 @@ export function waterClear( x, z, kind ) {
 	const r = Math.hypot( x - t.x, z - t.z );
 	// the tarn stays open, but for a few pads in its northern lobe
 	if ( kind === 'pad' && r < 30 && ! ( z < t.z - 10 && ( ( x * 7.1 + z * 3.3 ) % 1 + 1 ) % 1 < 0.3 ) ) return true;
+	// the tarn's near shore, where the path comes to the water: open, so you see into it; and
+	// round the figure's place on the far shore, and between (no reeds in front of it)
+	if ( Math.hypot( x - TARN_VIEW[ 0 ], z - TARN_VIEW[ 1 ] ) < 13 ) return true;
+	{
+
+		const [ ex, ez ] = SIGHTS.tarn.eye, [ fx, fz ] = SIGHTS.tarn.fig;
+		const dx = fx - ex, dz = fz - ez, l = Math.hypot( dx, dz );
+		const along = ( ( x - ex ) * dx + ( z - ez ) * dz ) / l;
+		const across = Math.abs( ( x - ex ) * dz - ( z - ez ) * dx ) / l;
+		if ( along > 0 && along < l + 6 && across < 5 + along * 0.12 ) return true;
+
+	}
 	return false;
 
 }
@@ -258,5 +272,34 @@ function fordWest( td ) {
 	let nx = tz / tl, nz = - tx / tl;
 	if ( nx < 0 ) { nx = - nx; nz = - nz; }
 	return [ c.p.x - nx * ( c.width + 11 ), c.p.y - nz * ( c.width + 11 ) ];
+
+}
+
+// ---------------------------------------------------------------------------
+// Sightlines. Where the figure is seen in the water, what is behind it (in the mirror) must be
+// light - sky, the snow of the horn in the haze - or a dark coat on dark water shows nothing.
+// Trees are kept out of a corridor running on from the eye, past the figure, down the valley.
+// ---------------------------------------------------------------------------
+export const SIGHTS = {
+	// F5: from the tarn's south-east shore, across it to the far shore's shallows, a little west
+	// of north: its reflection out in the middle of the tarn against the misty valley and the horn
+	tarn: { eye: [ - 93, 694 ], fig: [ - 99.3, 669.6 ], len: 240 },
+};
+
+export function treeClear( x, z ) {
+
+	for ( const s of Object.values( SIGHTS ) ) {
+
+		const [ ex, ez ] = s.eye, [ fx, fz ] = s.fig;
+		const dx = fx - ex, dz = fz - ez, l = Math.hypot( dx, dz );
+		const ux = dx / l, uz = dz / l;
+		const along = ( x - fx ) * ux + ( z - fz ) * uz;
+		if ( along < - 2 || along > s.len ) continue;
+		const across = Math.abs( ( x - fx ) * uz - ( z - fz ) * ux );
+		if ( across < 5 + along * 0.13 ) return true;
+
+	}
+
+	return false;
 
 }

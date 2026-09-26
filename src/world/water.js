@@ -36,6 +36,9 @@ uniform vec3 waterColor;
 uniform float uLevel;
 uniform vec4 uRipples[ ${MAX_RIPPLES} ];
 uniform float uCalm;
+// a peaty water (0: clear like the lake): its body stained dark brown, the bed lost within a
+// hand's depth, so that it is a mirror
+uniform float uPeat;
 varying vec4 mirrorCoord;
 varying vec3 worldPosition;
 
@@ -142,8 +145,10 @@ void main() {
 	vec3 amb = skyIrradiance( vec3( 0.0, 1.0, 0.0 ) );
 	vec3 scatter = max( 0.0, dot( surfaceNormal, eyeDirection ) ) * waterColor * ( amb + sunColor * max( uSunDir.y, 0.0 ) * 0.3 ) / PI;
 	vec3 body = diffuseLight * waterColor * 0.3 / PI + scatter;
+	// (peaty water scatters almost nothing back: brown-black)
 	// the water is clear: in the shallows the stony bed shows through the body colour
-	float opacity = smoothstep( 0.2, 9.0, depth ) * 0.85;
+	float opacity = mix( smoothstep( 0.2, 9.0, depth ) * 0.85, smoothstep( 0.02, 0.35, depth ) * 0.97, uPeat );
+	body = mix( body, body * vec3( 0.25, 0.18, 0.1 ), uPeat );
 	vec3 col = reflectionSample * reflectance + specularLight + body * ( 1.0 - reflectance ) * opacity;
 	float alpha = reflectance + ( 1.0 - reflectance ) * opacity;
 
@@ -221,6 +226,7 @@ export class Water {
 			waterColor: { value: new THREE.Color( 0x1e4a48 ).convertSRGBToLinear() },
 			uRipples: { value: this.ripples },
 			uCalm: { value: 0.3 },
+			uPeat: { value: opts.peat ?? 0 },
 		};
 		this.material = new THREE.ShaderMaterial( {
 			name: 'LakeWater',

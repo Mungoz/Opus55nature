@@ -360,7 +360,9 @@ export class Story {
 				if ( share <= 0.25 ) continue;
 				// ahead of you: the angle off the path's heading
 				const ahead = ( ( c.x - e.p.x ) * e.tx + ( c.z - e.p.z ) * e.tz ) / dist;
-				score += share * ( 0.4 + 0.6 * Math.max( 0, ahead ) );
+				// and seen against something light: a dark coat on dark water shows nothing
+				const back = this.sight.backdrop( e.p, pos, level );
+				score += share * ( 0.4 + 0.6 * Math.max( 0, ahead ) ) * ( 0.25 + back );
 
 			}
 

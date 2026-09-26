@@ -375,6 +375,8 @@ ${ __HORROR__ ? `#if STORY
 	float sh = sunShadow( wp, N );
 	// canopy shade inside dense stands (trees far away are not in the shadow cascades)
 	sh *= 1.0 - wForest * 0.55 * smoothstep( 80.0, 400.0, dist ) * ( 1.0 - canopyW * 0.7 );
+	// (wet turf under the blades hardly gleams; bare earth, rock and stones do)
+	wetSheen = 1.0 - 0.8 * smoothstep( 0.2, 0.7, wGrass ) * ( 1.0 - wet );
 	vec3 col = shadeSurface( alb, Nd, V, wp, occl, sh, rough, mix( 0.03, 0.02, wet ) );
 
 	// snow sparkle

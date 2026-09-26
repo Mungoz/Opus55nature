@@ -469,6 +469,8 @@ export class Streams {
 				fallback: this.lake,
 				farDist: 220,
 				name: 'pond',
+				// (an edition may darken a pond, so it mirrors)
+				peat: pd.peat ?? 0,
 			} );
 			w.uniforms.size.value = 3.5;
 			w.reflectOnly.push( this.terrainMesh );

@@ -70,10 +70,10 @@ body.horror.locked #scene { cursor: none; }
 	pointer-events: none;
 }
 #story-page .head { font-family: var(--sans); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(60, 50, 38, 0.6); margin-bottom: 22px; }
-#story-page .entry { position: relative; font-family: "Cedarville Cursive", "Reenie Beanie", cursive; font-size: 22px; line-height: 34px; margin: 0 0 10px; white-space: pre-wrap; }
-#story-page .entry.hand1 { font-family: "Cedarville Cursive", cursive; font-size: 21px; }
-#story-page .entry.hand2 { font-family: "Reenie Beanie", cursive; font-size: 27px; }
-#story-page .entry.hand3 { font-family: "Nothing You Could Do", cursive; font-size: 19px; }
+#story-page .entry { position: relative; font-family: "Cedarville Cursive", "Reenie Beanie", "Segoe Script", "Bradley Hand", serif; font-size: 22px; line-height: 34px; margin: 0 0 10px; white-space: pre-wrap; }
+#story-page .entry.hand1 { font-family: "Cedarville Cursive", "Segoe Script", "Bradley Hand", serif; font-size: 21px; color: #3a3530; }
+#story-page .entry.hand2 { font-family: "Reenie Beanie", "Segoe Print", "Bradley Hand", serif; font-size: 27px; color: #1f2a44; }
+#story-page .entry.hand3 { font-family: "Nothing You Could Do", "Segoe Print", "Bradley Hand", serif; font-size: 19px; color: #2b2622; }
 #story-page .entry.faint { opacity: 0.55; }
 #story-page .entry.scrawl { transform: rotate(-2deg); letter-spacing: 0.02em; }
 #story-page .foot { position: absolute; left: 0; right: 0; bottom: -36px; text-align: center; font-family: var(--sans); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(240, 234, 222, 0.6); }

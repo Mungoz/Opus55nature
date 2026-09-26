@@ -2,6 +2,22 @@ import * as THREE from 'three';
 
 const _p = new THREE.Vector3(), _m = new THREE.Vector3(), _r = new THREE.Vector3(), _f = new THREE.Vector3();
 const HEIGHTS = [ 1.72, 1.35, 0.95, 0.5 ]; // hat, chest, hips, knees
+// how tall each kind of obstacle stands (m); 0: see-through
+const HEIGHT = { tree: 40, rock: 0, log: 0.55, stump: 0.6, hut: 5.5, fence: 1.15, gate: 1.2, bridge: 0, jetty: 0, post: 1.2, signpost: 2.6, cross: 3, boatJ: 0.8, boatEnd: 0.9 };
+
+// closest approach of segments p (a-b) and q (c-d) in the plane: [ t along p, distance ]
+function segSeg( ax, az, bx, bz, cx, cz, dx, dz ) {
+
+	const ux = bx - ax, uz = bz - az, vx = dx - cx, vz = dz - cz, wx = ax - cx, wz = az - cz;
+	const A = ux * ux + uz * uz, B = ux * vx + uz * vz, Cc = vx * vx + vz * vz, D = ux * wx + uz * wz, E = vx * wx + vz * wz;
+	const den = A * Cc - B * B;
+	let s = den > 1e-9 ? THREE.MathUtils.clamp( ( B * E - Cc * D ) / den, 0, 1 ) : 0;
+	let t = Cc > 1e-9 ? THREE.MathUtils.clamp( ( B * s + E ) / Cc, 0, 1 ) : 0;
+	s = A > 1e-9 ? THREE.MathUtils.clamp( ( B * t - D ) / A, 0, 1 ) : 0;
+	const px = ax + ux * s - ( cx + vx * t ), pz = az + uz * s - ( cz + vz * t );
+	return [ s, Math.hypot( px, pz ) ];
+
+}
 
 // Can the player see the figure? Directly: on screen, big enough, with a clear line past the
 // ground, trunks and walls. Reflected: its mirror image on screen, at a point that really is
@@ -21,11 +37,14 @@ export class Sight {
 
 	}
 
-	// the terrain, trunks and walls between a and b?
+	// The terrain, trunks, walls and fences between a and b? The ground is sampled along the
+	// line; obstacles (the collision shapes) are tested exactly against it, each standing up to
+	// its own height (a fence hides only what is below its top rail).
 	blocked( a, b, skip = 0.6 ) {
 
 		const td = this.app.terrainData;
 		const d = a.distanceTo( b );
+		if ( d > 600 ) return true;
 		const n = Math.max( 2, Math.ceil( d / 1.5 ) );
 		for ( let i = 1; i < n; i ++ ) {
 
@@ -33,38 +52,54 @@ export class Sight {
 			if ( t * d < skip || ( 1 - t ) * d < skip ) continue;
 			const x = a.x + ( b.x - a.x ) * t, y = a.y + ( b.y - a.y ) * t, z = a.z + ( b.z - a.z ) * t;
 			if ( td.heightAt( x, z ) > y + 0.05 ) return true;
-			// trunks and walls: anything in the collision grid below the line's height there
-			if ( y < 12 && this.story.collision.blocked( x, z, 0.0 ) ) {
-
-				// (logs and stumps are low: only trunks and walls stand in the way above knee height)
-				if ( y - td.heightAt( x, z ) > 0.8 && this._tall( x, z ) ) return true;
-
-			}
 
 		}
 
-		return false;
+		return this._shapes( a, b, skip );
 
 	}
 
-	_tall( x, z ) {
+	_shapes( a, b, skip ) {
 
-		const C = this.story.collision;
-		const l = C.grid.get( C._key( Math.floor( x / 4 ), Math.floor( z / 4 ) ) );
-		if ( ! l ) return false;
-		for ( const s of l ) {
+		const C = this.story.collision, td = this.app.terrainData;
+		const stamp = ++ C._stamp;
+		const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot( dx, dz );
+		const steps = Math.max( 1, Math.ceil( len / 2 ) );
+		for ( let k = 0; k <= steps; k ++ ) {
 
-			if ( s.tag === 'log' || s.tag === 'stump' || s.tag === 'rock' || s.off ) continue;
-			let cx, cz;
-			if ( s.t === 0 ) { cx = s.x; cz = s.z; } else {
+			const cx = a.x + dx * k / steps, cz = a.z + dz * k / steps;
+			for ( let i = Math.floor( cx / 4 ) - 1; i <= Math.floor( cx / 4 ) + 1; i ++ ) for ( let j = Math.floor( cz / 4 ) - 1; j <= Math.floor( cz / 4 ) + 1; j ++ ) {
 
-				const ex = s.bx - s.ax, ez = s.bz - s.az, l2 = ex * ex + ez * ez || 1;
-				const t = THREE.MathUtils.clamp( ( ( x - s.ax ) * ex + ( z - s.az ) * ez ) / l2, 0, 1 );
-				cx = s.ax + ex * t; cz = s.az + ez * t;
+				const l = C.grid.get( C._key( i, j ) );
+				if ( ! l ) continue;
+				for ( const sh of l ) {
+
+					if ( sh.stamp === stamp || sh.off ) continue;
+					sh.stamp = stamp;
+					const H = HEIGHT[ sh.tag ] ?? 2;
+					if ( H <= 0 ) continue;
+					// the parameter along a-b (xz) of the closest approach to the shape
+					let t, dist;
+					if ( sh.t === 0 ) {
+
+						t = len > 1e-6 ? THREE.MathUtils.clamp( ( ( sh.x - a.x ) * dx + ( sh.z - a.z ) * dz ) / ( len * len ), 0, 1 ) : 0;
+						dist = Math.hypot( a.x + dx * t - sh.x, a.z + dz * t - sh.z );
+
+					} else {
+
+						[ t, dist ] = segSeg( a.x, a.z, b.x, b.z, sh.ax, sh.az, sh.bx, sh.bz );
+
+					}
+
+					if ( dist >= sh.r ) continue;
+					if ( t * len < skip || ( 1 - t ) * len < skip ) continue;
+					const x = a.x + dx * t, z = a.z + dz * t, y = a.y + ( b.y - a.y ) * t;
+					const top = ( sh.tag === 'rock' ? sh.r * 1.3 : H ) + td.heightAt( x, z );
+					if ( y < top ) return true;
+
+				}
 
 			}
-
-			if ( Math.hypot( x - cx, z - cz ) < s.r ) return true;
 
 		}
 
@@ -186,7 +221,9 @@ export class Sight {
 				if ( ! this._onScreen( _m, s ) ) continue;
 				// where the light leaves the water toward the eye
 				const t = ( eye.y - level ) / ( eye.y - _m.y );
+				if ( ! ( t > 0 && t < 1 ) ) continue;
 				_r.copy( eye ).lerp( _m, t );
+				if ( _r.distanceToSquared( eye ) > 250 * 250 ) continue;
 				if ( ! w.contains( _r.x, _r.z ) ) continue;
 				if ( h === HEIGHTS[ 0 ] ) top = s.y;
 				if ( h === HEIGHTS[ HEIGHTS.length - 1 ] ) bot = s.y;
@@ -227,7 +264,9 @@ export class Sight {
 			if ( y < level ) continue;
 			m.set( pos.x, 2 * level - y, pos.z );
 			const t = ( eye.y - level ) / ( eye.y - m.y );
+			if ( ! ( t > 0 && t < 1 ) ) continue;
 			r.copy( eye ).lerp( m, t );
+			if ( r.distanceToSquared( eye ) > 250 * 250 ) continue;
 			if ( ! contains( r.x, r.z ) ) continue;
 			r.y = level + 0.02;
 			if ( this.blocked( eye, r, 0.3 ) ) continue;
@@ -238,6 +277,75 @@ export class Sight {
 		}
 
 		return seen / HEIGHTS.length;
+
+	}
+
+	// What shows behind a figure at pos seen in water at level from eye: follow the mirrored
+	// ray on past its head and chest to what it meets - the ground or a spruce (dark: a dark
+	// coat is lost against it), a larch, birch or aspen crown (light), or nothing, sky and mist
+	// (light). Returns the share of those two points seen against something light.
+	backdrop( eye, pos, level ) {
+
+		const F = this.app.forest, td = this.app.terrainData;
+		const light = this._light || ( this._light = new Set( [ ...F.speciesVariants.larch, ...F.speciesVariants.birch, ...F.speciesVariants.aspen ] ) );
+		const e = new THREE.Vector3( eye.x, 2 * level - eye.y, eye.z ), p = new THREE.Vector3(), d = new THREE.Vector3(), q = new THREE.Vector3();
+		let good = 0;
+		for ( const h of [ 1.62, 1.3 ] ) {
+
+			p.set( pos.x, pos.y + h, pos.z );
+			d.subVectors( p, e ).normalize();
+			let res = 1;
+			for ( let t = 1; t < 400; t += t < 40 ? 1.5 : 6 ) {
+
+				q.copy( p ).addScaledVector( d, t );
+				if ( q.y > level + 90 ) break;
+				if ( td.heightAt( q.x, q.z ) > q.y ) { res = 0; break; }
+				// a crown here?
+				let hit = null;
+				for ( const tr of this._treesNear( q.x, q.z ) ) {
+
+					const v = F.variants[ tr.variant ], H = v.height * tr.s, R = ( v.radius ?? 2 ) * tr.s * 0.55;
+					if ( Math.hypot( tr.x - q.x, tr.z - q.z ) < R && q.y > tr.y + H * 0.25 && q.y < tr.y + H ) { hit = tr; break; }
+
+				}
+
+				// (after sunset the sky is the only light thing; gold crowns count for a little)
+				if ( hit ) { res = light.has( hit.variant ) ? ( this.app.sky.sunElevation > 1 ? 1 : 0.35 ) : 0; break; }
+
+			}
+
+			good += res;
+
+		}
+
+		return good / 2;
+
+	}
+
+	_treesNear( x, z ) {
+
+		if ( ! this._tg ) {
+
+			this._tg = new Map();
+			for ( const t of this.app.forest.trees ) {
+
+				const k = Math.floor( t.x / 8 ) * 100003 + Math.floor( t.z / 8 );
+				if ( ! this._tg.has( k ) ) this._tg.set( k, [] );
+				this._tg.get( k ).push( t );
+
+			}
+
+		}
+
+		const out = [];
+		for ( let i = - 1; i <= 1; i ++ ) for ( let j = - 1; j <= 1; j ++ ) {
+
+			const l = this._tg.get( ( Math.floor( x / 8 ) + i ) * 100003 + Math.floor( z / 8 ) + j );
+			if ( l ) out.push( ...l );
+
+		}
+
+		return out;
 
 	}
 

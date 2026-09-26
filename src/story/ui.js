@@ -48,6 +48,15 @@ export function initStoryUI( app ) {
 
 	const S = app.story;
 	document.body.classList.add( 'horror' );
+	// J.'s pencil, and two other hands in the register
+	{
+
+		const l = document.createElement( 'link' );
+		l.rel = 'stylesheet';
+		l.href = 'https://fonts.googleapis.com/css2?family=Cedarville+Cursive&family=Reenie+Beanie&family=Nothing+You+Could+Do&display=swap';
+		document.head.appendChild( l );
+
+	}
 	const settings = { volume: 0.85, sens: 1, invert: false, captions: true, ...load() };
 	const persist = () => save( { ...settings, quality: app.presetName } );
 	if ( settings.quality && settings.quality !== app.presetName ) app.setQuality( settings.quality );

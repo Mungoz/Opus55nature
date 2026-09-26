@@ -317,6 +317,9 @@ vec3 specGGX( vec3 N, vec3 V, vec3 L, float rough, float f0 ) {
 }
 
 // Standard lit result for opaque diffuse-ish surfaces.
+// how much of the wet sky-sheen a surface shows (a grassy meadow, little: the blades cover the
+// wet ground); a surface's shader may lower it before shading
+float wetSheen = 1.0;
 vec3 shadeSurface( vec3 albedo, vec3 N, vec3 V, vec3 wp, float ao, float shadow, float rough, float f0 ) {
 	// rain soaks surfaces: darker, glossier, the more so the more they face the sky
 	float wetS = uWeather.y * saturate( N.y * 0.7 + 0.3 );
@@ -332,7 +335,7 @@ vec3 shadeSurface( vec3 albedo, vec3 N, vec3 V, vec3 wp, float ao, float shadow,
 	vec3 spec = sun * specGGX( N, V, L, rough, f0 ) * uw;
 	vec3 R = reflect( -V, N );
 	float fres = F_Schlick( f0, saturate( dot( N, V ) ) );
-	spec += skyRadiance( normalize( vec3( R.x, max( R.y, 0.02 ), R.z ) ) ) * fres * wetS * ao * 0.8;
+	spec += skyRadiance( normalize( vec3( R.x, max( R.y, 0.02 ), R.z ) ) ) * fres * wetS * ao * 0.8 * wetSheen;
 	return direct + amb + spec;
 }
 `;

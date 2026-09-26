@@ -19,9 +19,10 @@ export const CLOCK = [
 
 // the weather at each waypoint (eased between; the storm beat overrides it at the hut)
 export const SKY = {
-	clouds: [ [ 'jettyHead', 0.42 ], [ 'gate', 0.55 ], [ 'signpost', 0.8 ], [ 'bridge', 0.95 ], [ 'hut', 1.0 ], [ 'trough', 0.55 ], [ 'tarn', 0.45 ], [ 'strand', 0.25 ], [ 'boat', 0.2 ] ],
+	// (after the storm the sky clears to a luminous afterglow, the cloud breaking up and going)
+	clouds: [ [ 'jettyHead', 0.42 ], [ 'gate', 0.55 ], [ 'signpost', 0.8 ], [ 'bridge', 0.95 ], [ 'hut', 1.0 ], [ 'trough', 0.5 ], [ 'tarn', 0.3 ], [ 'strand', 0.2 ], [ 'boat', 0.18 ] ],
 	wind: [ [ 'jettyHead', 0.8 ], [ 'gate', 1.15 ], [ 'signpost', 1.5 ], [ 'bridge', 1.8 ], [ 'hut', 2.0 ], [ 'trough', 0.35 ], [ 'tarn', 0.2 ], [ 'strand', 0.1 ], [ 'boat', 0.04 ] ],
-	overcast: [ [ 'jettyHead', 0.05 ], [ 'gate', 0.25 ], [ 'signpost', 0.6 ], [ 'bridge', 0.85 ], [ 'hut', 1.0 ], [ 'trough', 0.3 ], [ 'strand', 0.08 ] ],
+	overcast: [ [ 'jettyHead', 0.05 ], [ 'gate', 0.25 ], [ 'signpost', 0.6 ], [ 'bridge', 0.85 ], [ 'hut', 1.0 ], [ 'trough', 0.25 ], [ 'tarn', 0.06 ], [ 'strand', 0.04 ] ],
 	rain: [ [ 'signpost', 0 ], [ 'bridge', 0.06 ], [ 'troughView', 0.25 ], [ 'hut', 0.5 ], [ 'trough', 0 ] ],
 	haze: [ [ 'jettyHead', 2.2 ], [ 'bridge', 3.5 ], [ 'hut', 4.5 ], [ 'trough', 3.2 ], [ 'strand', 2.6 ] ],
 	mist: [ [ 'jettyHead', 0.0004 ], [ 'bridge', 0.0008 ], [ 'trough', 0.0016 ], [ 'tarn', 0.0022 ], [ 'wood', 0.0015 ], [ 'strand', 0.002 ], [ 'boat', 0.0024 ] ],
@@ -30,7 +31,7 @@ export const SKY = {
 	storm: [ [ 'hut', 0 ] ],
 	// the grade (post.js): exposure key, contrast, cooled shadows, colour drained - the valley
 	// losing its warmth as the evening goes
-	key: [ [ 'jettyHead', 1.05 ], [ 'gate', 1.0 ], [ 'bridge', 0.88 ], [ 'hut', 0.78 ], [ 'trough', 0.74 ], [ 'strand', 0.7 ], [ 'boat', 0.66 ] ],
+	key: [ [ 'jettyHead', 1.05 ], [ 'gate', 1.0 ], [ 'bridge', 0.88 ], [ 'hut', 0.78 ], [ 'trough', 0.85 ], [ 'tarn', 0.95 ], [ 'wood', 0.85 ], [ 'strand', 0.8 ], [ 'boat', 0.75 ] ],
 	contrast: [ [ 'jettyHead', 1.06 ], [ 'hut', 1.12 ], [ 'strand', 1.16 ] ],
 	cool: [ [ 'jettyHead', 0.0 ], [ 'gate', 0.05 ], [ 'hut', 0.25 ], [ 'tarn', 0.45 ], [ 'strand', 0.5 ] ],
 	desat: [ [ 'jettyHead', 0.0 ], [ 'gate', 0.02 ], [ 'hut', 0.14 ], [ 'tarn', 0.22 ], [ 'boat', 0.3 ] ],
@@ -40,7 +41,8 @@ export const SKY = {
 	lapMix: [ [ 'strand', 1 ], [ 'boatJ', 0.6 ], [ 'boat', 0.15 ] ],
 };
 
-const STORM = { clouds: 1.0, wind: 2.1, rain: 1.0, overcast: 1.0, haze: 5.0, mist: 0.0012, base: 520, lowCloud: 0.006, storm: 1 };
+// (and darker: the grade's key drops, the colour drains)
+const STORM = { clouds: 1.0, wind: 2.1, rain: 1.0, overcast: 1.0, haze: 5.0, mist: 0.0012, base: 520, lowCloud: 0.006, storm: 1, key: 0.58, desat: 0.28, cool: 0.45 };
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -402,14 +404,15 @@ export const BEATS = [
 			} );
 			void clock;
 			S.storming = true;
-			// the figure beyond the pen fence, then nearer
-			const spots = [ [ 9, - 16 ], [ 6.5, - 11.5 ], [ 4.2, - 7.2 ] ].map( ( [ lx, lz ] ) => f.toWorld( lx, 0, lz ) );
+			// out in the rain beyond the yard, on the way you came: at the edge of the light, then
+			// nearer at each flash, the last just past the trough's end
+			const spots = [ [ 5, 31 ], [ - 4.5, 21.5 ], [ 0.6, 14.2 ] ].map( ( [ lx, lz ] ) => f.toWorld( lx, 0, lz ) );
 			const face = () => Math.atan2( S.cam.x - S.figure.pos.x, S.cam.z - S.figure.pos.z );
 			let flash = 0;
 			const strike = () => {
 
-				// lightning behind the pen from where you stand, far enough that the thunder lags
-				const aim = Math.atan2( spots[ 0 ].z - S.cam.z, spots[ 0 ].x - S.cam.x ) + ( Math.random() - 0.5 ) * 0.6;
+				// lightning out beyond it from where you stand, far enough that the thunder lags
+				const aim = Math.atan2( spots[ 0 ].z - S.cam.z, spots[ 0 ].x - S.cam.x ) + ( Math.random() - 0.5 ) * 0.9;
 				app.weather.strike( app.camera, aim, 1400 + Math.random() * 1200 );
 
 			};
@@ -510,17 +513,11 @@ export const BEATS = [
 
 			const app = S.app, td = app.terrainData, tarn = td.ponds[ 1 ];
 			const heron = app.moreBirds.herons[ 1 ];
-			// in the shallows, on the line from you to the heron, 6 m out
+			// Out in the tarn, knee deep, a stone's throw from you - not on the shore, in it: where
+			// from the east shore its reflection lies against the reflected snow of the horn,
+			// down the valley past the trees (layout.SIGHTS keeps them out of the way)
 			const c = S.cam;
-			const hx = heron.pos.x - c.x, hz = heron.pos.z - c.z, hl = Math.hypot( hx, hz );
-			let fx = c.x + hx / hl * 6, fz = c.z + hz / hl * 6;
-			for ( let r = 6; r < 12; r += 0.5 ) {
-
-				fx = c.x + hx / hl * r; fz = c.z + hz / hl * r;
-				if ( td.heightAt( fx, fz ) < tarn.surf - 0.25 ) break;
-
-			}
-
+			const [ fx, fz ] = S.app.layout.SIGHTS.tarn.fig;
 			S.figure.place( fx, fz, Math.atan2( c.x - fx, c.z - fz ), td.heightAt( fx, fz ) - 0.02 );
 			S.figure.tilt = 0.66;
 			S.figure.setMode( 'reflect' );

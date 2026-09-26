@@ -256,7 +256,7 @@ export class StoryProps {
 		const tw = f.toWorld( HUT.trough.x, HUT.troughWater, HUT.trough.z );
 		const geo = new THREE.PlaneGeometry( 0.52, 2.42 );
 		geo.rotateZ( f.yaw );
-		const w = new Water( null, this.app.quality, { geometry: geo, position: tw, reflectScale: 1, fallback: this.app.water, farDist: 60, name: 'trough' } );
+		const w = new Water( null, this.app.quality, { geometry: geo, position: tw, reflectScale: 1, fallback: this.app.water, farDist: 60, name: 'trough', peat: 1 } );
 		w.uniforms.size.value = 3.5;
 		// still water a metre away: barely any distortion (the lake's is scaled for distance)
 		w.uniforms.distortionScale.value = 0.03;
