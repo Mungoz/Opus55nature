@@ -201,7 +201,8 @@ vec3 barkAlbedo( float kind, vec2 b, float rnd, vec3 wp, out float rough ) {
 		return c * ( 0.85 + 0.2 * fine );
 	}
 	// birch: chalk white with dark lenticels, blackened base
-	float len = smoothstep( 0.55, 0.8, gnoise( vec2( b.x * 5.0, b.y * 9.0 ) + 3.0 ) ) * smoothstep( 0.2, 0.5, abs( gnoise( vec2( b.x * 2.0, b.y * 40.0 ) ) ) );
+	// lenticels: short black dashes running round the trunk
+	float len = smoothstep( 0.62, 0.82, gnoise( vec2( b.x * 3.2, b.y * 48.0 ) + 3.0 ) ) * smoothstep( 0.0, 0.45, gnoise( vec2( b.x * 5.0, b.y * 5.0 ) + 11.0 ) );
 	float patchy = smoothstep( 0.3, 0.7, gnoise( vec2( b.x * 3.0, b.y * 0.8 ) + 7.0 ) );
 	vec3 c = vec3( 0.78, 0.76, 0.72 ) * ( 0.9 + 0.1 * fine );
 	c = mix( c, vec3( 0.08, 0.07, 0.07 ), max( len * 0.9, patchy * 0.6 * smoothstep( 4.0, 0.0, wp.y - 0.0 ) ) );

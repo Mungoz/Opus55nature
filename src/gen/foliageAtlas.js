@@ -95,10 +95,11 @@ function paintSpruce( ctx, r, rng ) {
 	const cy = r.y + r.h / 2;
 	const len = r.w * 0.95;
 	const x0 = r.x + 10;
+	let shade = 1;
 	const needleColor = ( rng2, u ) => {
 
-		const tip = rng2.next() < 0.06 + u * 0.1;
-		return tip ? hsl( 110 + rng2.next() * 20, 0.25, 0.26 + rng2.next() * 0.06 ) : hsl( 135 + rng2.next() * 25, 0.22 + rng2.next() * 0.12, 0.1 + rng2.next() * 0.08 );
+		const tip = rng2.next() < 0.05 + u * 0.22;
+		return tip ? hsl( 100 + rng2.next() * 24, 0.28, ( 0.25 + rng2.next() * 0.08 ) * shade ) : hsl( 128 + rng2.next() * 28, 0.2 + rng2.next() * 0.14, ( 0.08 + rng2.next() * 0.1 + u * 0.04 ) * shade );
 
 	};
 
@@ -106,10 +107,11 @@ function paintSpruce( ctx, r, rng ) {
 	// laterals first (under), then the main stem on top
 	for ( let s = 0.03; s < 0.95; s += 0.021 ) {
 
-		const env = r.h * 0.47 * Math.pow( Math.sin( Math.PI * Math.min( s * 1.08, 1 ) ), 0.7 ) * ( 1 - s * 0.3 );
+		const env = r.h * 0.4 * Math.pow( Math.sin( Math.PI * Math.min( s * 1.08, 1 ) ), 0.7 ) * ( 1 - s * 0.3 );
 		for ( const side of [ - 1, 1 ] ) {
 
 			if ( rng.next() < 0.1 ) continue;
+			shade = 0.65 + rng.next() * 0.45;
 			const ang = side * ( 0.75 + rng.next() * 0.35 );
 			const L = env / Math.sin( Math.abs( ang ) ) * ( 0.7 + rng.next() * 0.35 );
 			const pts = needleShoot( ctx, rng, x0 + s * len, cy + ( rng.next() - 0.5 ) * 4, ang, L, { ...opts, stemW: 1.8, needleLen: 14, curl: - side * 0.004 } );
@@ -126,6 +128,7 @@ function paintSpruce( ctx, r, rng ) {
 
 	}
 
+	shade = 1;
 	needleShoot( ctx, rng, x0, cy, 0, len, { ...opts, stemW: 5 } );
 
 }
@@ -135,12 +138,13 @@ function paintLarch( ctx, r, rng ) {
 	const cy = r.y + r.h / 2;
 	const len = r.w * 0.95;
 	const x0 = r.x + 10;
+	let shade = 1;
 	const tuftColor = () => {
 
 		const k = rng.next();
-		if ( k < 0.08 ) return hsl( 70 + rng.next() * 12, 0.5, 0.42 ); // a few still greenish
-		if ( k < 0.25 ) return hsl( 30 + rng.next() * 6, 0.75, 0.42 + rng.next() * 0.1 ); // orange
-		return hsl( 40 + rng.next() * 9, 0.72 + rng.next() * 0.2, 0.48 + rng.next() * 0.14 );
+		if ( k < 0.08 ) return hsl( 68 + rng.next() * 12, 0.42, 0.4 * shade ); // a few still greenish
+		if ( k < 0.25 ) return hsl( 32 + rng.next() * 6, 0.62, ( 0.4 + rng.next() * 0.1 ) * shade ); // orange
+		return hsl( 42 + rng.next() * 8, 0.6 + rng.next() * 0.16, ( 0.46 + rng.next() * 0.14 ) * shade );
 
 	};
 
@@ -181,10 +185,11 @@ function paintLarch( ctx, r, rng ) {
 
 	for ( let s = 0.04; s < 0.93; s += 0.035 + rng.next() * 0.015 ) {
 
-		const env = r.h * 0.46 * Math.pow( Math.sin( Math.PI * Math.min( s * 1.05, 1 ) ), 0.6 );
+		const env = r.h * 0.39 * Math.pow( Math.sin( Math.PI * Math.min( s * 1.05, 1 ) ), 0.6 );
 		for ( const side of [ - 1, 1 ] ) {
 
 			if ( rng.next() < 0.18 ) continue;
+			shade = 0.62 + rng.next() * 0.45;
 			const ang = side * ( 0.55 + rng.next() * 0.4 );
 			shoot( x0 + s * len, cy, ang, env / Math.sin( Math.abs( ang ) ) * ( 0.75 + rng.next() * 0.3 ), 2.2, 0 );
 
@@ -192,34 +197,81 @@ function paintLarch( ctx, r, rng ) {
 
 	}
 
+	shade = 1;
 	shoot( x0, cy, 0, len, 4.5, 1 );
 
 }
 
+let leafDepth = 1; // set by the painters: < 1 for leaves deep inside a cluster
 function leaf( ctx, x, y, ang, L, W, color, rng ) {
 
 	ctx.save();
 	ctx.translate( x, y );
 	ctx.rotate( ang );
+	const outline = () => {
+
+		ctx.beginPath();
+		ctx.moveTo( 0, 0 );
+		ctx.bezierCurveTo( L * 0.25, - W * 0.75, L * 0.7, - W * 0.55, L, 0 );
+		ctx.bezierCurveTo( L * 0.7, W * 0.55, L * 0.25, W * 0.75, 0, 0 );
+
+	};
+
+	outline();
 	ctx.fillStyle = color;
-	ctx.beginPath();
-	ctx.moveTo( 0, 0 );
-	ctx.bezierCurveTo( L * 0.25, - W * 0.75, L * 0.7, - W * 0.55, L, 0 );
-	ctx.bezierCurveTo( L * 0.7, W * 0.55, L * 0.25, W * 0.75, 0, 0 );
 	ctx.fill();
-	// midrib + slight shading on one half
-	ctx.strokeStyle = 'rgba(80,60,20,0.35)';
-	ctx.lineWidth = 1;
-	ctx.beginPath();
-	ctx.moveTo( 0, 0 );
-	ctx.lineTo( L * 0.95, 0 );
+	ctx.save();
+	ctx.clip();
+	// light across the blade: one half catches it, the tip is paler, the base shadowed
+	const g = ctx.createLinearGradient( 0, - W * 0.6, 0, W * 0.6 );
+	const lift = 0.1 + rng.next() * 0.12;
+	g.addColorStop( 0, `rgba(255,248,220,${lift})` );
+	g.addColorStop( 0.5, 'rgba(255,248,220,0)' );
+	g.addColorStop( 0.52, `rgba(40,26,8,${0.1 + rng.next() * 0.12})` );
+	g.addColorStop( 1, 'rgba(40,26,8,0.2)' );
+	ctx.fillStyle = g;
+	ctx.fillRect( 0, - W, L, W * 2 );
+	const t = ctx.createLinearGradient( 0, 0, L, 0 );
+	t.addColorStop( 0, 'rgba(30,20,5,0.22)' );
+	t.addColorStop( 0.35, 'rgba(30,20,5,0)' );
+	t.addColorStop( 1, 'rgba(255,245,210,0.12)' );
+	ctx.fillStyle = t;
+	ctx.fillRect( 0, - W, L, W * 2 );
+	// autumn spots on some leaves
+	if ( rng.next() < 0.22 ) {
+
+		const n = 1 + Math.floor( rng.next() * 4 );
+		for ( let k = 0; k < n; k ++ ) {
+
+			ctx.fillStyle = `rgba(${70 + rng.next() * 40},${38 + rng.next() * 20},12,${0.35 + rng.next() * 0.35})`;
+			ctx.beginPath();
+			ctx.arc( L * ( 0.25 + rng.next() * 0.6 ), ( rng.next() - 0.5 ) * W * 0.8, W * ( 0.08 + rng.next() * 0.14 ), 0, Math.PI * 2 );
+			ctx.fill();
+
+		}
+
+	}
+
+	// leaves deep in the cluster are in the shade of the ones in front
+	if ( leafDepth < 1 ) {
+
+		ctx.fillStyle = `rgba(12,10,4,${( 1 - leafDepth ) * 0.55})`;
+		ctx.fillRect( 0, - W, L, W * 2 );
+
+	}
+
+	ctx.restore();
+	// a darker rim and the midrib
+	outline();
+	ctx.strokeStyle = 'rgba(50,34,10,0.28)';
+	ctx.lineWidth = 0.8;
 	ctx.stroke();
-	ctx.fillStyle = `rgba(60,40,0,${0.08 + rng.next() * 0.1})`;
+	ctx.strokeStyle = 'rgba(70,50,18,0.4)';
+	ctx.lineWidth = 0.9;
 	ctx.beginPath();
 	ctx.moveTo( 0, 0 );
-	ctx.bezierCurveTo( L * 0.25, W * 0.75, L * 0.7, W * 0.55, L, 0 );
-	ctx.closePath();
-	ctx.fill();
+	ctx.lineTo( L * 0.92, 0 );
+	ctx.stroke();
 	ctx.restore();
 
 }
@@ -245,20 +297,25 @@ function paintBirch( ctx, r, rng, palette, shape = { L: 22, Lr: 12, w: 0.62, per
 
 	};
 
-	for ( let i = 0; i < 5; i ++ ) grow( cx + ( rng.next() - 0.5 ) * 30, by, - Math.PI / 2 + ( i - 2 ) * 0.45 + ( rng.next() - 0.5 ) * 0.2, r.h * ( 0.55 + rng.next() * 0.25 ), 3, 0 );
-	// leaves hang from the twigs
+	for ( let i = 0; i < 5; i ++ ) grow( cx + ( rng.next() - 0.5 ) * 30, by, - Math.PI / 2 + ( i - 2 ) * 0.4 + ( rng.next() - 0.5 ) * 0.2, r.h * ( 0.42 + rng.next() * 0.16 ), 3, 0 );
+	// leaves hang from the twigs; painted back to front, the ones behind in shade
+	const leaves = [];
 	for ( const [ x, y, a ] of twigs ) {
 
 		const n = 1 + Math.floor( rng.next() * shape.per );
-		for ( let k = 0; k < n; k ++ ) {
-
-			const la = a + ( rng.next() - 0.5 ) * 2.8 + Math.PI * 0.1;
-			const L = shape.L + rng.next() * shape.Lr;
-			leaf( ctx, x, y, la, L, L * shape.w, palette( rng ), rng );
-
-		}
+		for ( let k = 0; k < n; k ++ ) leaves.push( { x, y, a: a + ( rng.next() - 0.5 ) * 2.8 + Math.PI * 0.1, L: shape.L + rng.next() * shape.Lr, depth: rng.next() } );
 
 	}
+
+	leaves.sort( ( p, q ) => p.depth - q.depth );
+	for ( const l of leaves ) {
+
+		leafDepth = 0.45 + 0.55 * l.depth;
+		leaf( ctx, l.x, l.y, l.a, l.L, l.L * shape.w, palette( rng ), rng );
+
+	}
+
+	leafDepth = 1;
 
 }
 
@@ -353,7 +410,7 @@ function paintPine( ctx, r, rng ) {
 
 	for ( let s = 0.05; s < 0.93; s += 0.045 + rng.next() * 0.03 ) {
 
-		const env = r.h * 0.44 * Math.pow( Math.sin( Math.PI * Math.min( s * 1.04, 1 ) ), 0.55 );
+		const env = r.h * 0.37 * Math.pow( Math.sin( Math.PI * Math.min( s * 1.04, 1 ) ), 0.55 );
 		for ( const side of [ - 1, 1 ] ) {
 
 			if ( rng.next() < 0.12 ) continue;
@@ -390,7 +447,7 @@ function paintRowan( ctx, r, rng ) {
 
 	};
 
-	for ( let i = 0; i < 4; i ++ ) grow( cx + ( rng.next() - 0.5 ) * 30, by, - Math.PI / 2 + ( i - 1.5 ) * 0.5, r.h * ( 0.5 + rng.next() * 0.2 ), 3, 0 );
+	for ( let i = 0; i < 4; i ++ ) grow( cx + ( rng.next() - 0.5 ) * 30, by, - Math.PI / 2 + ( i - 1.5 ) * 0.42, r.h * ( 0.4 + rng.next() * 0.14 ), 3, 0 );
 	const tone = () => {
 
 		const k = rng.next();
@@ -542,44 +599,66 @@ export function buildFoliageAtlas() {
 	ctx.clearRect( 0, 0, S, SH );
 	const rng = new RNG( 1234 );
 
-	paintSpruce( ctx, ATLAS.spruce, rng );
-	paintLarch( ctx, ATLAS.larch, rng );
-	const birchPal = ( g ) => {
+	const within = ( r, paint ) => {
 
-		const k = g.next();
-		if ( k < 0.1 ) return hsl( 62 + g.next() * 10, 0.55, 0.4 );
-		if ( k < 0.22 ) return hsl( 30 + g.next() * 6, 0.8, 0.45 );
-		return hsl( 44 + g.next() * 8, 0.8 + g.next() * 0.15, 0.5 + g.next() * 0.12 );
+		ctx.save();
+		ctx.beginPath();
+		ctx.rect( r.x, r.y, r.w, r.h );
+		ctx.clip();
+		paint();
+		ctx.restore();
+		// fade anything that still reaches the edge of the cell
+		const img = ctx.getImageData( r.x, r.y, r.w, r.h ), dd = img.data, E = 10;
+		for ( let y = 0; y < r.h; y ++ ) for ( let x = 0; x < r.w; x ++ ) {
+
+			const e = Math.min( x, y, r.w - 1 - x, r.h - 1 - y );
+			if ( e < E ) dd[ ( y * r.w + x ) * 4 + 3 ] *= e / E;
+
+		}
+
+		ctx.putImageData( img, r.x, r.y );
 
 	};
 
-	paintBirch( ctx, ATLAS.birchA, rng, birchPal );
-	paintBirch( ctx, ATLAS.birchB, rng, birchPal );
-	paintBirch( ctx, ATLAS.shrub, rng, ( g ) => {
+	within( ATLAS.spruce, () => paintSpruce( ctx, ATLAS.spruce, rng ) );
+	within( ATLAS.larch, () => paintLarch( ctx, ATLAS.larch, rng ) );
+	const birchPal = ( g ) => {
+
+		const k = g.next();
+		if ( k < 0.12 ) return hsl( 60 + g.next() * 12, 0.45, 0.4 );
+		if ( k < 0.24 ) return hsl( 32 + g.next() * 6, 0.62, 0.42 );
+		if ( k < 0.3 ) return hsl( 26 + g.next() * 8, 0.45, 0.32 );
+		return hsl( 45 + g.next() * 8, 0.62 + g.next() * 0.16, 0.48 + g.next() * 0.12 );
+
+	};
+
+	within( ATLAS.birchA, () => paintBirch( ctx, ATLAS.birchA, rng, birchPal ) );
+	within( ATLAS.birchB, () => paintBirch( ctx, ATLAS.birchB, rng, birchPal ) );
+	within( ATLAS.shrub, () => paintBirch( ctx, ATLAS.shrub, rng, ( g ) => {
 
 		const k = g.next();
 		if ( k < 0.5 ) return hsl( 3 + g.next() * 10, 0.62, 0.26 + g.next() * 0.1 );
 		if ( k < 0.85 ) return hsl( 16 + g.next() * 12, 0.7, 0.34 + g.next() * 0.1 );
 		return hsl( 38 + g.next() * 8, 0.6, 0.4 );
 
-	} );
-	paintPine( ctx, ATLAS.pine, rng );
+	} ) );
+	within( ATLAS.pine, () => paintPine( ctx, ATLAS.pine, rng ) );
 	const aspenPal = ( g ) => {
 
 		const k = g.next();
-		if ( k < 0.12 ) return hsl( 64 + g.next() * 12, 0.55, 0.42 );
-		if ( k < 0.3 ) return hsl( 24 + g.next() * 10, 0.85, 0.46 );
-		if ( k < 0.36 ) return hsl( 6 + g.next() * 8, 0.7, 0.38 );
-		return hsl( 46 + g.next() * 8, 0.88, 0.52 + g.next() * 0.1 );
+		if ( k < 0.12 ) return hsl( 62 + g.next() * 12, 0.45, 0.42 );
+		if ( k < 0.3 ) return hsl( 26 + g.next() * 10, 0.68, 0.44 );
+		if ( k < 0.36 ) return hsl( 8 + g.next() * 8, 0.58, 0.36 );
+		return hsl( 46 + g.next() * 8, 0.7, 0.5 + g.next() * 0.1 );
 
 	};
 
 	const aspenShape = { L: 17, Lr: 8, w: 0.95, per: 3 };
-	paintBirch( ctx, ATLAS.aspenA, rng, aspenPal, aspenShape );
-	paintBirch( ctx, ATLAS.aspenB, rng, aspenPal, aspenShape );
-	paintRowan( ctx, ATLAS.rowan, rng );
-	paintFern( ctx, ATLAS.fern, rng );
-	paintHeath( ctx, ATLAS.heath, rng );
+	within( ATLAS.aspenA, () => paintBirch( ctx, ATLAS.aspenA, rng, aspenPal, aspenShape ) );
+	within( ATLAS.aspenB, () => paintBirch( ctx, ATLAS.aspenB, rng, aspenPal, aspenShape ) );
+	within( ATLAS.rowan, () => paintRowan( ctx, ATLAS.rowan, rng ) );
+	within( ATLAS.fern, () => paintFern( ctx, ATLAS.fern, rng ) );
+	within( ATLAS.heath, () => paintHeath( ctx, ATLAS.heath, rng ) );
 	ctx.fillStyle = 'rgb(128,128,128)';
 	ctx.fillRect( ATLAS.solid.x, ATLAS.solid.y, ATLAS.solid.w, ATLAS.solid.h );
 

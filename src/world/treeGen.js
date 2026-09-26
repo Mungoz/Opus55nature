@@ -321,7 +321,7 @@ export function makeConifer( rng, species, form = 'normal' ) {
 
 			const y = crownBase + rng.range( 0, 0.3 ) * ( H - crownBase );
 			const a = rng.next() * Math.PI * 2;
-			const L = R * rng.range( 1.1, 1.5 );
+			const L = R * rng.range( 0.75, 1.0 );
 			const dir = new THREE.Vector3( Math.cos( a ), larch ? 0.2 : - 0.05, Math.sin( a ) ).normalize();
 			const limb = [ { p: new THREE.Vector3( 0, y, 0 ), r: r0 * 0.35, flex: 0.1 }, { p: new THREE.Vector3( dir.x * L * 0.6, y + L * ( larch ? 0.18 : 0.02 ), dir.z * L * 0.6 ), r: r0 * 0.18, flex: 0.3 }, { p: new THREE.Vector3( dir.x * L, y + L * ( larch ? 0.3 : - 0.05 ), dir.z * L ), r: r0 * 0.06, flex: 0.5 } ];
 			tube( B, limb, 5, barkKind, H, 1 );
@@ -354,7 +354,7 @@ export function makeConifer( rng, species, form = 'normal' ) {
 
 	}
 
-	return { geometry: B.build(), height: H, radius: ( form === 'old' ? R * 1.5 : R ) + 0.4, species };
+	return { geometry: B.build(), height: H, radius: ( form === 'old' ? R * 1.1 : R ) + 0.4, species };
 
 }
 
