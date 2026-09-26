@@ -29,12 +29,14 @@ export class Path {
 		this.length = d;
 		for ( const p of points ) {
 
-			// the nearest sample after the previous waypoint
+			// the nearest sample after the previous waypoint, on the first pass by it (a path
+			// that comes back near a waypoint later must not be matched to it there)
 			let best = j, bd = Infinity;
 			for ( let i = j; i < n; i ++ ) {
 
 				const s = this.samples[ i ], dd = ( s.x - p.x ) ** 2 + ( s.z - p.z ) ** 2;
 				if ( dd < bd ) { bd = dd; best = i; }
+				if ( bd < 1.5 && dd > bd + 4 ) break;
 				if ( dd > bd + 400 ) break;
 
 			}

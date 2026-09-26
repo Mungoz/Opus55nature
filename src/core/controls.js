@@ -286,6 +286,13 @@ export class Controls {
 
 				// a step every pi of the phase: the head rises over each planted foot
 				this.bob += dt * moving * Math.PI / this.stride;
+				const step = Math.floor( this.bob / Math.PI );
+				if ( step !== this._step ) {
+
+					this._step = step;
+					this.onStep?.( moving );
+
+				}
 				bobY = ( Math.abs( Math.sin( this.bob ) ) - 0.64 ) * 0.045 * Math.min( moving / 2.5, 1 );
 
 			} else {

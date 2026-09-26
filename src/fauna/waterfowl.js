@@ -54,10 +54,15 @@ class Paddler {
 
 export class Waterfowl {
 
-	constructor( terrain, water ) {
+	// at: an edition's placements - swans: [ x, z ] or false, mallards: [ [ x, z, n ] ],
+	// bay: { x0, x1, z0, z1 } (the water they keep to)
+	constructor( terrain, water, at = {} ) {
 
 		this.terrain = terrain;
 		this.water = water;
+		this.at = at;
+		// a director's empty point on the water the birds paddle away from: { p, r }
+		this.fear = null;
 		this.rng = new RNG( 23 );
 		this.material = creatureMaterial();
 		this.group = new THREE.Group();
@@ -84,9 +89,14 @@ export class Waterfowl {
 
 		};
 
-		const swanA = new Paddler( swanMesh( 1.0 ), - 30, 395, 0.45, rng );
-		const swanB = new Paddler( swanMesh( 0.93 ), - 34, 400, 0.45, rng, swanA, new THREE.Vector3( - 2.4, 0, - 2.2 ) );
-		this.birds.push( swanA, swanB );
+		if ( at.swans !== false ) {
+
+			const [ sx, sz ] = at.swans ?? [ - 30, 395 ];
+			const swanA = new Paddler( swanMesh( 1.0 ), sx, sz, 0.45, rng );
+			const swanB = new Paddler( swanMesh( 0.93 ), sx - 4, sz + 5, 0.45, rng, swanA, new THREE.Vector3( - 2.4, 0, - 2.2 ) );
+			this.birds.push( swanA, swanB );
+
+		}
 		const duck = ( g ) => {
 
 			const m = mk( g, 1 );
@@ -96,7 +106,7 @@ export class Waterfowl {
 		};
 
 		// mallards: a party in front of the start, another in the west bay, a pair by the mouth
-		for ( const [ x, z, n ] of [ [ 14, 436, 5 ], [ - 70, 425, 7 ], [ 52, 418, 2 ] ] ) {
+		for ( const [ x, z, n ] of at.mallards ?? [ [ 14, 436, 5 ], [ - 70, 425, 7 ], [ 52, 418, 2 ] ] ) {
 
 			const lead = new Paddler( duck( drakeGeo ), x, z, 0.55, rng );
 			this.birds.push( lead );
@@ -118,7 +128,9 @@ export class Waterfowl {
 			const x = b.pos.x + this.rng.range( - 70, 70 );
 			const z = b.pos.z + this.rng.range( - 70, 70 );
 			// keep to the bay in front of the start, where people will see them
-			if ( z > 448 || z < 290 || Math.abs( x + 5 ) > 160 ) continue;
+			const B = this.at.bay;
+			if ( B ? x < B.x0 || x > B.x1 || z < B.z0 || z > B.z1 : z > 448 || z < 290 || Math.abs( x + 5 ) > 160 ) continue;
+			if ( this.fear && Math.hypot( x - this.fear.p.x, z - this.fear.p.z ) < this.fear.r * 2 ) continue;
 			if ( this.terrain.heightAt( x, z ) < - 1.2 ) {
 
 				b.target.set( x, 0, z );
@@ -157,6 +169,20 @@ export class Waterfowl {
 
 				desired = Math.atan2( b.target.x - b.pos.x, b.target.z - b.pos.z );
 				if ( b.pause > 0 ) b.pause -= dt;
+				// away from the empty patch the director has them fear, all at once
+				if ( this.fear ) {
+
+					const fx = b.pos.x - this.fear.p.x, fz = b.pos.z - this.fear.p.z, fd = Math.hypot( fx, fz );
+					if ( fd < this.fear.r * 2.5 ) {
+
+						desired = Math.atan2( fx, fz );
+						b.pause = 0;
+						b.speed = 0.9;
+						if ( fd > this.fear.r * 2.2 ) this._pickTarget( b );
+
+					}
+
+				}
 
 			}
 

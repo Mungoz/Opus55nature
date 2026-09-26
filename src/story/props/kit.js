@@ -243,12 +243,14 @@ void main() {
 		vec4 w = wood( p, vec3( 0.0, 0.0, 1.0 ), 1.2 );
 		vec3 bare = vec3( 0.34, 0.29, 0.23 ) * w.x;
 		float chipN = gnoise3( p * 16.0 ) * 0.5 + gnoise3( p * 55.0 ) * 0.25 + gnoise3( p * 3.0 ) * 0.35;
-		float zone = ( 1.0 - smoothstep( 0.0, 0.03, edge ) ) * 0.4 + ( m == 17 ? smoothstep( 0.34, 0.5, vObj.y ) * 0.25 : ( 1.0 - smoothstep( 0.0, 0.25, vObj.y ) ) * 0.3 );
-		float chip = smoothstep( 0.46, 0.52, chipN + zone );
+		float zone = ( 1.0 - smoothstep( 0.0, 0.03, edge ) ) * 0.2 + ( m == 17 ? smoothstep( 0.34, 0.5, vObj.y ) * 0.25 : ( 1.0 - smoothstep( 0.0, 0.25, vObj.y ) ) * 0.3 );
+		// (after refs of the Oeschinensee boats: sound paint, worn through only in small chips
+		// along the seams, the gunwale and the stem)
+		float chip = smoothstep( 0.66, 0.72, chipN * 0.85 + zone * 0.9 );
 		vec3 paint = vColor * ( 0.88 + 0.14 * gnoise3( vec3( u * 1.2, p.y * 9.0, p.x * 9.0 ) ) );
 		paint *= 1.0 - 0.12 * smoothstep( 0.3, 0.8, gnoise3( vec3( u * 0.4, p.y * 30.0, 2.0 ) ) );
 		// the grey primer shows at a chip's rim, the bare wood at its heart
-		alb = mix( paint, mix( vec3( 0.4, 0.39, 0.36 ), bare, smoothstep( 0.52, 0.6, chipN + zone ) ), chip );
+		alb = mix( paint, mix( vec3( 0.4, 0.39, 0.36 ), bare, smoothstep( 0.72, 0.8, chipN * 0.85 + zone * 0.9 ) ), chip );
 		alb *= mix( 0.3, 1.0, smoothstep( 0.0, 0.005, edge ) );
 		// a row of clench nails along each seam, each with a rust stain
 		vec2 nq = vec2( mod( u + ( isFlat ? 0.0 : 0.03 ), 0.085 ) - 0.0425, edge - 0.017 );

@@ -444,7 +444,11 @@ function valueNoise( x, z ) {
 
 export class WaterPlants {
 
-	constructor( terrain ) {
+	// keepOut( x, z ): an edition's open water (landings, berths, a pond kept clear for its
+	// reflections) where nothing grows
+	constructor( terrain, { keepOut = null } = {} ) {
+
+		this.keepOut = keepOut;
 
 		this.terrain = terrain;
 		this.group = new THREE.Group();
@@ -478,6 +482,7 @@ export class WaterPlants {
 		const pads = [], flowers = [];
 		const add = ( set, x, z, s = rng.range( 0.8, 1.2 ), y = null ) => {
 
+			if ( this.keepOut?.( x, z, set ) ) return;
 			S[ set ].items.push( { x, y: y ?? td.heightAt( x, z ) - 0.03, z, s, rot: rng.next() * Math.PI * 2, variant: Math.floor( rng.next() * S[ set ].variants.length ) } );
 
 		};
@@ -491,7 +496,7 @@ export class WaterPlants {
 				const a = rng.next() * Math.PI * 2, r = Math.sqrt( rng.next() ) * R;
 				const x = cx + Math.cos( a ) * r, z = cz + Math.sin( a ) * r;
 				const s = rng.range( 0.13, 0.22 );
-				if ( ! ok( x, z ) ) continue;
+				if ( ! ok( x, z ) || this.keepOut?.( x, z, 'pad' ) ) continue;
 				if ( mine.some( ( p ) => Math.hypot( p.x - x, p.z - z ) < ( p.s + s ) * 0.7 ) ) continue;
 				const p = { x, y: y + 0.015 + rng.next() * 0.008, z, s, rot: rng.next() * Math.PI * 2, variant: rng.next() < 0.25 ? 2 : Math.floor( rng.next() * 2 ) };
 				mine.push( p );

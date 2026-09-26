@@ -527,11 +527,12 @@ export function buildHut( ground ) {
 
 		}
 
-		// the feed pipe on its post at the far end, spouting back into the trough
-		const postZ = tp.z + tl / 2 + 0.25, pg = ground( tp.x, postZ );
-		k.pole( new THREE.Vector3( tp.x, pg - 0.05, postZ ), new THREE.Vector3( tp.x, axisY + 0.75, postZ ), 0.08, M.LOG, col( '#5a4632' ), 9 );
-		k.pole( new THREE.Vector3( tp.x, axisY + 0.42, postZ - 0.05 ), new THREE.Vector3( tp.x, axisY + 0.36, postZ - 0.75 ), 0.04, M.BARK, col( '#4d3e30' ), 4 );
-		HUT.troughPipe = new THREE.Vector3( tp.x, axisY + 0.36, postZ - 0.75 );
+		// the feed pipe on its post beside the far end, spouting in over the rim (off the line
+		// of the door, so the view along the water is clear)
+		const postZ = tp.z + tl / 2 - 0.35, postX = tp.x - ro - 0.28, pg = ground( postX, postZ );
+		k.pole( new THREE.Vector3( postX, pg - 0.05, postZ ), new THREE.Vector3( postX, axisY + 0.75, postZ ), 0.08, M.LOG, col( '#5a4632' ), 9 );
+		k.pole( new THREE.Vector3( postX + 0.05, axisY + 0.42, postZ ), new THREE.Vector3( tp.x - 0.05, axisY + 0.34, postZ - 0.25 ), 0.04, M.BARK, col( '#4d3e30' ), 4 );
+		HUT.troughPipe = new THREE.Vector3( tp.x - 0.05, axisY + 0.34, postZ - 0.25 );
 		for ( let i = 0; i < 6; i ++ ) {
 
 			const zz = tp.z - tl / 2 + 0.3 + i * 0.4 + ( R() - 0.5 ) * 0.06, dx = ( R() - 0.5 ) * 0.08, c = logCol( 1, 0.8 ), ry = ( R() - 0.5 ) * 0.15, rz = ( R() - 0.5 ) * 0.03;

@@ -131,6 +131,9 @@ uniform float uVignette;
 uniform float uGrain;
 uniform float uSaturation;
 uniform vec2 uRes;
+// a grade an edition may set: x key scale (exposure target), y contrast, z cool shift in the
+// shadows, w desaturation
+uniform vec4 uGrade;
 varying vec2 vUv;
 
 const mat3 SRGB_TO_2020 = mat3( vec3( 0.6274, 0.0691, 0.0164 ), vec3( 0.3293, 0.9195, 0.0880 ), vec3( 0.0433, 0.0113, 0.8956 ) );
@@ -178,7 +181,7 @@ void main() {
 	// auto exposure: map the adapted average to a key that sinks in the dark,
 	// so dusk and night stay dim and moody rather than being lifted to grey
 	float logL = texture2D( tAdapt, vec2( 0.5 ) ).r;
-	float key = mix( 0.03, 0.165, smoothstep( -12.5, -2.5, logL ) );
+	float key = mix( 0.03, 0.165, smoothstep( -12.5, -2.5, logL ) ) * uGrade.x;
 	float ev = clamp( log2( key ) - logL, -2.0, 7.5 );
 	c *= exp2( ev ) * uExposure;
 
@@ -189,6 +192,13 @@ void main() {
 
 	c = agx( c );
 
+	// the edition's grade: contrast about mid-grey, colour drained, shadows cooled
+	{
+		float lg = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+		c = mix( vec3( lg ), c, 1.0 - uGrade.w );
+		c = max( vec3( 0.0 ), ( c - 0.18 ) * uGrade.y + 0.18 * mix( 1.0, uGrade.y, 0.25 ) );
+		c = mix( c, c * vec3( 0.9, 0.97, 1.08 ), uGrade.z * ( 1.0 - smoothstep( 0.0, 0.4, lg ) ) );
+	}
 	// gentle split-tone: warm highlights, cool shadows
 	float l2 = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
 	c = mix( c, c * vec3( 0.93, 0.99, 1.07 ), ( 1.0 - smoothstep( 0.0, 0.35, l2 ) ) * 0.5 );
@@ -213,6 +223,8 @@ export class Post {
 		this.scale = 1;
 		this.bloomLevels = 6;
 		this.exposure = 1;
+		// key scale, contrast, cool shadows, desaturation (see the composite)
+		this.grade = new THREE.Vector4( 1, 1, 0, 0 );
 		this.bloomStrength = 0.05;
 		this.raysStrength = 0.35;
 		this.raysTint = new THREE.Vector3( 1, 1, 1 );
@@ -244,6 +256,7 @@ export class Post {
 			uGrain: { value: 0.012 },
 			uSaturation: { value: 1.12 },
 			uRes: { value: new THREE.Vector2() },
+			uGrade: { value: this.grade },
 		} ) );
 
 		this.sceneRT = null;

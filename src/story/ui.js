@@ -243,6 +243,16 @@ export function initStoryUI( app ) {
 			r.onClose?.();
 
 		},
+		// the end: a last line, and a way to begin again
+		end() {
+
+			card.innerHTML = '<div><p>Thank you for walking.</p><p style="margin-top:48px;font-style:normal;font-family:var(--sans);font-size:12px;letter-spacing:0.24em;text-transform:uppercase;pointer-events:auto;cursor:pointer;color:rgba(239,232,220,0.55)" id="story-again">Begin again</p></div>';
+			card.style.pointerEvents = 'auto';
+			card.classList.add( 'show' );
+			document.exitPointerLock?.();
+			card.querySelector( '#story-again' ).addEventListener( 'click', () => location.reload() );
+
+		},
 		update( dt ) {
 
 			if ( capTimer > 0 && ( capTimer -= dt ) <= 0 ) caption.classList.remove( 'show' );

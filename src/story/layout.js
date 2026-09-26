@@ -12,15 +12,16 @@ const D2R = Math.PI / 180;
 export const PLACES = {
 	// the jetty on the east strand: where its deck meets the shore, and the way it points
 	// (out over the lake, to the north-west)
-	jetty: { x: 80, z: 437, yaw: Math.atan2( - 0.54, - 0.84 ) },
+	// (a metre and a half inland of the waterline; its deck runs 18 m out, the head in 2 m of water)
+	jetty: { x: 74.6, z: 428.6, yaw: Math.atan2( - 0.54, - 0.84 ) },
 	// the alp hut, its porch facing east toward the bridge; the tarn beside it
 	hut: { x: - 69, z: 712, yaw: 78 * D2R },
 	tarn: { x: - 110, z: 682 },
 	// the footbridge: its two ends (south bank, north bank)
 	bridge: { a: [ - 17.6, 733.6 ], b: [ - 24.6, 722.2 ] },
 	// the signpost at the junction, the wayside cross beside it
-	signpost: { x: 6, z: 750.5, yaw: - 20 * D2R },
-	cross: { x: 12.5, z: 755, yaw: 200 * D2R },
+	signpost: { x: 9, z: 752.8, yaw: - 20 * D2R },
+	cross: { x: 14.5, z: 756.5, yaw: 200 * D2R },
 	// the marmot bank: a low moraine south of the east pond
 	marmotBank: { x: 96, z: 742 },
 	// J.'s boots on the plunge pool's shingle, toes to the water
@@ -47,10 +48,11 @@ const H = ( lx, lz, extra = {} ) => ( { ...hutPoint( lx, lz ), ...extra } );
 // ---------------------------------------------------------------------------
 export const ROUTE = [
 	// 1. the jetty, from its head to the shore
-	{ x: 71.0, z: 423.1, deck: true, id: 'jettyHead' },
-	{ x: 80.0, z: 437.0, deck: true, id: 'jettyLand' },
+	{ x: 65.6, z: 414.7, deck: true, id: 'jettyHead' },
+	{ x: 75.1, z: 429.4, deck: true, id: 'jettyLand' },
 	// 2. the strand to the stream mouth, then up its east bank
-	{ x: 78.5, z: 446 },
+	{ x: 76.8, z: 437.5 },
+	{ x: 75.5, z: 447 },
 	{ x: 72, z: 457, id: 'mouth' },
 	{ x: 74, z: 471 },
 	{ x: 81, z: 487 },
@@ -77,34 +79,42 @@ export const ROUTE = [
 	{ x: 12, z: 749, id: 'signpost' },
 	// 5. along the south bank to the footbridge, over it
 	{ x: - 8, z: 741 },
+	// (straight on and off, along the bridge's line)
+	{ x: - 15.5, z: 737.0 },
 	{ x: - 17.6, z: 733.6, deck: true, id: 'bridge' },
 	{ x: - 24.6, z: 722.2, deck: true },
+	{ x: - 26.7, z: 718.8 },
 	// 6. the hut: up the line of its door, past the trough standing out in front of the porch
 	{ x: - 36, z: 717.5 },
-	H( - 0.8, 24 ),
-	H( - 0.8, 14.5, { id: 'troughView' } ),
-	H( 0.9, 10.2 ),
-	H( 0.6, 7.2 ),
+	H( - 1.9, 24 ),
+	H( - 2.3, 14.5, { id: 'troughView' } ),
+	H( - 2.4, 10.2 ),
+	H( - 1.6, 7.2 ),
 	H( - 0.3, 5.4, { id: 'hut' } ),
-	// 8. after the storm, round the hut's north side and behind the pen to the tarn
-	H( 3.6, 4.6, { id: 'trough' } ),
-	H( 5.6, 0 ),
-	H( 6.6, - 4.8 ),
-	H( 11.2, - 8.6 ),
-	H( 13.2, - 16 ),
+	// 8. after the storm: back out along the trough's other side to its far end, then round
+	// behind the hut and the pen to the tarn
+	H( 0.9, 6.7, { id: 'trough' } ),
+	H( 1.1, 9.6 ),
+	H( 1.5, 12.6, { id: 'troughEnd' } ),
+	H( 5.2, 14.2 ),
+	H( 10.2, 11.6 ),
+	H( 12.6, 5 ),
+	H( 13.3, - 4 ),
+	H( 13.9, - 14 ),
 	{ x: - 93, z: 694, id: 'tarn' },
 	// 9. round the tarn, to the plunge pool's rim
 	{ x: - 103, z: 712 },
 	{ x: - 124, z: 728 },
 	{ x: - 145, z: 748 },
 	{ x: - 162, z: 761, id: 'pool' },
-	{ x: - 181, z: 763 },
-	{ x: - 196, z: 752 },
-	// 10. north through the larch wood under the west wall
-	{ x: - 205, z: 725 },
-	{ x: - 212, z: 694, id: 'wood' },
-	{ x: - 218, z: 660 },
-	{ x: - 222, z: 628 },
+	{ x: - 175, z: 757 },
+	// 10. north through the larch wood, along the foot of the west wall (clear of its scree)
+	{ x: - 185, z: 743 },
+	{ x: - 191, z: 723 },
+	{ x: - 197, z: 700, id: 'wood' },
+	{ x: - 205, z: 678 },
+	{ x: - 214, z: 655 },
+	{ x: - 221, z: 628 },
 	{ x: - 227, z: 596 },
 	{ x: - 229, z: 562, id: 'bear' },
 	{ x: - 231, z: 528 },
@@ -121,7 +131,7 @@ export const ROUTE = [
 	{ x: - 248, z: 276, id: 'boatJ' },
 	{ x: - 250, z: 250 },
 	// 13. the boat
-	{ x: - 251, z: 226, id: 'boat' },
+	{ x: - 249.5, z: 219.6, id: 'boat' },
 ];
 
 let _path = null;
@@ -143,7 +153,7 @@ export const BANKS = [
 ];
 
 // the pool the footbridge crosses: a stretch of the stream widened and deepened
-export const BRIDGE_POOL = { s0: 150, s1: 192, widen: 2.1, deepen: 0.9 };
+export const BRIDGE_POOL = { s0: 128, s1: 182, widen: 2.1, deepen: 0.9 };
 
 // what the terrain generator shapes for this edition (see core/features.js)
 export const FEATURES = { banks: BANKS, pool: BRIDGE_POOL };
@@ -159,10 +169,12 @@ export function paintGround( g ) {
 	// trough is trodden bare, and the path out to the pen
 	g.rect( 3, hut.x, hut.z, 3.6, 5.6, hut.yaw, 1, 0.6 );
 	g.blob( 1, ...at( - 0.3, 7.7 ), 3.2, 2.4, hut.yaw, 0.95, 0.6 );
-	g.blob( 1, ...at( - 0.8, 8.4 ), 1.5, 2.6, hut.yaw, 0.9, 0.6 );
+	g.blob( 1, ...at( - 0.8, 8.4 ), 2.6, 3.0, hut.yaw, 0.9, 0.6 );
 	g.blob( 1, ...at( 4.5, - 5.5 ), 2.0, 1.5, hut.yaw, 0.6, 0.7 );
-	// the jetty's landing, the bridge ends, the signpost's foot
+	// the jetty's landing, the bridge ends, the signpost's foot; the jetty's line and its
+	// berths kept clear (of boulders)
 	const j = PLACES.jetty;
+	g.rect( 3, j.x + Math.sin( j.yaw ) * 11, j.z + Math.cos( j.yaw ) * 11, 6, 13, j.yaw, 1, 0.5 );
 	g.blob( 1, j.x - Math.sin( j.yaw ) * 1.5, j.z - Math.cos( j.yaw ) * 1.5, 2.2, 1.6, j.yaw, 0.8, 0.6 );
 	for ( const [ x, z ] of [ PLACES.bridge.a, PLACES.bridge.b ] ) g.blob( 1, x, z, 1.6, 1.6, 0, 0.8, 0.6 );
 	g.blob( 1, PLACES.signpost.x, PLACES.signpost.z, 1.8, 1.5, 0.3, 0.7, 0.6 );
@@ -175,3 +187,76 @@ export function paintGround( g ) {
 
 // the area the ground marks cover: [ x0, z0, x1, z1 ]
 export const GROUND_BOX = [ - 285, 195, 120, 790 ];
+
+// ---------------------------------------------------------------------------
+// Open water: no reeds or lily pads on the jetty's line and its berths, round the boats on
+// the west strand, or on the tarn, whose reflections the story needs
+// ---------------------------------------------------------------------------
+export function waterClear( x, z, kind ) {
+
+	const j = PLACES.jetty, c = Math.cos( j.yaw ), s = Math.sin( j.yaw );
+	const dx = x - j.x, dz = z - j.z;
+	const lx = c * dx - s * dz, lz = s * dx + c * dz;
+	if ( lz > - 3 && lz < 26 && lx > - 7 && lx < 8 ) return true;
+	for ( const b of [ PLACES.boatEnd, PLACES.boatJ ] ) if ( Math.hypot( x - b.x, z - b.z ) < 6 ) return true;
+	const t = PLACES.tarn;
+	const r = Math.hypot( x - t.x, z - t.z );
+	// the tarn stays open, but for a few pads in its northern lobe
+	if ( kind === 'pad' && r < 30 && ! ( z < t.z - 10 && ( ( x * 7.1 + z * 3.3 ) % 1 + 1 ) % 1 < 0.3 ) ) return true;
+	return false;
+
+}
+
+// ---------------------------------------------------------------------------
+// Where the animals live in this edition (see the encounters in story/encounters.js)
+// ---------------------------------------------------------------------------
+export function faunaAt( td ) {
+
+	const tarn = td.ponds[ 1 ];
+	return {
+		mammals: {
+			// the herd grazes the west bank by the ford, across the stream from the path
+			herd: fordWest( td ),
+			// the marmots' bank, their burrows turned toward the path
+			burrows: [ [ 108, 745 ], [ 116, 740 ], [ 111, 755 ], [ 121, 750 ] ],
+			face: [ 92, 738 ],
+			// a hare that sits tight in the path (E5), and others along the way
+			hares: [ [ 95, 604 ], [ 58, 600 ], [ 118, 676 ], [ - 150, 732 ], [ - 222, 474 ], [ - 30, 660 ] ],
+			// the bear works the lower edge of the larch wood (E13)
+			bear: { start: [ - 206, 572 ], route: [ [ - 206, 572 ], [ - 211, 546 ], [ - 200, 592 ], [ - 214, 562 ] ] },
+			// squirrels in the larch wood (E12), by the signpost and near the hut
+			squirrels: [ [ - 221, 642 ], [ - 214, 704 ], [ 4, 744 ], [ - 40, 725 ], [ - 233, 520 ] ],
+		},
+		birds: {
+			// a heron on the shallows by the jetty (E1), another on the tarn's far shore (E9)
+			herons: [ [ 57, 428, 0 ], [ tarn.c.x - 16, tarn.c.y - 6, tarn.surf ] ],
+			grebes: [ [ 48, 402 ], [ 82, 394 ], [ 30, 386 ] ],
+			chough: { crag: [ - 240, 150, 830 ], spots: [ [ - 110, 60, 700 ], [ - 160, 72, 752 ], [ 0, 52, 650 ], [ - 60, 58, 610 ] ] },
+		},
+		small: {
+			flocks: [ [ 12, 756 ], [ - 58, 700 ], [ 104, 610 ], [ - 214, 660 ], [ 70, 478 ] ],
+			wagtails: { x0: 62, x1: 108, z0: 424, z1: 452 },
+			// a dipper at the stream's mouth (E3), one under the footbridge (E8)
+			dippers: [ 478, 184 ],
+		},
+		fowl: {
+			swans: false,
+			mallards: [ [ 40, 402, 6 ], [ - 170, 330, 5 ], [ - 225, 300, 3 ] ],
+			bay: { x0: - 260, x1: 120, z0: 240, z1: 452 },
+		},
+	};
+
+}
+
+// the west bank of the reach where the herd fords the stream (E4), a few metres from the water
+function fordWest( td ) {
+
+	const R = td.river;
+	const i = R.findIndex( ( s ) => s.s > 420 );
+	const a = R[ i - 1 ], b = R[ i + 1 ], c = R[ i ];
+	const tx = b.p.x - a.p.x, tz = b.p.y - a.p.y, tl = Math.hypot( tx, tz );
+	let nx = tz / tl, nz = - tx / tl;
+	if ( nx < 0 ) { nx = - nx; nz = - nz; }
+	return [ c.p.x - nx * ( c.width + 11 ), c.p.y - nz * ( c.width + 11 ) ];
+
+}

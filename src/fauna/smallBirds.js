@@ -206,9 +206,13 @@ const arc = ( a, b, u, lift, out ) => out.lerpVectors( a, b, u ).setY( THREE.Mat
 
 export class SmallBirds {
 
-	constructor( terrain, forest, river ) {
+	// at: an edition's placements - flocks: [ [ x, z ] ] (a flock in the tree nearest each),
+	// wagtails: { x0, x1, z0, z1 } (the strand they keep to), dippers: [ s ] (metres down the
+	// stream from the fall)
+	constructor( terrain, forest, river, at = {} ) {
 
 		this.terrain = terrain;
+		this.at = at;
 		this.rng = new RNG( 2718 );
 		const rng = this.rng;
 		this.group = new THREE.Group();
@@ -219,6 +223,20 @@ export class SmallBirds {
 		// ---- finch flocks: each keeps to a few trees near the meadows and the start
 		const trees = forest.trees.filter( ( t ) => t.y < 60 && t.y > 1.5 && Math.hypot( t.x + 5, t.z - 560 ) < 330 && forest.variants[ t.variant ].height * t.s > 6 );
 		const homes = [];
+		for ( const [ x, z ] of at.flocks ?? [] ) {
+
+			let best = null, bd = Infinity;
+			for ( const t of trees ) {
+
+				const d = Math.hypot( t.x - x, t.z - z );
+				if ( d < bd ) { bd = d; best = t; }
+
+			}
+
+			if ( best && bd < 40 && ! homes.includes( best ) ) homes.push( best );
+
+		}
+
 		for ( let k = 0; k < 6000 && homes.length < 16; k ++ ) {
 
 			const t = trees[ Math.floor( rng.next() * trees.length ) ];
@@ -263,10 +281,11 @@ export class SmallBirds {
 		this.wagtails = [];
 		for ( let k = 0; k < 3000 && this.wagtails.length < 5; k ++ ) {
 
-			const x = - 5 + rng.range( - 220, 220 ), z = rng.range( 380, 520 );
+			const W = at.wagtails;
+			const x = W ? rng.range( W.x0, W.x1 ) : - 5 + rng.range( - 220, 220 ), z = W ? rng.range( W.z0, W.z1 ) : rng.range( 380, 520 );
 			const h = terrain.heightAt( x, z );
 			if ( h < 0.12 || h > 0.6 ) continue;
-			if ( this.wagtails.some( ( w ) => Math.hypot( w.pos.x - x, w.pos.z - z ) < 30 ) ) continue;
+			if ( this.wagtails.some( ( w ) => Math.hypot( w.pos.x - x, w.pos.z - z ) < ( at.wagtails ? 6 : 30 ) ) ) continue;
 			this.wagtails.push( { pos: V( x, h, z ), heading: rng.next() * Math.PI * 2, state: 'stand', timer: rng.range( 1, 4 ), from: V(), to: V(), u: 1, dur: 1, pump: 0 } );
 
 		}
@@ -276,9 +295,10 @@ export class SmallBirds {
 		// ---- dippers on the stones of the stream
 		this.dippers = [];
 		const pts = ( river || [] ).filter( ( s, i ) => i % 3 === 0 );
-		for ( const s0 of [ 0.2, 0.55 ] ) {
+		const total = pts.length ? pts[ pts.length - 1 ].s : 1;
+		for ( const s0 of at.dippers ? at.dippers.map( ( m ) => m / total ) : [ 0.2, 0.55 ] ) {
 
-			const s = pts[ Math.floor( s0 * pts.length ) ];
+			const s = pts[ Math.min( pts.length - 1, Math.floor( s0 * pts.length ) ) ];
 			if ( ! s ) continue;
 			this.dippers.push( { pos: V( s.p.x, s.surf + 0.08, s.p.y ), heading: 0, state: 'stand', timer: rng.range( 2, 6 ), from: V(), to: V(), u: 1, dur: 1, bob: 0, idx: Math.floor( s0 * pts.length ) } );
 
@@ -342,6 +362,33 @@ export class SmallBirds {
 
 		} );
 		F.state = 'fly';
+
+	}
+
+	// the flock nearest p bursts out of its tree and away, to a tree well off from from
+	flush( p, from ) {
+
+		let F = null, bd = Infinity;
+		for ( const f of this.flocks ) {
+
+			const d = Math.hypot( f.tree.x - p.x, f.tree.z - p.z );
+			if ( d < bd ) { bd = d; F = f; }
+
+		}
+
+		if ( ! F || F.state === 'fly' ) return null;
+		let far = F.tree, fd = - 1;
+		for ( const t of F.visits ) {
+
+			const d = Math.hypot( t.x - from.x, t.z - from.z );
+			if ( d > fd ) { fd = d; far = t; }
+
+		}
+
+		F.tree = far;
+		this._flyFlock( F, () => this.crown( F.tree ), 1.4 );
+		F.next = 'tree';
+		return F;
 
 	}
 
@@ -496,6 +543,7 @@ export class SmallBirds {
 					w.u = 0;
 					w.dur = fly ? dist / 7 : dist / 1.6;
 					w.state = fly ? 'fly' : 'run';
+					if ( fly ) this.onEvent?.( 'wagtail', w.pos );
 					w.heading = Math.atan2( x - w.pos.x, z - w.pos.z );
 
 				}
@@ -554,6 +602,7 @@ export class SmallBirds {
 					p.dur = p.from.distanceTo( p.to ) / 8 + 0.3;
 					p.state = 'fly';
 					p.heading = Math.atan2( p.to.x - p.pos.x, p.to.z - p.pos.z );
+					this.onEvent?.( 'dipper', p.pos );
 
 				}
 

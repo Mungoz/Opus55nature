@@ -5,6 +5,7 @@ import { App } from './app.js';
 const params = new URLSearchParams( location.search );
 const num = ( k, d ) => ( params.has( k ) ? parseFloat( params.get( k ) ) : d );
 const filmMode = params.has( 'film' );
+const turbo = Math.max( 1, parseInt( params.get( 'turbo' ) ) || 1 );
 const shotMode = params.has( 'shot' ) || filmMode;
 if ( shotMode ) document.body.classList.add( 'shot' );
 // (the dev server serves both editions: its page starts as the nature one's)
@@ -30,6 +31,8 @@ const options = {
 	cam: params.has( 'cam' ) ? params.get( 'cam' ).split( ',' ).map( Number ) : undefined,
 	prop: params.get( 'prop' ) || undefined,
 	look: params.has( 'look' ) ? params.get( 'look' ).split( ',' ).map( Number ) : undefined,
+	// ?above: cam's and look's heights are above the ground there
+	above: params.has( 'above' ),
 	near: params.has( 'near' ),
 	showcase: params.has( 'showcase' ),
 	showcasePage: parseInt( params.get( 'showcase' ) ) || 0,
@@ -91,7 +94,9 @@ if ( app ) app.load( ( f, text ) => {
 		const dt = Math.min( ( now - last ) / 1000, 0.1 );
 		last = now;
 		app.realDt = dt;
-		app.update( shotMode ? 1 / 60 : dt );
+		// ?turbo=N: N simulation steps a frame (the walk-through bot)
+		for ( let k = 1; k < turbo; k ++ ) app.update( 1 / 30 );
+		app.update( shotMode ? 1 / 60 : turbo > 1 ? 1 / 30 : dt );
 		ui?.update( dt );
 		app.render();
 		if ( shotMode && ++ shotFrames === ( parseInt( params.get( 'shot' ) ) || 30 ) ) window.__shotReady = true;

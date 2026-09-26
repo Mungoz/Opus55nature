@@ -145,8 +145,9 @@ export class Collision {
 	// every obstacle nearby.
 	resolve( pos, px, pz ) {
 
-		// the ground: try the whole step, then each axis alone
-		if ( ! this._standable( pos.x, pos.z, px, pz ) ) {
+		// the ground: try the whole step, then each axis alone (from somewhere you couldn't
+		// stand - put there - any step is allowed, so you can always get out)
+		if ( this._standable( px, pz, px, pz ) && ! this._standable( pos.x, pos.z, px, pz ) ) {
 
 			if ( this._standable( pos.x, pz, px, pz ) ) pos.z = pz;
 			else if ( this._standable( px, pos.z, px, pz ) ) pos.x = px;
@@ -192,7 +193,7 @@ export class Collision {
 		}
 
 		// never pushed into water or up a cliff by an obstacle
-		if ( ! this._standable( pos.x, pos.z, px, pz ) ) { pos.x = px; pos.z = pz; }
+		if ( this._standable( px, pz, px, pz ) && ! this._standable( pos.x, pos.z, px, pz ) ) { pos.x = px; pos.z = pz; }
 
 	}
 

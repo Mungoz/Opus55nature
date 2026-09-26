@@ -27,7 +27,7 @@ function rand( seed ) {
 // ---------------------------------------------------------------------------
 
 // a box from a to b along its length, w wide and h high; `up` fixes its roll
-function beam( k, a, b, w, h, mat, c, { up = V( 0, 1, 0 ), round = 0 } = {} ) {
+export function beam( k, a, b, w, h, mat, c, { up = V( 0, 1, 0 ), round = 0 } = {} ) {
 
 	const d = new THREE.Vector3().subVectors( b, a ), len = d.length();
 	const zAx = d.clone().normalize();
@@ -72,7 +72,7 @@ function RoundedBox( w, h, d, r ) {
 }
 
 // a rectangular section w x h swept along a polyline (rails, battens, stems)
-function sweep( k, pts, w, h, mat, c, { up = V( 0, 1, 0 ), caps = true } = {} ) {
+export function sweep( k, pts, w, h, mat, c, { up = V( 0, 1, 0 ), caps = true } = {} ) {
 
 	const pos = [], idx = [];
 	const n = pts.length;
@@ -231,7 +231,7 @@ function slab( k, P, Nrm, t, C, mOut, cOut, mIn, cIn ) {
 }
 
 // a surface of revolution about the y axis: profile [ [ r, y ], ... ], at pos
-function lathe( k, profile, pos, mat, c, segs = 16, inward = false ) {
+export function lathe( k, profile, pos, mat, c, segs = 16, inward = false ) {
 
 	const g = new THREE.LatheGeometry( profile.map( ( [ r, y ] ) => new THREE.Vector2( r, y ) ), segs );
 	if ( inward ) {
@@ -247,7 +247,7 @@ function lathe( k, profile, pos, mat, c, segs = 16, inward = false ) {
 
 }
 
-function rope( k, pts, r = 0.012, c = '#6b5a45', tension = 0.5 ) {
+export function rope( k, pts, r = 0.012, c = '#6b5a45', tension = 0.5 ) {
 
 	const curve = new THREE.CatmullRomCurve3( pts, false, 'catmullrom', tension );
 	const g = new THREE.TubeGeometry( curve, Math.max( 12, pts.length * 10 ), r, 7, false );
@@ -257,7 +257,7 @@ function rope( k, pts, r = 0.012, c = '#6b5a45', tension = 0.5 ) {
 }
 
 // a carriage bolt: a square washer and a domed head, facing n
-function bolt( k, p, n, r = 0.013 ) {
+export function bolt( k, p, n, r = 0.013 ) {
 
 	const q = new THREE.Quaternion().setFromUnitVectors( V( 0, 1, 0 ), n.clone().normalize() );
 	const w = new THREE.BoxGeometry( r * 3.4, 0.005, r * 3.4 );
@@ -272,7 +272,7 @@ function bolt( k, p, n, r = 0.013 ) {
 
 }
 
-function ring( k, p, axis, r = 0.05, t = 0.009 ) {
+export function ring( k, p, axis, r = 0.05, t = 0.009 ) {
 
 	const g = new THREE.TorusGeometry( r, t, 6, 16 );
 	g.applyQuaternion( new THREE.Quaternion().setFromUnitVectors( V( 0, 0, 1 ), axis.clone().normalize() ) );
@@ -282,7 +282,7 @@ function ring( k, p, axis, r = 0.05, t = 0.009 ) {
 }
 
 // a flat coil of rope on a surface
-function coil( k, c, turns = 4, r0 = 0.07, r1 = 0.2, rr = 0.013 ) {
+export function coil( k, c, turns = 4, r0 = 0.07, r1 = 0.2, rr = 0.013 ) {
 
 	const pts = [];
 	for ( let i = 0; i <= turns * 24; i ++ ) {
@@ -708,8 +708,8 @@ export function buildJetty( bed, { seed = 11, lamp = true, emptyBerth = true } =
 	let z0 = 0;
 	while ( z0 > - 4 && bed( 0, z0 ) < top - 0.25 ) z0 -= 0.1;
 	info.z0 = z0;
-	const weathered = () => mixc( '#8a8378', '#a39b8e', R() ).multiplyScalar( 0.9 + 0.2 * R() );
-	const postCol = () => mixc( '#6f675c', '#857c70', R() );
+	const weathered = () => mixc( '#7d766b', '#958d81', R() ).multiplyScalar( 0.9 + 0.2 * R() );
+	const postCol = () => mixc( '#5d564d', '#72695e', R() );
 	const iron = col( '#34302b' );
 
 	// --- the abutment: a rubble block up to the deck, flagstone steps down to the strand

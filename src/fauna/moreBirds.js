@@ -251,12 +251,17 @@ function choughGeometry() {
 
 // ---------------------------------------------------------------------------
 
+const HIDE_M = new THREE.Matrix4().makeScale( 0, 0, 0 );
+
 export class MoreBirds {
 
-	constructor( terrain, water ) {
+	// at: an edition's placements - herons: [ [ x, z, level? ] ] (level: a pond's surface),
+	// grebes: [ [ x, z ] ], chough: { crag: [ x, y, z ], spots: [ [ x, y, z ] ] }
+	constructor( terrain, water, at = {} ) {
 
 		this.terrain = terrain;
 		this.water = water;
+		this.at = at;
 		const rng = this.rng = new RNG( 818 );
 		this.group = new THREE.Group();
 		this.group.name = 'more-birds';
@@ -266,15 +271,15 @@ export class MoreBirds {
 		const proto = heronModel( this.material ), fly = heronFlightGeometry();
 		this.flyMat = creatureMaterial( { flapSpeed: 2.3, flapAmp: 0.55 } );
 		this.herons = [];
-		for ( const [ x, z ] of [ [ 28, 452 ], [ - 48, 452 ] ] ) {
+		for ( const [ x, z, level = 0 ] of at.herons ?? [ [ 28, 452 ], [ - 48, 452 ] ] ) {
 
-			const spot = this._shallow( x, z, 0.12, 0.35 );
+			const spot = this._shallow( x, z, 0.12, 0.35, level );
 			const rig = this.herons.length === 0 ? proto : cloneRig( proto );
 			const h = {
 				home: spot.clone(), pos: spot.clone(), heading: rng.next() * Math.PI * 2,
 				state: 'stalk', timer: rng.range( 3, 8 ), neck: 0, strike: 0,
 				stand: rig.mesh, bones: rig.bones, fly: new THREE.Mesh( fly, this.flyMat ),
-				vel: new THREE.Vector3(), flyT: 0, phase: 0,
+				vel: new THREE.Vector3(), flyT: 0, phase: 0, level,
 				gaze: new Gaze( rng, { yaw: 0.9, pitch: 0.2, hold: [ 1.5, 5 ], speed: 5 } ),
 			};
 			rig.bones.get( 'head' ).add( eyes( this.material, 0.006, [ 0.022, 0.032, 0.045 ], '#d8b030' ) );
@@ -290,7 +295,8 @@ export class MoreBirds {
 		this.grebes = [];
 		for ( let i = 0; i < 3; i ++ ) {
 
-			const spot = this._deep( - 55 + i * 42, 418 - i * 6, 2.5 );
+			const g0 = at.grebes?.[ i ] ?? [ - 55 + i * 42, 418 - i * 6 ];
+			const spot = this._deep( g0[ 0 ], g0[ 1 ], 2.5 );
 			const g = {
 				home: spot.clone(), pos: spot.clone(), heading: rng.next() * Math.PI * 2, state: 'swim', timer: rng.range( 4, 12 ),
 				target: spot.clone(), mesh: new THREE.Mesh( grebe, this.material ), dive: 0, phase: rng.next() * 10,
@@ -305,21 +311,28 @@ export class MoreBirds {
 		// choughs: a flock round the crags above the western wood
 		this.choughMat = creatureMaterial( { flapSpeed: 9, flapAmp: 0.7, glide: 0.6 } );
 		const n = 26;
-		this.chough = { n, mesh: new THREE.InstancedMesh( choughGeometry(), this.choughMat, n ), crag: V( - 360, 170, 760 ), c: V( - 120, 60, 560 ), goal: V( - 120, 60, 560 ), timer: rng.range( 20, 40 ), out: true, spread: 0.6, birds: [] };
+		const crag = at.chough?.crag ? V( ...at.chough.crag ) : V( - 360, 170, 760 );
+		this.chough = { n, mesh: new THREE.InstancedMesh( choughGeometry(), this.choughMat, n ), crag, c: crag.clone(), goal: crag.clone(), timer: rng.range( 20, 40 ), out: true, spread: 0.6, birds: [], spots: at.chough?.spots ?? [ [ 5, 40, 545 ], [ - 55, 34, 455 ], [ 45, 45, 470 ], [ - 80, 50, 560 ] ] };
+		// (settled on a ledge: the same birds perched, their wings folded)
+		this.choughPerchMat = creatureMaterial();
+		this.chough.perched = new THREE.InstancedMesh( choughGeometry(), this.choughPerchMat, n );
+		this.chough.perched.frustumCulled = false;
+		this.chough.perched.count = 0;
+		this.group.add( this.chough.perched );
 		this.chough.mesh.frustumCulled = false;
 		for ( let i = 0; i < n; i ++ ) this.chough.birds.push( { ph: rng.next() * 6.28, r: rng.range( 25, 70 ), w: rng.range( 0.25, 0.45 ) * ( rng.next() < 0.8 ? 1 : - 1 ), y: rng.range( - 15, 15 ), tumble: 0 } );
 		this.group.add( this.chough.mesh );
 
 	}
 
-	// a point near (x, z) with water depth in [d0, d1]
-	_shallow( x, z, d0, d1 ) {
+	// a point near (x, z) with water depth in [d0, d1] (below a surface at level)
+	_shallow( x, z, d0, d1, level = 0 ) {
 
 		for ( let r = 0; r < 150; r += 2 ) for ( let k = 0; k < 24; k ++ ) {
 
 			const a = k / 24 * Math.PI * 2;
 			const px = x + Math.cos( a ) * r, pz = z + Math.sin( a ) * r;
-			const d = - this.terrain.heightAt( px, pz );
+			const d = level - this.terrain.heightAt( px, pz );
 			if ( d > d0 && d < d1 ) return V( px, 0, pz );
 
 		}
@@ -369,9 +382,11 @@ export class MoreBirds {
 		const bob = stepping ? Math.abs( Math.sin( Math.PI * h.phase ) ) * 0.01 : 0;
 		const crouch = h.state === 'freeze' || h.state === 'strike' ? 1 : 0;
 		h.crouch = damp( h.crouch ?? 0, crouch, 2, dt );
-		h.stand.position.set( h.pos.x, - 0.28 - h.crouch * 0.04 + bob, h.pos.z );
+		h.stand.position.set( h.pos.x, ( h.level ?? 0 ) - 0.28 - h.crouch * 0.04 + bob, h.pos.z );
 		h.stand.rotation.set( h.crouch * 0.12, h.heading, 0, 'YXZ' );
-		const look = h.gaze.update( dt, null );
+		// (a director may have it stare at something: its head turns and holds there)
+		const w = h.cmd?.watch;
+		const look = h.gaze.update( dt, w ? THREE.MathUtils.clamp( Math.atan2( Math.sin( Math.atan2( w.x - h.pos.x, w.z - h.pos.z ) - h.heading ), Math.cos( Math.atan2( w.x - h.pos.x, w.z - h.pos.z ) - h.heading ) ), - 1.2, 1.2 ) : null );
 		// the neck: upright and still while it walks (the head holds still, the body moves under
 		// it); drawn down in an S when it fishes; flung forward in the strike
 		const st = h.strike;
@@ -390,15 +405,41 @@ export class MoreBirds {
 
 			const dist = Math.hypot( cam.x - h.pos.x, cam.z - h.pos.z );
 			h.timer -= dt;
-			if ( dist < 12 && h.state !== 'fly' && h.state !== 'land' ) {
+			if ( h.cmd ) {
+
+				// fly: up with a croak and away to cmd.to (on water at cmd.level); stare: stand
+				// frozen, head turned to cmd.watch
+				const c = h.cmd;
+				if ( c.do === 'fly' && h.state !== 'fly' && ! c.done ) {
+
+					h.state = 'fly';
+					h.flyT = 0;
+					h.start = h.pos.clone();
+					h.dest = this._shallow( c.to.x, c.to.z, 0.12, 0.35, c.level ?? 0 );
+					h.startLevel = h.level ?? 0;
+					h.destLevel = c.level ?? 0;
+					c.done = true;
+					this.onCroak?.( h.pos );
+
+				} else if ( c.do === 'stare' && h.state !== 'fly' ) {
+
+					h.state = 'freeze';
+					h.timer = 1e9;
+					if ( c.face ) h.heading = turn( h.heading, Math.atan2( c.watch.x - h.pos.x, c.watch.z - h.pos.z ), dt * 0.8 );
+
+				}
+
+			} else if ( dist < 12 && h.state !== 'fly' && h.state !== 'land' ) {
 
 				// takes off with a croak, flies along the shore and settles further on
 				h.state = 'fly';
 				h.flyT = 0;
 				const away = Math.atan2( h.pos.x - cam.x, h.pos.z - cam.z ) + rng.range( - 0.6, 0.6 );
 				const hop = rng.range( 35, 65 );
-				h.dest = this._shallow( h.pos.x + Math.sin( away ) * hop, h.pos.z + Math.cos( away ) * hop, 0.12, 0.35 );
+				h.dest = this._shallow( h.pos.x + Math.sin( away ) * hop, h.pos.z + Math.cos( away ) * hop, 0.12, 0.35, h.level ?? 0 );
 				h.start = h.pos.clone();
+				h.startLevel = h.destLevel = h.level ?? 0;
+				this.onCroak?.( h.pos );
 
 			}
 
@@ -410,7 +451,7 @@ export class MoreBirds {
 
 						h.state = rng.next() < 0.5 ? 'freeze' : 'step';
 						h.timer = h.state === 'freeze' ? rng.range( 4, 10 ) : rng.range( 1.5, 3 );
-						h.target = this._shallow( h.home.x + rng.range( - 6, 6 ), h.home.z + rng.range( - 6, 6 ), 0.12, 0.35 );
+						h.target = this._shallow( h.home.x + rng.range( - 6, 6 ), h.home.z + rng.range( - 6, 6 ), 0.12, 0.35, h.level ?? 0 );
 
 					}
 
@@ -476,7 +517,7 @@ export class MoreBirds {
 					const total = h.start.distanceTo( h.dest ) / 6;
 					const u = Math.min( 1, h.flyT / total );
 					const p = h.start.clone().lerp( h.dest, u );
-					const alt = Math.sin( u * Math.PI ) * 14 + 0.9;
+					const alt = Math.sin( u * Math.PI ) * 14 + 0.9 + THREE.MathUtils.lerp( h.startLevel ?? 0, h.destLevel ?? 0, u );
 					h.fly.position.set( p.x, alt, p.z );
 					const dir = h.dest.clone().sub( h.start ).setY( Math.cos( u * Math.PI ) * 2 ).normalize();
 					h.fly.lookAt( h.fly.position.clone().add( dir ) );
@@ -488,8 +529,9 @@ export class MoreBirds {
 						h.timer = rng.range( 6, 12 );
 						h.home.copy( h.dest );
 						h.pos.copy( h.dest );
+						h.level = h.destLevel ?? 0;
 						h.heading = Math.atan2( dir.x, dir.z );
-						this.water.addRipple( h.pos.x, h.pos.z, 0.3 );
+						if ( ! h.level ) this.water.addRipple( h.pos.x, h.pos.z, 0.3 );
 
 					}
 
@@ -510,6 +552,13 @@ export class MoreBirds {
 		for ( const g of this.grebes ) {
 
 			g.timer -= dt;
+			if ( g.dive_now ) {
+
+				g.dive_now = false;
+				if ( g.state === 'swim' ) g.timer = 0;
+
+			}
+
 			if ( g.state === 'swim' ) {
 
 				const tx = g.target.x - g.pos.x, tz = g.target.z - g.pos.z;
@@ -556,12 +605,13 @@ export class MoreBirds {
 		// ---- choughs: loose circles round the crags, with sudden dives and tumbles ----
 		const C = this.chough, m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3( 1.25, 1.25, 1.25 );
 		C.timer -= dt;
+		if ( C.roost ) C.timer = 1e9;
 		if ( C.timer <= 0 ) {
 
 			C.out = ! C.out;
 			if ( C.out ) {
 
-				const spots = [ [ 5, 40, 545 ], [ - 55, 34, 455 ], [ 45, 45, 470 ], [ - 80, 50, 560 ] ];
+				const spots = C.spots;
 				C.goal.set( ...spots[ Math.floor( rng.next() * spots.length ) ] );
 				C.timer = rng.range( 25, 45 );
 
@@ -578,7 +628,54 @@ export class MoreBirds {
 		const toGoal = C.goal.clone().sub( C.c ), dg = toGoal.length();
 		if ( dg > 0.5 ) C.c.addScaledVector( toGoal, Math.min( 1, 13 * dt / dg ) );
 		C.spread = damp( C.spread, C.out && dg < 40 ? 0.55 : 1, 0.5, dt );
+		// settling on a ledge: each bird leaves the wheel for its place in the row, drops onto it
+		// and folds its wings (drawn perched from then on)
+		let perched = 0;
+		if ( C.roost ) {
+
+			C.roostT = ( C.roostT ?? 0 ) + dt;
+			C.goal.copy( C.roost.a ).lerp( C.roost.b, 0.5 ).add( V( 0, 12, 0 ) );
+
+		} else C.roostT = 0;
+
 		C.birds.forEach( ( b, i ) => {
+
+			if ( C.roost ) {
+
+				const u = C.roost.n ? ( i % C.roost.n ) / ( C.roost.n - 1 ) : i / ( C.n - 1 );
+				const seat = C.roost.a.clone().lerp( C.roost.b, u ).add( V( 0, 0, ( ( i * 7 ) % 3 - 1 ) * 0.05 ) );
+				// each lands in turn, a second or so apart
+				const land = THREE.MathUtils.clamp( ( C.roostT - 2 - i * 0.55 ) / 3.2, 0, 1 );
+				if ( land >= 1 ) {
+
+					// on the ledge: all facing out the same way, now and then a head turns
+					const face = C.roost.face ?? 0;
+					e.set( 0, face + Math.sin( time * 0.3 + i ) * 0.05, 0, 'YXZ' );
+					q.setFromEuler( e );
+					m.compose( seat, q, s );
+					C.perched.setMatrixAt( perched ++, m );
+					C.mesh.setMatrixAt( i, HIDE_M );
+					return;
+
+				}
+
+				if ( land > 0 ) {
+
+					// gliding in: from the wheel to the seat
+					const a0 = time * b.w + b.ph, r0 = b.r * C.spread;
+					const from = V( C.c.x + Math.cos( a0 ) * r0, C.c.y + b.y, C.c.z + Math.sin( a0 ) * r0 );
+					const k = land * land * ( 3 - 2 * land );
+					const p = from.lerp( seat, k ).add( V( 0, Math.sin( k * Math.PI ) * 3, 0 ) );
+					const d = seat.clone().sub( p );
+					e.set( 0.2 * ( 1 - k ), Math.atan2( d.x, d.z ), 0, 'YXZ' );
+					q.setFromEuler( e );
+					m.compose( p, q, s );
+					C.mesh.setMatrixAt( i, m );
+					return;
+
+				}
+
+			}
 
 			const a = time * b.w + b.ph;
 			const lift = ( Math.sin( time * 0.3 + b.ph * 2 ) * 20 + b.y ) * C.spread;
@@ -595,6 +692,8 @@ export class MoreBirds {
 
 		} );
 		C.mesh.instanceMatrix.needsUpdate = true;
+		C.perched.count = perched;
+		C.perched.instanceMatrix.needsUpdate = true;
 
 	}
 

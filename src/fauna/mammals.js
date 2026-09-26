@@ -54,9 +54,13 @@ function instance( proto ) {
 
 export class Mammals {
 
-	constructor( terrain, forest, audio, quality = {} ) {
+	// at: an edition's placements (all optional) - herd: [ x, z ], burrows: [ [ x, z ] ],
+	// hares: [ [ x, z ] ], bear: { start: [ x, z ], route: [ [ x, z ] ] }, squirrels: [ [ x, z ] ]
+	// (trees near these), and face: [ x, z ] (the point the burrows' mouths turn toward)
+	constructor( terrain, forest, audio, quality = {}, at = {} ) {
 
 		this.terrain = terrain;
+		this.at = at;
 		this.audio = audio;
 		this.rng = new RNG( 1717 );
 		this.material = creatureMaterial();
@@ -85,7 +89,7 @@ export class Mammals {
 
 		// --- a small herd grazing the open lakeshore east of the start
 		this.deer = [];
-		const herd = this._findMeadow( 34, 488, 9 );
+		const herd = this._findMeadow( ...( at.herd ?? [ 34, 488 ] ), 9 );
 		for ( let i = 0; i < 5; i ++ ) {
 
 			const d = instance( i === 0 ? stagProto : hindProto );
@@ -114,10 +118,11 @@ export class Mammals {
 		// spoil with a real tunnel), and the marmots that live in them
 		this.burrows = [];
 		const burrowGeos = [ burrowGeometry( 1, true ), burrowGeometry( 2, false ), burrowGeometry( 3, true ), burrowGeometry( 4, false ) ];
-		[ [ 1, 494.5 ], [ 10, 497 ], [ 6, 488.5 ], [ - 4, 490 ] ].forEach( ( [ x, z ], i ) => {
+		const face = at.face ?? [ - 5, 508 ];
+		( at.burrows ?? [ [ 1, 494.5 ], [ 10, 497 ], [ 6, 488.5 ], [ - 4, 490 ] ] ).forEach( ( [ x, z ], i ) => {
 
-			// the holes face roughly toward the start, so people see into them
-			const h = Math.atan2( - 5 - x, 508 - z ) + ( i % 2 ? 0.55 : - 0.45 );
+			// the holes face roughly toward the start (or the path), so people see into them
+			const h = Math.atan2( face[ 0 ] - x, face[ 1 ] - z ) + ( i % 2 ? 0.55 : - 0.45 );
 			const y = this.terrain.heightAt( x, z );
 			const mesh = new THREE.Mesh( burrowGeos[ i ], this.material );
 			mesh.position.set( x, y, z );
@@ -156,17 +161,40 @@ export class Mammals {
 
 		// --- red squirrels at the foot of the nearest conifers
 		this.squirrels = [];
-		const cands = forest.trees
-			.filter( ( t ) => t.variant < 6 && t !== forest.spawnVignette?.tree && Math.hypot( t.x + 5, t.z - 508 ) > 25 && Math.hypot( t.x + 5, t.z - 508 ) < 170 )
-			.sort( ( a, b ) => Math.hypot( a.x + 5, a.z - 508 ) - Math.hypot( b.x + 5, b.z - 508 ) );
 		const nearTrees = [];
-		for ( const t of cands ) {
+		if ( at.squirrels ) {
 
-			if ( nearTrees.length >= 6 ) break;
-			if ( nearTrees.every( ( o ) => Math.hypot( o.x - t.x, o.z - t.z ) > 28 ) ) nearTrees.push( t );
+			// the conifer nearest each given point
+			for ( const [ x, z ] of at.squirrels ) {
+
+				let best = null, bd = Infinity;
+				for ( const t of forest.trees ) {
+
+					if ( t.variant >= 6 && ! ( t.variant >= 16 && t.variant <= 22 ) ) continue;
+					const d = Math.hypot( t.x - x, t.z - z );
+					if ( d < bd ) { bd = d; best = t; }
+
+				}
+
+				if ( best ) nearTrees.push( best );
+
+			}
+
+		} else {
+
+			const cands = forest.trees
+				.filter( ( t ) => t.variant < 6 && t !== forest.spawnVignette?.tree && Math.hypot( t.x + 5, t.z - 508 ) > 25 && Math.hypot( t.x + 5, t.z - 508 ) < 170 )
+				.sort( ( a, b ) => Math.hypot( a.x + 5, a.z - 508 ) - Math.hypot( b.x + 5, b.z - 508 ) );
+			for ( const t of cands ) {
+
+				if ( nearTrees.length >= 6 ) break;
+				if ( nearTrees.every( ( o ) => Math.hypot( o.x - t.x, o.z - t.z ) > 28 ) ) nearTrees.push( t );
+
+			}
+
+			if ( forest.spawnVignette ) nearTrees.unshift( forest.spawnVignette.tree );
 
 		}
-		if ( forest.spawnVignette ) nearTrees.unshift( forest.spawnVignette.tree );
 		for ( const t of nearTrees ) {
 
 			const q = instance( squirrelProto );
@@ -189,7 +217,7 @@ export class Mammals {
 
 		// --- mountain hares in the meadows round the start
 		this.hares = [];
-		for ( const [ x, z ] of [ [ 26, 543 ], [ - 34, 552 ], [ 58, 528 ], [ - 58, 505 ], [ 88, 497 ], [ 8, 578 ], [ - 92, 548 ], [ 40, 598 ] ] ) {
+		for ( const [ x, z ] of at.hares ?? [ [ 26, 543 ], [ - 34, 552 ], [ 58, 528 ], [ - 58, 505 ], [ 88, 497 ], [ 8, 578 ], [ - 92, 548 ], [ 40, 598 ] ] ) {
 
 			const h = instance( hareProto );
 			h.pos = this._dryPoint( x, z, 0, 6 );
@@ -214,9 +242,9 @@ export class Mammals {
 
 			const b = instance( bearProto );
 			b.home = new THREE.Vector2( - 115, 625 );
-			b.route = [ [ - 112, 622 ], [ - 74, 552 ], [ - 58, 518 ], [ - 88, 505 ], [ - 96, 575 ], [ - 132, 590 ] ].map( ( [ x, z ] ) => new THREE.Vector2( x, z ) );
+			b.route = ( at.bear?.route ?? [ [ - 112, 622 ], [ - 74, 552 ], [ - 58, 518 ], [ - 88, 505 ], [ - 96, 575 ], [ - 132, 590 ] ] ).map( ( [ x, z ] ) => new THREE.Vector2( x, z ) );
 			b.leg = 1;
-			b.pos = this._dryPoint( - 88, 560, 0, 10 );
+			b.pos = this._dryPoint( ...( at.bear?.start ?? [ - 88, 560 ] ), 0, 10 );
 			b.heading = rng.next() * Math.PI * 2;
 			b.state = 'walk';
 			b.timer = rng.range( 30, 60 );
@@ -346,7 +374,8 @@ export class Mammals {
 		const rng = this.rng;
 		d.timer -= dt;
 		if ( dist > 60 ) d.wary = false;
-		if ( d.forced ) {
+		if ( d.cmd ) this._deerCmd( d, dt );
+		else if ( d.forced ) {
 
 			const f = d.forced;
 			if ( f === 'stagup' ) d.pose = true;
@@ -478,10 +507,14 @@ export class Mammals {
 
 		}
 
+		if ( d.cmd?.speed && ( d.state === 'walk' || d.state === 'flee' ) ) speedT = d.cmd.speed;
+		// facing what it stares at, turning slowly on the spot
+		if ( d.cmd?.face && d.cmd.watch && d.state === 'alert' ) want = Math.atan2( d.cmd.watch.x - d.pos.x, d.cmd.watch.z - d.pos.z );
 		// a body with mass: it gathers speed and pulls up; it turns more tightly when slow
 		d.speed = approach( d.speed, speedT, speedT > 3 ? 5 : 0.9, speedT > 3 ? 4 : 1.6, dt );
 		const prevHeading = d.heading;
 		if ( d.speed > 0.05 || d.state === 'flee' ) d.heading = steer( d.heading, want, rate * ( 0.4 + Math.min( 1, d.speed ) * 0.6 ), dt );
+		else if ( d.cmd?.face && d.state === 'alert' ) d.heading = steer( d.heading, want, 0.6, dt );
 		d.turnRate = wrapAngle( d.heading - prevHeading ) / Math.max( dt, 1e-3 );
 
 		const moving = ! d.forced || d.forced === 'stagwalk' || d.forced === 'stagrun';
@@ -489,7 +522,8 @@ export class Mammals {
 
 			// look a couple of metres ahead: if that is the strand or the lake, veer inland
 			const ax = d.pos.x + Math.sin( d.heading ) * 2.5, az = d.pos.z + Math.cos( d.heading ) * 2.5;
-			if ( this.terrain.heightAt( ax, az ) < 1.0 ) {
+			const wade = !! d.cmd?.wade;
+			if ( ! wade && this.terrain.heightAt( ax, az ) < 1.0 ) {
 
 				const inland = this._inland( d.pos );
 				d.heading = steer( d.heading, inland, 3.5, dt );
@@ -499,7 +533,7 @@ export class Mammals {
 			}
 
 			const nx = d.pos.x + Math.sin( d.heading ) * d.speed * dt, nz = d.pos.z + Math.cos( d.heading ) * d.speed * dt;
-			if ( this.terrain.heightAt( nx, nz ) >= 0.8 || this.terrain.heightAt( nx, nz ) > this.terrain.heightAt( d.pos.x, d.pos.z ) ) {
+			if ( wade || this.terrain.heightAt( nx, nz ) >= 0.8 || this.terrain.heightAt( nx, nz ) > this.terrain.heightAt( d.pos.x, d.pos.z ) ) {
 
 				d.pos.x = nx;
 				d.pos.z = nz;
@@ -562,7 +596,8 @@ export class Mammals {
 		body.rotation.z = running ? 0 : Math.sin( d.phase * Math.PI * 2 ) * 0.022 * amp - d.turnRate * 0.04;
 
 		// ---- neck & head: springs, a gaze that fixes and snaps, the head leading turns ----
-		const toCam = THREE.MathUtils.clamp( wrapAngle( Math.atan2( dx, dz ) - d.heading ), - 1.1, 1.1 );
+		const wp = d.cmd?.watch;
+		const toCam = THREE.MathUtils.clamp( wrapAngle( ( wp ? Math.atan2( wp.x - d.pos.x, wp.z - d.pos.z ) : Math.atan2( dx, dz ) ) - d.heading ), - 1.1, 1.1 );
 		const look = d.gaze.update( dt, d.state === 'alert' && ! d.pose ? toCam : null );
 		const bite = d.bite.update( dt );
 		let neckT = 0, headT = 0, yawT = 0;
@@ -623,6 +658,57 @@ export class Mammals {
 
 	}
 
+	// A director's command for a deer (d.cmd): { do: 'walk'|'trot'|'run'|'stare'|'graze'|'roar',
+	// to: Vector3, watch: Vector3, face, wade, speed, then }. Arriving (or a roar ending) sets
+	// cmd.done; the deer then does cmd.then ('stare', 'graze') until the command is cleared.
+	_deerCmd( d, dt ) {
+
+		const c = d.cmd;
+		d.wary = true;
+		d.timer = 1e9;
+		d.pose = false;
+		let act = c.done ? ( c.then ?? 'stare' ) : c.do;
+		if ( ( act === 'walk' || act === 'trot' || act === 'run' ) && c.to ) {
+
+			const tx = c.to.x - d.pos.x, tz = c.to.z - d.pos.z;
+			if ( Math.hypot( tx, tz ) < ( c.near ?? 1.2 ) ) {
+
+				c.done = true;
+				act = c.then ?? 'stare';
+
+			} else {
+
+				d.state = act === 'run' ? 'flee' : 'walk';
+				d.target.copy( c.to );
+				d.fleeDir = Math.atan2( tx, tz );
+				if ( act === 'trot' && ! c.speed ) c.speed = 2.8;
+				return;
+
+			}
+
+		}
+
+		if ( act === 'roar' ) {
+
+			if ( d.state !== 'roar' ) {
+
+				d.state = 'roar';
+				d.roarLeft = 3.2;
+				this.audio?.roar?.( d.pos );
+
+			}
+
+			d.roarLeft -= dt;
+			if ( d.roarLeft <= 0 ) c.done = true;
+			return;
+
+		}
+
+		d.state = act === 'graze' ? 'graze' : 'alert';
+		d.lookUp = 0;
+
+	}
+
 	// --------------------------------------------------------------- marmots
 	_updateMarmot( m, dt, time, cam ) {
 
@@ -630,7 +716,18 @@ export class Mammals {
 		const rng = this.rng;
 		const home = m.home;
 		m.timer -= dt;
-		if ( m.forced ) {
+		if ( m.cmd ) {
+
+			// dive: into the burrow now; sentinel: sit up and watch; peek: just the head out of
+			// the burrow, watching
+			const c = m.cmd;
+			const tunnel = m.state === 'enter' || m.state === 'emerge' || m.state === 'hide';
+			if ( c.do === 'dive' && ! tunnel && m.state !== 'dive' ) m.state = 'dive';
+			else if ( c.do === 'sentinel' && ! tunnel ) { m.state = 'sentinel'; m.timer = 1e9; }
+			else if ( c.do === 'peek' && m.state === 'hide' ) { m.state = 'emerge'; m.tun = 0; }
+			if ( m.state === 'hide' ) m.timer = 1e9;
+
+		} else if ( m.forced ) {
 
 			m.state = m.forced;
 			m.timer = 5;
@@ -692,7 +789,8 @@ export class Mammals {
 
 			case 'sentinel':
 				sitT = 1;
-				if ( dist < 30 ) m.heading = turnToward( m.heading, Math.atan2( cam.x - m.pos.x, cam.z - m.pos.z ), dt * 3 );
+				if ( m.cmd?.watch ) m.heading = turnToward( m.heading, Math.atan2( m.cmd.watch.x - m.pos.x, m.cmd.watch.z - m.pos.z ), dt * 3 );
+				else if ( dist < 30 ) m.heading = turnToward( m.heading, Math.atan2( cam.x - m.pos.x, cam.z - m.pos.z ), dt * 3 );
 				if ( m.timer <= 0 && dist > 13 ) {
 
 					m.state = 'forage';
@@ -724,7 +822,8 @@ export class Mammals {
 
 				// ...and head first down the tunnel (or back up it, looking out)
 				const into = m.state === 'enter';
-				m.tun = Math.min( 1, m.tun + dt * ( into ? 1.8 : 0.6 ) );
+				// (peeking, it comes only as far as the mouth, and waits there)
+				m.tun = Math.min( ! into && m.cmd?.do === 'peek' ? 0.62 : 1, m.tun + dt * ( into ? 1.8 : 0.6 ) );
 				const u = into ? m.tun : 1 - m.tun;
 				const p = u < 0.4 ? home.mouth.clone().lerp( home.entry, u / 0.4 ) : home.entry.clone().lerp( home.deep, ( u - 0.4 ) / 0.6 );
 				m.pos.set( p.x, 0, p.z );
@@ -833,8 +932,9 @@ export class Mammals {
 
 		// ---- head: grazing in bouts, looking up and about; the sentinel's head snaps from
 		// one thing to the next and keeps coming back to you ----
-		const toCam = THREE.MathUtils.clamp( wrapAngle( Math.atan2( cam.x - m.pos.x, cam.z - m.pos.z ) - m.heading ), - 1.0, 1.0 );
-		const watching = ( m.state === 'sentinel' && dist < 30 ) ? toCam : null;
+		const mw = m.cmd?.watch ?? cam;
+		const toCam = THREE.MathUtils.clamp( wrapAngle( Math.atan2( mw.x - m.pos.x, mw.z - m.pos.z ) - m.heading ), - 1.0, 1.0 );
+		const watching = ( m.state === 'sentinel' && ( dist < 30 || m.cmd ) ) || m.cmd?.do === 'peek' ? toCam : null;
 		const look = m.gaze.update( dt, watching );
 		const nib = m.nib.update( dt );
 		const grazing = m.state === 'forage' && ! m.lookUp;
@@ -861,8 +961,15 @@ export class Mammals {
 			h.state = h.forced;
 			h.timer = 5;
 
-		} else if ( dist < 8 && h.state !== 'flee' ) {
+		} else if ( h.cmd && dist >= ( h.cmd.until ?? 7 ) ) {
 
+			// sitting tight, watching
+			h.state = 'alert';
+			h.timer = 1e9;
+
+		} else if ( dist < ( h.cmd ? 99 : 8 ) && h.state !== 'flee' ) {
+
+			h.cmd = null;
 			h.state = 'flee';
 			h.timer = rng.range( 1.8, 3 );
 			h.fleeDir = Math.atan2( - dx, - dz ) + rng.range( - 0.5, 0.5 );
@@ -1040,7 +1147,24 @@ export class Mammals {
 		const dx = cam.x - b.pos.x, dz = cam.z - b.pos.z;
 		const dist = Math.hypot( dx, dz );
 		b.timer -= dt;
-		if ( b.forced ) {
+		if ( b.cmd ) {
+
+			// rear: up on its hind legs, facing what it scents; run: away at a lope; forage
+			const c = b.cmd;
+			b.timer = 1e9;
+			if ( c.do === 'rear' ) {
+
+				b.state = 'rear';
+				if ( c.watch ) b.heading = turnToward( b.heading, Math.atan2( c.watch.x - b.pos.x, c.watch.z - b.pos.z ), dt * 1.2 );
+
+			} else if ( c.do === 'run' ) {
+
+				b.state = 'leave';
+				b.target.copy( c.to );
+
+			} else b.state = c.do;
+
+		} else if ( b.forced ) {
 
 			b.state = b.forced;
 			b.timer = 5;
@@ -1062,11 +1186,17 @@ export class Mammals {
 
 				const tx = b.target.x - b.pos.x, tz = b.target.z - b.pos.z;
 				b.heading = turnToward( b.heading, Math.atan2( tx, tz ), dt * 0.8 );
-				speedT = b.state === 'leave' ? 1.5 : 0.95;
+				speedT = b.cmd?.do === 'run' ? ( b.cmd.speed ?? 3.4 ) : b.state === 'leave' ? 1.5 : 0.95;
 				// the head swings low from side to side as it walks
 				neckT = 0.5;
 				yawT = Math.sin( b.phase * Math.PI * 2 ) * 0.15;
-				if ( Math.hypot( tx, tz ) < 2 || b.timer <= 0 ) {
+				if ( b.cmd && Math.hypot( tx, tz ) < 2 ) {
+
+					b.cmd = null;
+					b.state = 'forage';
+					b.timer = rng.range( 30, 60 );
+
+				} else if ( Math.hypot( tx, tz ) < 2 || b.timer <= 0 ) {
 
 					if ( b.state === 'leave' && dist < 60 ) {
 
@@ -1204,6 +1334,42 @@ export class Mammals {
 		B.get( 'neck' ).rotation.set( b.neck * 0.6 + nod, b.yaw * 0.5, 0, 'YXZ' );
 		B.get( 'head' ).rotation.set( b.headP - nod * 0.5, b.yaw * 0.5, 0, 'YXZ' );
 
+		// Rearing (after photographs of brown bears standing to look and scent): the body swings
+		// up about the hind feet until nearly upright, leaning a little forward; the hind legs
+		// stay under it, knees soft; the forelegs hang in front of the chest, paws limp; the head
+		// comes level and the nose lifts, working the air.
+		b.rear = damp( b.rear ?? 0, b.state === 'rear' ? 1 : 0, b.state === 'rear' ? 1.6 : 2.6, dt );
+		if ( b.rear > 0.001 ) {
+
+			const e = b.rear * b.rear * ( 3 - 2 * b.rear );
+			const th = e * 1.3;
+			// pivot at the hind feet (local 0, 0.1, -0.6): keep them where they stand
+			const py = 0.1, pz = - 0.6;
+			const c = Math.cos( th ), s = Math.sin( th );
+			const ry = py * c + pz * s, rz = - py * s + pz * c;
+			const oy = py - ry, oz = pz - rz;
+			b.mesh.position.x += Math.sin( b.heading ) * oz;
+			b.mesh.position.z += Math.cos( b.heading ) * oz;
+			b.mesh.position.y += oy;
+			b.mesh.rotation.set( - th, b.heading, 0, 'YXZ' );
+			B.get( 'body' ).rotation.x *= 1 - e;
+			for ( const sd of [ 'L', 'R' ] ) {
+
+				B.get( 'hH' + sd ).rotation.x = B.get( 'hH' + sd ).rotation.x * ( 1 - e ) + e * ( th * 0.86 );
+				B.get( 'hK' + sd ).rotation.x = B.get( 'hK' + sd ).rotation.x * ( 1 - e ) - e * 0.25;
+				B.get( 'hF' + sd ).rotation.x = B.get( 'hF' + sd ).rotation.x * ( 1 - e ) + e * ( 0.25 - th * 0.55 );
+				B.get( 'fS' + sd ).rotation.x = B.get( 'fS' + sd ).rotation.x * ( 1 - e ) + e * ( th * 0.62 );
+				B.get( 'fE' + sd ).rotation.x = B.get( 'fE' + sd ).rotation.x * ( 1 - e ) - e * 0.75;
+				B.get( 'fF' + sd ).rotation.x = B.get( 'fF' + sd ).rotation.x * ( 1 - e ) + e * 1.05;
+
+			}
+
+			const sniff = b.state === 'rear' ? b.sniff.update( 0 ) * 0.08 * ( 0.5 + 0.5 * Math.sin( time * 11 ) ) : 0;
+			B.get( 'neck' ).rotation.x += e * ( th * 0.62 - b.neck * 0.6 );
+			B.get( 'head' ).rotation.x += e * ( th * 0.55 - 0.12 - b.headP - sniff );
+
+		}
+
 	}
 
 	// ------------------------------------------------------------- squirrels
@@ -1213,7 +1379,25 @@ export class Mammals {
 		const t = q.tree;
 		const dist = Math.hypot( cam.x - q.pos.x, cam.z - q.pos.z );
 		q.timer -= dt;
-		if ( dist < ( q.perch ? 5 : 9 ) && q.state !== 'climb' && q.state !== 'up' ) {
+		if ( q.cmd?.do === 'scold' ) {
+
+			// clinging to the trunk a man's height up, facing what it scolds, tail flicking,
+			// chattering in bursts
+			const w = q.cmd.watch;
+			const a = Math.atan2( w.x - t.x, w.z - t.z );
+			q.pos.set( t.x + Math.sin( a ) * 0.5, 0, t.z + Math.cos( a ) * 0.5 );
+			q.state = 'up';
+			q.timer = 1e9;
+			q.climb = damp( q.climb, 1.7, 3, dt );
+			q.chat = ( q.chat ?? 0 ) - dt;
+			if ( q.chat <= 0 ) {
+
+				this.audio?.chatter?.( q.mesh.position );
+				q.chat = rng.range( 0.9, 2.2 );
+
+			}
+
+		} else if ( dist < ( q.perch ? 5 : 9 ) && q.state !== 'climb' && q.state !== 'up' ) {
 
 			q.state = 'climb';
 			q.onPerch = false;
@@ -1327,7 +1511,7 @@ export class Mammals {
 		const flex = q.state === 'hop' ? Math.cos( hopPh * Math.PI * 2 ) : 0;
 		if ( q.climb > 0 ) {
 
-			const a = Math.atan2( q.pos.x - t.x, q.pos.z - t.z ) + q.climb * 0.25;
+			const a = Math.atan2( q.pos.x - t.x, q.pos.z - t.z ) + ( q.cmd ? 0 : q.climb * 0.25 );
 			q.mesh.position.set( t.x + Math.sin( a ) * trunkR, g + q.climb, t.z + Math.cos( a ) * trunkR );
 			q.mesh.rotation.set( - Math.PI / 2, a + Math.PI, 0, 'YXZ' );
 			B.get( 'chest' ).rotation.x = 0;
@@ -1361,7 +1545,7 @@ export class Mammals {
 		}
 
 		// the tail follows through, and flicks now and then (a squirrel's signal)
-		const fl = q.flickB.update( dt );
+		const fl = q.cmd?.do === 'scold' ? 0.6 + 0.4 * Math.max( 0, Math.sin( time * 3.1 ) ) : q.flickB.update( dt );
 		const tailT = q.state === 'hop' ? - 0.45 + flex * 0.3 : ( q.sit ?? 0 ) * 1.35;
 		B.get( 'tail1' ).rotation.x = q.tailS.update( tailT, dt );
 		B.get( 'tail2' ).rotation.x = fl * 0.45 * Math.sin( time * 24 ) + Math.sin( time * 2.1 + 1 ) * 0.06;

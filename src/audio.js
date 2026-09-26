@@ -13,6 +13,10 @@ export class Soundscape {
 		this._owlTimer = 30;
 		this._fwd = new THREE.Vector3();
 		this._up = new THREE.Vector3();
+		// an edition may hush parts of the valley: each factor scales its layer (1 = as normal)
+		this.mix = { birds: 1, wind: 1, lap: 1, brook: 1, fall: 1, rain: 1 };
+		// ...and keep songbirds out of a moving patch round something ({ p: Vector3, r })
+		this.quiet = null;
 
 	}
 
@@ -517,31 +521,35 @@ export class Soundscape {
 
 		}
 
-		const { gust, wind, forest, shore, altitude, night, dusk, rain = 0, brook = 0, fall = 0 } = env;
+		const { gust, forest, shore, altitude, night, dusk, brook = 0, fall = 0 } = env;
+		const X = this.mix;
+		const wind = env.wind * X.wind, rain = ( env.rain ?? 0 ) * X.rain;
 		const w = wind * ( 0.35 + 0.9 * gust ) * ( 1 + Math.min( altitude / 300, 1.5 ) );
 		this.wind.g.gain.setTargetAtTime( 0.16 * w, now, 0.3 );
 		this.wind.f.frequency.setTargetAtTime( 300 + 500 * gust, now, 0.4 );
 		this.windHi.g.gain.setTargetAtTime( 0.03 * w * gust, now, 0.3 );
 		this.rustle.g.gain.setTargetAtTime( 0.05 * forest * wind * ( 0.3 + gust ), now, 0.25 );
 		const lapEnv = 0.5 + 0.5 * Math.sin( now * 1.3 + Math.sin( now * 0.37 ) * 3 );
-		this.lap.g.gain.setTargetAtTime( 0.22 * shore * ( 0.35 + 0.65 * lapEnv * lapEnv ), now, 0.12 );
-		this.lapHi.g.gain.setTargetAtTime( 0.02 * shore * lapEnv * lapEnv * lapEnv, now, 0.1 );
+		this.lap.g.gain.setTargetAtTime( 0.22 * shore * X.lap * ( 0.35 + 0.65 * lapEnv * lapEnv ), now, 0.12 );
+		this.lapHi.g.gain.setTargetAtTime( 0.02 * shore * X.lap * lapEnv * lapEnv * lapEnv, now, 0.1 );
 		this.rainHiss.g.gain.setTargetAtTime( 0.11 * rain * ( 0.8 + 0.2 * gust ), now, 0.5 );
 		this.rainRoar.g.gain.setTargetAtTime( 0.14 * rain * rain, now, 0.6 );
 		const burble = 0.75 + 0.25 * Math.sin( now * 7.3 ) * Math.sin( now * 3.1 + 1 );
-		this.brook.g.gain.setTargetAtTime( 0.05 * brook * burble, now, 0.08 );
-		this.brookLo.g.gain.setTargetAtTime( 0.08 * brook, now, 0.3 );
-		this.fallLoop.g.gain.setTargetAtTime( 0.22 * fall * fall, now, 0.3 );
+		this.brook.g.gain.setTargetAtTime( 0.05 * brook * burble * X.brook, now, 0.08 );
+		this.brookLo.g.gain.setTargetAtTime( 0.08 * brook * X.brook, now, 0.3 );
+		this.fallLoop.g.gain.setTargetAtTime( 0.22 * fall * fall * X.fall, now, 0.3 );
 
 		// songbirds by day, loons at dusk, owls at night
 		this._birdTimer -= dt;
 		if ( this._birdTimer <= 0 ) {
 
 			this._birdTimer = 1.5 + Math.random() * 5;
-			if ( night < 0.3 && rain < 0.3 && ( forest > 0.05 || Math.random() < 0.3 ) ) {
+			if ( night < 0.3 && rain < 0.3 && ( forest > 0.05 || Math.random() < 0.3 ) && Math.random() < X.birds ) {
 
 				const a = Math.random() * Math.PI * 2, d = 25 + Math.random() * 90;
-				this.birdSong( new THREE.Vector3( p.x + Math.cos( a ) * d, p.y + 6 + Math.random() * 10, p.z + Math.sin( a ) * d ) );
+				const at = new THREE.Vector3( p.x + Math.cos( a ) * d, p.y + 6 + Math.random() * 10, p.z + Math.sin( a ) * d );
+				// no song inside the hushed patch
+				if ( ! this.quiet || Math.hypot( at.x - this.quiet.p.x, at.z - this.quiet.p.z ) > this.quiet.r ) this.birdSong( at );
 
 			}
 
@@ -551,7 +559,7 @@ export class Soundscape {
 		if ( this._loonTimer <= 0 ) {
 
 			this._loonTimer = 25 + Math.random() * 45;
-			if ( dusk > 0.2 || night > 0.3 ) this.loon( new THREE.Vector3( Math.random() * 400 - 200, 1, - 300 - Math.random() * 600 ) );
+			if ( ( dusk > 0.2 || night > 0.3 ) && X.birds > 0.5 && ! this.noLoons ) this.loon( new THREE.Vector3( Math.random() * 400 - 200, 1, - 300 - Math.random() * 600 ) );
 
 		}
 
@@ -559,7 +567,7 @@ export class Soundscape {
 		if ( this._owlTimer <= 0 ) {
 
 			this._owlTimer = 20 + Math.random() * 40;
-			if ( night > 0.6 ) {
+			if ( night > 0.6 && X.birds > 0.5 ) {
 
 				const a = Math.random() * Math.PI * 2;
 				this.owl( new THREE.Vector3( p.x + Math.cos( a ) * 120, p.y + 15, p.z + Math.sin( a ) * 120 ) );

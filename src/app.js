@@ -223,7 +223,7 @@ export class App {
 		this.scene.add( this.water.mesh );
 		this.streams = new Streams( td, this.textures, this.water, this.quality, this.terrain.mesh, this.terrain.reflectMesh );
 		this.scene.add( this.streams.group );
-		this.waterPlants = new WaterPlants( td );
+		this.waterPlants = new WaterPlants( td, { keepOut: this.layout?.waterClear } );
 		this.scene.add( this.waterPlants.group );
 
 		await step( 0.5, 'Growing the larches' );
@@ -267,17 +267,19 @@ export class App {
 		this.starlings = new Murmuration( Math.round( 900 * Math.max( 0.45, this.quality.particles ) ), td );
 		this.geese = new GeeseFlight( td, ( p, n ) => this.audio.honk( p, n ) );
 		this.eagles = new Eagles( td );
-		this.waterfowl = new Waterfowl( td, this.water );
+		// (an edition may place the animals where its story needs them)
+		const fauna = this.layout?.faunaAt?.( td ) ?? {};
+		this.waterfowl = new Waterfowl( td, this.water, fauna.fowl );
 		this.fish = new LeapingFish( td, this.water, this.particles, ( p, s ) => this.audio.splash( p, s ) );
 		this.shallows = new Shallows( td );
 		this.scene.add( this.shallows.group );
 		this.riverFish = new RiverFish( td, this.streams.path );
 		this.scene.add( this.riverFish.group );
-		this.moreBirds = new MoreBirds( td, this.water );
+		this.moreBirds = new MoreBirds( td, this.water, fauna.birds );
 		this.scene.add( this.moreBirds.group );
-		this.smallBirds = new SmallBirds( td, this.forest, td.river );
+		this.smallBirds = new SmallBirds( td, this.forest, td.river, fauna.small );
 		this.scene.add( this.smallBirds.group );
-		this.mammals = new Mammals( td, this.forest, this.audio, this.quality );
+		this.mammals = new Mammals( td, this.forest, this.audio, this.quality, fauna.mammals );
 		this.scene.add( this.mammals.group );
 		// marmots crop the turf short around their burrows
 		// grazed turf round each burrow, and none growing through the spoil
@@ -301,6 +303,13 @@ export class App {
 		this.controls = new Controls( this.camera, this.canvas, td );
 		this.controls.onClick = ( e ) => this.throwStone( e );
 		const p = this.options.cam;
+		if ( p && this.options.above ) {
+
+			p[ 1 ] += Math.max( 0, td.heightAt( p[ 0 ], p[ 2 ] ) );
+			if ( this.options.look ) this.options.look[ 1 ] += Math.max( 0, td.heightAt( this.options.look[ 0 ], this.options.look[ 2 ] ) );
+
+		}
+
 		this.controls.setPose( ...( p || START_POSE ) );
 		// debug: ?cam=x,y,z&look=x,y,z aims the camera at a point
 		if ( p && this.options.look ) {
@@ -585,6 +594,7 @@ export class App {
 
 				} else {
 
+					this.onStoneSplash?.( p.clone() );
 					this.water.addRipple( p.x, p.z, 0.8 );
 					this.water.addRipple( p.x, p.z, 0.35, 0.3 );
 					this.particles.splash( p, 16, 1.9 );

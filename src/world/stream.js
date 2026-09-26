@@ -810,9 +810,12 @@ export class Streams {
 		}
 
 		this.reflectMesh.layers.enable( 0 );
+		// (things that appear only in reflections join the mirror's view for its pass)
+		if ( this.reflectOnly ) for ( const o of this.reflectOnly ) o.layers.enable( 0 );
 		renderer.setClearColor( 0x000000, 1 );
 		this.reflector.onBeforeRender( renderer, scene, cam );
 		this.reflectMesh.layers.disable( 0 );
+		if ( this.reflectOnly ) for ( const o of this.reflectOnly ) o.layers.disable( 0 );
 		rt.viewport.set( 0, 0, rt.width, rt.height );
 		rt.scissorTest = false;
 

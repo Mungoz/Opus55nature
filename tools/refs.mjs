@@ -11,10 +11,30 @@ const UA = { 'User-Agent': 'LarchmereRefs/1.0 (reference research for a game; co
 const dir = path.join( 'shots/refs', tag );
 fs.mkdirSync( dir, { recursive: true } );
 const got = [];
+const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
+// Commons rate-limits: space the requests out, and back off when told to
+async function get( url, json = true ) {
+
+	for ( let k = 0; k < 6; k ++ ) {
+
+		await sleep( 700 + k * k * 1500 );
+		const r = await fetch( url, { headers: UA } );
+		if ( r.status === 429 || r.status >= 500 ) continue;
+		if ( ! json ) return r.ok ? Buffer.from( await r.arrayBuffer() ) : null;
+		const text = await r.text();
+		try { return JSON.parse( text ); } catch ( e ) { continue; }
+
+	}
+
+	return null;
+
+}
+
 for ( const t of terms ) {
 
 	const u = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent( t )}&gsrnamespace=6&gsrlimit=30&prop=imageinfo&iiprop=url|size&iiurlwidth=800&format=json`;
-	const j = await ( await fetch( u, { headers: UA } ) ).json();
+	const j = await get( u );
+	if ( ! j ) { console.log( 'skipped: ' + t ); continue; }
 	const pages = Object.values( j.query?.pages || {} ).sort( ( a, b ) => a.index - b.index );
 	let n = 0;
 	for ( const p of pages ) {
@@ -27,9 +47,9 @@ for ( const t of terms ) {
 
 			if ( ! fs.existsSync( file ) ) {
 
-				const r = await fetch( ii.thumburl, { headers: UA } );
-				if ( ! r.ok ) continue;
-				fs.writeFileSync( file, Buffer.from( await r.arrayBuffer() ) );
+				const b = await get( ii.thumburl, false );
+				if ( ! b ) continue;
+				fs.writeFileSync( file, b );
 
 			}
 

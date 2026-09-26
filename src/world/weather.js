@@ -23,6 +23,10 @@ ${terrainLookupFnGLSL}
 uniform float uTime;
 uniform float uIntensity;
 uniform vec2 uWindVel;
+// a roof the rain doesn't come through: centre xz, half sizes (in its own frame), then
+// ( cos yaw, sin yaw, height of the roof, on )
+uniform vec4 uShelter;
+uniform vec4 uShelterB;
 attribute vec4 aSeed;
 varying float vAlpha;
 varying vec3 vWorldPos;
@@ -47,6 +51,11 @@ void main() {
 	vec3 p = vec3( xz.x, y, xz.y );
 	float ground = max( terrainH( p.xz ), 0.0 );
 	if ( p.y < ground ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
+	if ( uShelterB.w > 0.5 ) {
+		vec2 d = p.xz - uShelter.xy;
+		vec2 l = vec2( uShelterB.x * d.x - uShelterB.y * d.y, uShelterB.y * d.x + uShelterB.x * d.y );
+		if ( abs( l.x ) < uShelter.z && abs( l.y ) < uShelter.w && p.y < uShelterB.z ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }
+	}
 	vec3 dir = normalize( vel );
 	vec3 toCam = normalize( cameraPosition - p );
 	vec3 side = normalize( cross( dir, toCam ) );
@@ -131,6 +140,8 @@ export class Weather {
 			...sharedUniforms(),
 			uIntensity: { value: 0 },
 			uWindVel: { value: new THREE.Vector2() },
+			uShelter: { value: new THREE.Vector4() },
+			uShelterB: { value: new THREE.Vector4() },
 		};
 		this.rain = new THREE.Mesh( geo, new THREE.ShaderMaterial( {
 			vertexShader: rainVert,

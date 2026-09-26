@@ -92,6 +92,37 @@ export class Murmuration {
 		this.predator = null;
 		this.time = 0;
 		this.rng = rng;
+		// director: centre (Vector3) the flock wheels about; keepAway { p, r } it parts round
+		this.centre = null;
+		this.keepAway = null;
+
+	}
+
+	// bring a murmuration in now, from far down the valley, to wheel about centre
+	summon( centre, from ) {
+
+		this.centre = centre.clone();
+		this.phase = 'on';
+		this.cycle = 1e9;
+		for ( let i = 0; i < this.n; i ++ ) {
+
+			this.pos[ i * 3 ] = from.x + this.rng.range( - 30, 30 );
+			this.pos[ i * 3 + 1 ] = from.y + this.rng.range( - 15, 15 );
+			this.pos[ i * 3 + 2 ] = from.z + this.rng.range( - 30, 30 );
+			this.vel[ i * 3 ] = ( centre.x - from.x ) * 0.01;
+			this.vel[ i * 3 + 1 ] = 0;
+			this.vel[ i * 3 + 2 ] = ( centre.z - from.z ) * 0.01;
+
+		}
+
+	}
+
+	// send it away (to roost in the reeds at exit, or off down the valley)
+	dismiss( exit = null ) {
+
+		this.phase = 'out';
+		this.cycle = 30;
+		this.exit = exit ?? new THREE.Vector3( this.rng.range( - 1, 1 ) * 1500, 320, 2400 );
 
 	}
 
@@ -145,7 +176,8 @@ export class Murmuration {
 
 	update( dt, allowed ) {
 
-		const visible = this.schedule( dt, allowed );
+		// (a director's murmuration flies whatever the light)
+		const visible = this.schedule( dt, allowed || !! this.centre );
 		this.mesh.visible = visible;
 		if ( ! visible ) return;
 		dt = Math.min( dt, 0.05 );
@@ -154,6 +186,7 @@ export class Murmuration {
 		const n = this.n, P = this.pos, Vv = this.vel;
 		// wandering attractor over the lake (or away, when leaving)
 		if ( this.phase === 'out' ) this.attractor.copy( this.exit );
+		else if ( this.centre ) this.attractor.set( this.centre.x + Math.sin( t * 0.09 ) * 60 + Math.sin( t * 0.23 ) * 20, this.centre.y + 18 * Math.sin( t * 0.13 ) + 8 * Math.sin( t * 0.37 ), this.centre.z + Math.cos( t * 0.07 ) * 70 );
 		else this.attractor.set( Math.sin( t * 0.045 ) * 170 + Math.sin( t * 0.13 ) * 50, 125 + 35 * Math.sin( t * 0.09 ) + 15 * Math.sin( t * 0.31 ), 120 + Math.cos( t * 0.033 ) * 260 );
 		// occasional falcon strike splits the flock
 		if ( ! this.predator && this.rng.next() < dt * 0.02 ) {
@@ -261,6 +294,21 @@ export class Murmuration {
 
 			}
 
+			// part round the director's empty point, as round a falcon
+			if ( this.keepAway ) {
+
+				const K = this.keepAway;
+				const ox = px - K.p.x, oy = py - K.p.y, oz = pz - K.p.z;
+				const d2 = ox * ox + oy * oy + oz * oz, r2 = K.r * K.r;
+				if ( d2 < r2 * 2.2 ) {
+
+					const k = r2 * 1.6 / ( d2 + 4 );
+					fx += ox * k; fy += oy * k; fz += oz * k;
+
+				}
+
+			}
+
 			// keep off the ground
 			const ground = Math.max( this.terrain.heightAt( px, pz ), 0 );
 			if ( py < ground + 25 ) fy += ( ground + 25 - py ) * 2;
@@ -318,6 +366,24 @@ export class GeeseFlight {
 		this.rng = new RNG( 17 );
 		this.timer = 12;
 		this.flight = null;
+		// passes on their own every so often (a director may take that over)
+		this.auto = true;
+
+	}
+
+	// a skein now, crossing low in front of the viewer at height h above them
+	pass( camera, h = 30, ahead = 60 ) {
+
+		this._launch( camera );
+		const f = this.flight;
+		const fwd = new THREE.Vector3();
+		camera.getWorldDirection( fwd );
+		fwd.y = 0;
+		fwd.normalize();
+		const passP = camera.position.clone().addScaledVector( fwd, ahead );
+		f.pos.copy( passP ).addScaledVector( f.dir, - 500 );
+		f.pos.y = Math.max( camera.position.y, 0 ) + h;
+		f.low = h;
 
 	}
 
@@ -343,7 +409,7 @@ export class GeeseFlight {
 	update( dt, time, camera, visible ) {
 
 		this.timer -= dt;
-		if ( ! this.flight && this.timer <= 0 && visible ) {
+		if ( ! this.flight && this.timer <= 0 && visible && this.auto ) {
 
 			this._launch( camera );
 			this.timer = this.rng.range( 25, 55 );
@@ -363,7 +429,8 @@ export class GeeseFlight {
 		f.pos.addScaledVector( f.dir, f.speed * dt );
 		f.dist += f.speed * dt;
 		const ground = this.terrain.heightAt( f.pos.x, f.pos.z );
-		if ( f.pos.y < ground + 45 ) f.pos.y += ( ground + 45 - f.pos.y ) * dt * 0.5;
+		const floor = f.low ? Math.min( 45, f.low ) : 45;
+		if ( f.pos.y < ground + floor ) f.pos.y += ( ground + floor - f.pos.y ) * dt * 0.5;
 		const vel = _f.copy( f.dir ).multiplyScalar( f.speed );
 		for ( let i = 0; i < f.count; i ++ ) {
 

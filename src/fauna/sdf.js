@@ -117,6 +117,8 @@ export class Sculpt {
 		P.tip = o.tip ?? null;
 		P.comb = o.comb ?? null;
 		P.pat = o.pat ?? null;
+		// squash along z (0..1): a cone with an elliptical section, deeper than wide or not
+		P.sz = o.sz ?? 0;
 		// bounding sphere for culling
 		this.parts.push( P );
 		return this;
@@ -168,7 +170,9 @@ export class Sculpt {
 
 	_partDist( P, x, y, z ) {
 
-		let d = P.type === 0 ? roundCone( x, y, z, P ) : ellipsoid( x, y, z, P );
+		let d;
+		if ( P.sz ) d = roundCone( x, y, P.bc.z + ( z - P.bc.z ) / P.sz, P ) * P.sz;
+		else d = P.type === 0 ? roundCone( x, y, z, P ) : ellipsoid( x, y, z, P );
 		if ( P.fuzz ) d += P.fuzz * noise3( x * P.fuzzFreq, y * P.fuzzFreq, z * P.fuzzFreq );
 		return d;
 
