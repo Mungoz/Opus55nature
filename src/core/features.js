@@ -6,7 +6,7 @@ import * as THREE from 'three';
 // A hanging-valley step on the west wall of the lower valley, with a waterfall.
 // base: foot of the cliff; out: unit vector from the cliff face into the valley.
 export const FALL = {
-	base: new THREE.Vector2( - 548, 1092 ),
+	base: new THREE.Vector2( - 190, 790 ),
 	out: new THREE.Vector2( 0.967, - 0.257 ).normalize(),
 	height: 92,
 	width: 135, // half-length of the rock step along the wall
@@ -14,8 +14,8 @@ export const FALL = {
 
 // The stream from the plunge pool, meandering across the meadow into the lake.
 const RIVER_CTRL = [
-	[ - 539, 1090 ], [ - 470, 1064 ], [ - 390, 1052 ], [ - 300, 1010 ], [ - 215, 948 ], [ - 150, 905 ],
-	[ - 70, 890 ], [ 10, 850 ], [ 70, 785 ], [ 92, 715 ], [ 68, 655 ], [ 88, 592 ], [ 78, 530 ], [ 58, 468 ], [ 48, 438 ],
+	[ - 181, 788 ], [ - 142, 774 ], [ - 104, 764 ], [ - 64, 748 ], [ - 22, 728 ], [ 16, 700 ], [ 52, 668 ],
+	[ 78, 624 ], [ 70, 580 ], [ 84, 540 ], [ 74, 503 ], [ 58, 468 ], [ 48, 438 ],
 ].map( ( [ x, z ] ) => new THREE.Vector3( x, 0, z ) );
 
 export const RIVER_SAMPLES = 160;
@@ -69,7 +69,9 @@ export function riverSamples() {
 
 		const u = i / ( RIVER_SAMPLES - 1 );
 		const p = path.getPointAt( u );
-		out.push( { p: new THREE.Vector2( p.x, p.z ), width: THREE.MathUtils.lerp( 2.1, 4.4, Math.pow( u, 0.8 ) ), s: u * plen } );
+		// over its last stretch the stream spreads into a shallow fan and opens into the lake
+		const flare = 1 + 2.2 * THREE.MathUtils.smoothstep( u, 0.86, 1.0 );
+		out.push( { p: new THREE.Vector2( p.x, p.z ), width: THREE.MathUtils.lerp( 2.1, 4.4, Math.pow( u, 0.8 ) ) * flare, s: u * plen } );
 
 	}
 
@@ -81,8 +83,8 @@ export function riverSamples() {
 // surface heights are measured from the terrain at load.
 export const PONDS = [
 	{ c: new THREE.Vector2( - 58, 540 ), r: 15 },
-	{ c: new THREE.Vector2( - 262, 810 ), r: 22 },
-	{ c: new THREE.Vector2( 250, 1185 ), r: 27 },
+	{ c: new THREE.Vector2( - 110, 682 ), r: 18 },
+	{ c: new THREE.Vector2( 106, 716 ), r: 20 },
 	// the plunge pool the waterfall has scoured out of the foot of its cliff; the stream
 	// flows out of it (its level is the stream's, set when the water is measured)
 	{ c: FALL.base.clone().addScaledVector( FALL.out, 15 ), r: 17, plunge: true },

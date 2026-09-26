@@ -4,8 +4,8 @@ import { featuresGLSL } from '../core/features.js';
 // by ridged ranges and closed to the north by a pyramidal horn. Requires noise.glsl.
 export const terrainShapeGLSL = /* glsl */ `
 ${ featuresGLSL }
-const vec2 LAKE_C = vec2( 0.0, -330.0 );
-const vec2 LAKE_AX = vec2( 330.0, 780.0 );
+const vec2 LAKE_C = vec2( 0.0, -70.0 );
+const vec2 LAKE_AX = vec2( 265.0, 520.0 );
 const vec2 HORN_C = vec2( -120.0, -3350.0 );
 const vec2 ISLAND_C = vec2( -70.0, 205.0 );
 
@@ -83,10 +83,13 @@ float terrainHeight( vec2 p, float detail ) {
 	// Flat-bottomed glacial trough with steep walls.
 	// below the lake the trough stays narrow, walled in close on both sides,
 	// and pinches into a hanging valley beneath the horn
-	float widen = smoothstep( 300.0, 2500.0, p.y ) * 240.0 - smoothstep( -1200.0, -2000.0, p.y ) * 250.0;
-	float wall = smoothstep( 430.0 + widen, 1850.0 + widen * 1.4, dv );
-	// the valley ends in a cirque not far behind the meadows: a curved headwall
-	float cirque = smoothstep( 1250.0, 2600.0, p.y + 0.00022 * p.x * p.x + 120.0 * fbm2( p * 0.0012 + 3.0, 3 ) );
+	float widen = - smoothstep( -800.0, -1500.0, p.y ) * 150.0;
+	// a close valley: the floor round the lake ~300 m either side of its line, and beyond
+	// the head of the lake a meadow ~150 m either side; the walls rise soon after
+	float floorW = mix( 300.0, 150.0, smoothstep( 200.0, 520.0, p.y ) );
+	float wall = smoothstep( floorW + widen, floorW + 950.0 + widen * 1.4, dv );
+	// the valley ends in a cirque a few hundred metres behind the meadows: a curved headwall
+	float cirque = smoothstep( 780.0, 1500.0, p.y + 0.00022 * p.x * p.x + 100.0 * fbm2( p * 0.0012 + 3.0, 3 ) );
 	wall = max( wall, cirque * 0.82 );
 	wall = wall * wall * ( 3.0 - 2.0 * wall );
 
@@ -117,8 +120,8 @@ float terrainHeight( vec2 p, float detail ) {
 	float s1 = 1150.0 * pow( max( 0.0, 1.0 - length( p - vec2( -2100.0, -2500.0 ) ) / 1500.0 ), 1.8 ) * ( 0.8 + 0.4 * r );
 	float s2 = 1300.0 * pow( max( 0.0, 1.0 - length( p - vec2( 2000.0, -2300.0 ) ) / 1600.0 ), 1.8 ) * ( 0.8 + 0.4 * r );
 	// the trough floor itself climbs toward the horn in glacial steps
-	float headwall = smoothstep( -1250.0, -2100.0, p.y );
-	floorH += headwall * ( 160.0 + 60.0 * smoothstep( -1500.0, -1650.0, p.y ) );
+	float headwall = smoothstep( -850.0, -1650.0, p.y );
+	floorH += headwall * ( 160.0 + 60.0 * smoothstep( -1100.0, -1250.0, p.y ) );
 	float mtn = smax( range, horn * smoothstep( 150.0, 700.0, dv + ( 1.0 - headwall ) * 400.0 ), 220.0 );
 	mtn = smax( mtn, max( s1, s2 ) * wall, 200.0 );
 

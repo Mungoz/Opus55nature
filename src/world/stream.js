@@ -63,7 +63,14 @@ void main() {
 function streamShader() {
 
 	const base = Water2.WaterShader;
-	return { ...base, name: 'StreamShader', uniforms: THREE.UniformsUtils.clone( base.uniforms ), fragmentShader: base.fragmentShader.replace( 'vec2 uv = coord.xy + coord.z * normal.xz * 0.05;', 'vec2 uv = coord.xy + coord.z * normal.xz * 0.012;' ) };
+	return {
+		...base, name: 'StreamShader',
+		uniforms: { ...THREE.UniformsUtils.clone( base.uniforms ), uFade: { value: new THREE.Vector2( 1e6, 1e6 + 1 ) } },
+		fragmentShader: base.fragmentShader
+			.replace( 'vec2 uv = coord.xy + coord.z * normal.xz * 0.05;', 'vec2 uv = coord.xy + coord.z * normal.xz * 0.012;' )
+			.replace( 'uniform vec4 config;', 'uniform vec4 config;\nuniform vec2 uFade;' )
+			.replace( 'gl_FragColor = vec4( color, 1.0 ) * mix( refractColor, reflectColor, reflectance );', 'gl_FragColor = vec4( color, 1.0 ) * mix( refractColor, reflectColor, reflectance );\n\t\t\tgl_FragColor.a = 1.0 - smoothstep( uFade.x, uFade.y, vUv.y );' ),
+	};
 
 }
 
@@ -282,7 +289,7 @@ export class Streams {
 			const o = pts[ i ].w + 3;
 			if ( td.heightAt( pts[ i ].p.x + n.x * o, pts[ i ].p.y + n.y * o ) < 0.02 && td.heightAt( pts[ i ].p.x - n.x * o, pts[ i ].p.y - n.y * o ) < 0.02 ) {
 
-				end = Math.min( pts.length, i + 3 );
+				end = Math.min( pts.length, i + 7 );
 				break;
 
 			}
@@ -321,6 +328,9 @@ export class Streams {
 		g.computeBoundingSphere();
 		const scale = 0.33; // the normal maps repeat every 3 m
 		const m = new THREE.Mesh( g, this._flowMaterial( streamShader(), { color: 0xd4e6dc, reflectivity: 0.03, scale, flowSpeed: 0.9 * scale * 0.5 } ) );
+		// fade out over the last stretch, where the stream runs out into the lake
+		const sEnd = pts[ pts.length - 1 ].s;
+		m.material.uniforms.uFade.value.set( sEnd - 34, sEnd );
 		m.material.side = THREE.DoubleSide;
 		m.layers.set( LAYERS.WATER );
 		m.renderOrder = 11;

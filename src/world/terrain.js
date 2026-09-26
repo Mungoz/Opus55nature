@@ -38,8 +38,8 @@ function axis( min, max, coreMin, coreMax, s0, growth ) {
 export function buildTerrainGeometry( data, spacing = 2, growth = 1.03, extent = 6000 ) {
 
 	// full detail over the lake, the meadows and the whole stream up to the falls
-	const xs = axis( - extent, extent, - 640, 600, spacing, growth );
-	const zs = axis( - extent, extent, - 1250, 1140, spacing, growth );
+	const xs = axis( - extent, extent, - 440, 400, spacing, growth );
+	const zs = axis( - extent, extent, - 720, 920, spacing, growth );
 	const nx = xs.length, nz = zs.length;
 	const pos = new Float32Array( nx * nz * 3 );
 	let k = 0;

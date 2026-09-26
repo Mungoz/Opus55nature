@@ -390,7 +390,7 @@ export class App {
 			scale: this.renderScale,
 			river: this.terrainData.river.filter( ( v, i ) => i % 6 === 0 ).map( ( r ) => r.surf ).map( ( v ) => Math.round( v * 10 ) / 10 ),
 			ponds: this.terrainData.ponds.map( ( p ) => Math.round( p.surf * 10 ) / 10 ),
-			fallBase: probe( - 548, 1092 ), fallTop: probe( - 555, 1094 ),
+			fallBase: Math.round( this.streams.fallInfo.floorY * 10 ) / 10, fallTop: Math.round( this.streams.fallInfo.lipY * 10 ) / 10,
 			load: this.loadTimes,
 		};
 
