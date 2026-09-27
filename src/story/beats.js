@@ -1346,7 +1346,8 @@ export const BEATS = [
 			} );
 
 		},
-		skip: ( S ) => { S.flags.shedOpen = true; },
+		// (skipped - jumped or resumed past it - you have been: the key used, the oars carried)
+		skip: ( S ) => { S.flags.shedOpen = true; S.hold( 'the shed key', false ); if ( ! S.flags.oarsIn ) S.hold( 'the oars' ); },
 	},
 
 	// E12: a red squirrel scolding from a trunk, tail flicking, facing past you
