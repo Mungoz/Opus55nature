@@ -255,6 +255,19 @@ export class BoatScene {
 		const F = S.figure;
 		F.setMode( 'hidden' );
 		const shore = from.clone();
+		// the light going as you row out: the last of the glow off the peaks, then the dusk, the
+		// clock running on to a quarter to six (the eye adapting as it goes)
+		S.clockOverride = 17.75;
+		S.clockRate = 0.014;
+		const dusk = S.skyOverride = { lift: 0.16 };
+		const tl = S.time;
+		S.every( () => {
+
+			if ( S.skyOverride !== dusk ) return true;
+			dusk.lift = THREE.MathUtils.lerp( 0.16, 0.45, THREE.MathUtils.smoothstep( S.time - tl, 0, 20 ) );
+			return false;
+
+		} );
 		let strokes = 0;
 		const rowing = this._drive( b, course, ( u, t ) => ( t < 17 ? 1.5 : Math.max( 0.06, 1.5 - ( t - 17 ) * 0.35 ) ), ( bb ) => {
 
@@ -267,14 +280,14 @@ export class BoatScene {
 		// story doesn't wait for it to reach its end - that took a further minute)
 		await Promise.race( [ rowing, S.wait( 19 ) ] );
 		// the rings from the oars settle. The water goes still; your eyes open to the dark
-		S.skyOverride = { wind: 0.0, mist: 0.0028, lift: 0.72, keyLow: 0.22 };
+		S.skyOverride = { wind: 0.0, mist: 0.0028, lift: 0.45, keyLow: 0.22 };
 		app.water.uniforms.uCalm.value = 1;
 		const tr = S.time;
 		S.every( () => {
 
 			const k = THREE.MathUtils.smoothstep( S.time - tr, 0, 9 );
 			if ( ! S.skyOverride ) return true;
-			S.skyOverride.lift = THREE.MathUtils.lerp( 0.72, 1.05, k );
+			S.skyOverride.lift = THREE.MathUtils.lerp( 0.45, 0.8, k );
 			S.skyOverride.keyLow = THREE.MathUtils.lerp( 0.22, 0.3, k );
 			return k >= 1;
 

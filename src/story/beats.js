@@ -8,14 +8,17 @@ import { FALL } from '../core/features.js';
 
 const V = ( x, y, z ) => new THREE.Vector3( x, y, z );
 
-// the clock (hours) at each waypoint; between them it follows the walk
+// the clock (hours) at each waypoint; between them it follows the walk. The sun sets at about
+// 17.15 here: the wood is walked in the last of the sun, low and gold through the trunks; it sets
+// as you come out on the west strand; it is dark only on the boardwalk and the lake. (It was
+// dark from the hut on: "it gets dark much later on".)
 export const CLOCK = [
-	[ 'jettyHead', 16.5 ], [ 'mouth', 16.53 ], [ 'ford', 16.58 ], [ 'gate', 16.66 ], [ 'pond', 16.7 ],
-	[ 'marmots', 16.76 ], [ 'signpost', 16.8 ], [ 'bridge', 16.87 ], [ 'hut', 16.93 ],
+	[ 'jettyHead', 15.9 ], [ 'mouth', 15.93 ], [ 'ford', 15.98 ], [ 'gate', 16.06 ], [ 'pond', 16.1 ],
+	[ 'marmots', 16.16 ], [ 'signpost', 16.2 ], [ 'bridge', 16.27 ], [ 'hut', 16.33 ],
 	// (the storm runs the clock on while you shelter: see the storm beat)
-	[ 'trough', 17.44 ], [ 'troughEnd', 17.46 ], [ 'tarn', 17.52 ], [ 'pool', 17.57 ], [ 'shrine', 17.59 ], [ 'wood', 17.61 ],
-	[ 'gully', 17.63 ], [ 'blackpond', 17.66 ], [ 'stand', 17.69 ], [ 'lodge', 17.71 ], [ 'camp', 17.73 ], [ 'bear', 17.75 ],
-	[ 'strand', 17.8 ], [ 'boatJ', 17.95 ], [ 'boat', 18.05 ],
+	[ 'trough', 16.56 ], [ 'troughEnd', 16.58 ], [ 'tarn', 16.62 ], [ 'pool', 16.67 ], [ 'shrine', 16.7 ], [ 'wood', 16.73 ],
+	[ 'gully', 16.77 ], [ 'blackpond', 16.82 ], [ 'stand', 16.87 ], [ 'lodge', 16.91 ], [ 'camp', 16.95 ], [ 'bear', 16.99 ],
+	[ 'strand', 17.1 ], [ 'boatJ', 17.32 ], [ 'boat', 17.45 ],
 ];
 
 // the weather at each waypoint (eased between; the storm beat overrides it at the hut)
@@ -37,8 +40,11 @@ export const SKY = {
 	key: [ [ 'jettyHead', 1.05 ], [ 'gate', 1.0 ], [ 'bridge', 0.88 ], [ 'hut', 0.82 ], [ 'trough', 0.95 ], [ 'tarn', 1.0 ], [ 'strand', 1.0 ] ],
 	// (raised after playtesting - "everything is way too dark at night": the dark of a night wood as
 	// eyes adapted to it see it, not black)
-	lift: [ [ 'jettyHead', 0 ], [ 'hut', 0.1 ], [ 'trough', 0.26 ], [ 'tarn', 0.42 ], [ 'pool', 0.55 ], [ 'wood', 0.72 ], [ 'stand', 0.8 ], [ 'strand', 0.78 ], [ 'boat', 0.72 ] ],
-	keyLow: [ [ 'jettyHead', 0.03 ], [ 'hut', 0.05 ], [ 'trough', 0.09 ], [ 'tarn', 0.13 ], [ 'pool', 0.17 ], [ 'wood', 0.21 ], [ 'stand', 0.24 ], [ 'strand', 0.24 ], [ 'boat', 0.22 ] ],
+	// (and lowered again with the later dusk - "it to get dark much later on": the light holds
+	// through the wood, the sun goes behind the peaks on the shore, and the dark comes down as you
+	// row out; see the ending)
+	lift: [ [ 'jettyHead', 0 ], [ 'hut', 0.06 ], [ 'trough', 0.06 ], [ 'tarn', 0.04 ], [ 'stand', 0.05 ], [ 'strand', 0.08 ], [ 'boatJ', 0.12 ], [ 'boat', 0.16 ] ],
+	keyLow: [ [ 'jettyHead', 0.03 ], [ 'hut', 0.05 ], [ 'trough', 0.07 ], [ 'wood', 0.1 ], [ 'stand', 0.13 ], [ 'strand', 0.18 ], [ 'boatJ', 0.21 ], [ 'boat', 0.22 ] ],
 	contrast: [ [ 'jettyHead', 1.06 ], [ 'hut', 1.12 ], [ 'strand', 1.16 ] ],
 	cool: [ [ 'jettyHead', 0.0 ], [ 'gate', 0.05 ], [ 'hut', 0.25 ], [ 'tarn', 0.45 ], [ 'strand', 0.5 ] ],
 	desat: [ [ 'jettyHead', 0.0 ], [ 'gate', 0.02 ], [ 'hut', 0.14 ], [ 'tarn', 0.22 ], [ 'boat', 0.3 ] ],
@@ -517,11 +523,11 @@ export const BEATS = [
 			} } );
 			const t0 = S.time, h0 = app.hours;
 			S.clockOverride = h0;
-			// the clock: 17:00 to 17:26 over the storm
+			// the clock: from about 16:20 to 16:33 over the storm (a long storm, and the light holds after)
 			const clock = S.every( () => {
 
 				if ( ! S.storming ) return true;
-				S.clockOverride = THREE.MathUtils.lerp( h0, 17.43, Math.min( 1, ( S.time - t0 ) / 170 ) );
+				S.clockOverride = THREE.MathUtils.lerp( h0, 16.55, Math.min( 1, ( S.time - t0 ) / 300 ) );
 				S.clockRate = 0.02;
 				return false;
 
@@ -560,32 +566,55 @@ export const BEATS = [
 			// minutes - or as you walk on from the hut, the storm going off down the valley
 			// (it was over in half a minute once the book was read: "the storm doesn't last anywhere
 			// near long enough". Two and a half minutes at the least, four at the most.)
-			const over = () => S.time - t0 > 240 || ( S.time - t0 > 150 && S.flags.hutbookRead && S.time - S.flags.hutbookAt > 20 );
+			// (four minutes at the least, six at the most: "i want the storm to last longer")
+			const over = () => S.time - t0 > 360 || ( S.time - t0 > 240 && S.flags.hutbookRead && S.time - S.flags.hutbookAt > 20 );
+			// the long middle of it, while you wait under the porch: from inside the shut hut, three
+			// slow knocks on the door; later, something dragged across the boards (the lamp that is
+			// lit when the door opens was lit by someone)
+			( async () => {
+
+				const near = () => Math.hypot( dp.x - S.cam.x, dp.z - S.cam.z ) < 12 && ! S.reading;
+				await S.until( () => ( S.time - t0 > 130 && near() ) || over() );
+				if ( over() ) return;
+				for ( let i = 0; i < 3; i ++ ) setTimeout( () => S.sound.knock( dp, 0.55 ), i * 1100 );
+				S.ui.caption( '[ three knocks on the door - from inside ]', 4.5 );
+				await S.until( () => ( S.time - t0 > 215 && near() ) || over() );
+				if ( over() ) return;
+				S.sound.creak( dp, 1.1, 0.3, 95, 70 );
+				setTimeout( () => S.sound.knock( dp, 0.25 ), 1200 );
+				S.ui.caption( '[ something dragged across the floor, inside ]', 4.5 );
+
+			} )();
 			while ( ! over() ) {
 
 				// the next flash, and in it, the next place (unless you are out there yourself)
+				// (if you are out near the next place, it stands off at the edge of the light instead - it
+				// kept to two flashes when you sheltered close to the last, and the storm is long now)
 				if ( flash < 3 ) {
 
-					const p = spots[ flash ];
-					if ( Math.hypot( p.x - S.cam.x, p.z - S.cam.z ) > 14 ) {
-
-						flash ++;
-						S.figure.place( p.x, p.z, 0 );
-						S.figure.yaw = face();
-						S.figure.tilt = 0.55;
-						lit = true;
-
-					}
+					const p = spots[ flash ].clone();
+					const d = Math.hypot( p.x - S.cam.x, p.z - S.cam.z );
+					if ( d < 14.5 ) p.set( S.cam.x + ( p.x - S.cam.x ) * 14.5 / Math.max( d, 0.1 ), 0, S.cam.z + ( p.z - S.cam.z ) * 14.5 / Math.max( d, 0.1 ) );
+					flash ++;
+					S.figure.place( p.x, p.z, 0 );
+					S.figure.yaw = face();
+					S.figure.tilt = 0.55;
+					lit = true;
 
 				}
 
 				strike();
-				if ( flash === 2 ) setTimeout( () => {
+				if ( flash === 2 && ! S.flags.penBell ) {
 
-					S.sound.cowbell( f.toWorld( 7, 1, - 7 ), 2, 0.9 );
-					S.ui.caption( '[ a cowbell, in the empty pen ]', 4 );
+					S.flags.penBell = true;
+					setTimeout( () => {
 
-				}, 4000 );
+						S.sound.cowbell( f.toWorld( 7, 1, - 7 ), 2, 0.9 );
+						S.ui.caption( '[ a cowbell, in the empty pen ]', 4 );
+
+					}, 4000 );
+
+				}
 				// the boards J. nailed over the trough are wrenched off while no one sees - while the
 				// page of the book covers the view, or while the trough is out of it - with a sound
 				// you hear through the rain, and they lie flung down beside it
@@ -602,7 +631,7 @@ export const BEATS = [
 				}
 
 				// (the next flash in a while - but look up often for the end)
-				const tw = S.time + 11 + Math.random() * 8;
+				const tw = S.time + ( flash < 3 ? 11 : 13 ) + Math.random() * 9;
 				await S.until( () => S.time > tw || over() );
 
 			}

@@ -553,7 +553,7 @@ export class Story {
 	hold( name, on = true ) {
 
 		( this._held ??= new Set() )[ on ? 'add' : 'delete' ]( name );
-		this.ui.carry( [ ...this._held ] );
+		this.ui?.carry( [ ...this._held ] ); // (a skipped beat can hand you something before the page is up)
 
 	}
 
@@ -917,7 +917,7 @@ export class Story {
 		// night: the far meadow drawn to two thirds of its reach, a little thinner (unseen in the dark)
 		if ( this._lod ) {
 
-			const k = THREE.MathUtils.smoothstep( this.app.hours, 17.2, 17.6 );
+			const k = THREE.MathUtils.smoothstep( this.app.hours, 17.2, 17.45 );
 			const M = this.app.meadow;
 			M.far.uniforms.uRadius.value = this._lod.far * ( 1 - 0.35 * k );
 			M.far.uniforms.uDensity.value = 1 - 0.25 * k;
@@ -996,7 +996,7 @@ export class Story {
 			const woods = app.layout?.woodsAt ? Math.max( app.layout.woodsAt( cam.x, cam.z ), app.layout.woodsAt( cam.x + 20, cam.z ), app.layout.woodsAt( cam.x - 20, cam.z ), app.layout.woodsAt( cam.x, cam.z + 20 ), app.layout.woodsAt( cam.x, cam.z - 20 ) ) : 0;
 			this._lakeDir ??= { t: - 1, v: null };
 			if ( this.time - this._lakeDir.t > 5 ) this._lakeDir = { t: this.time, v: this.waterSide( cam ) };
-			this.sound.ambience( dt, { cam, dir: { x: _v.x / dl, z: _v.z / dl }, woods: Math.max( woods, this.progress > this.path.ids.tarn ? 0.35 : 0 ), dusk: THREE.MathUtils.smoothstep( h, 17.3, 17.7 ), night: THREE.MathUtils.smoothstep( h, 17.75, 18.1 ), lake: this._lakeDir.v, second: this.progress > this.path.ids.hut } );
+			this.sound.ambience( dt, { cam, dir: { x: _v.x / dl, z: _v.z / dl }, woods: Math.max( woods, this.progress > this.path.ids.tarn ? 0.35 : 0 ), dusk: THREE.MathUtils.smoothstep( h, 16.85, 17.15 ), night: THREE.MathUtils.smoothstep( h, 17.2, 17.45 ), lake: this._lakeDir.v, second: this.progress > this.path.ids.hut } );
 
 		}
 		// lost for a minute and a half: the cowbell rings from the direction of the path

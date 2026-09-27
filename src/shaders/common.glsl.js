@@ -70,6 +70,8 @@ uniform vec3 uTrueSunDir;
 uniform float uNight;
 uniform vec4 uPointLights[ 4 ];
 uniform float uFoliageLift;
+// (a shader may keep the rain's soaking off what it draws - a roof over it: 0 dry, 1 as it falls)
+float gRainReach = 1.0;
 uniform sampler2D uSkyLUT;
 uniform sampler2D uIrrLUT;
 uniform sampler2D uTShadow;
@@ -341,7 +343,7 @@ vec3 pointLights( vec3 albedo, vec3 N, vec3 wp ) {
 
 vec3 shadeSurface( vec3 albedo, vec3 N, vec3 V, vec3 wp, float ao, float shadow, float rough, float f0 ) {
 	// rain soaks surfaces: darker, glossier, the more so the more they face the sky
-	float wetS = uWeather.y * saturate( N.y * 0.7 + 0.3 );
+	float wetS = uWeather.y * gRainReach * saturate( N.y * 0.7 + 0.3 );
 	albedo *= 1.0 - wetS * 0.42;
 	rough = mix( rough, 0.22, wetS * 0.75 );
 	f0 = mix( f0, 0.05, wetS );

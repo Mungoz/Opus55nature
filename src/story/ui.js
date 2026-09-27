@@ -297,6 +297,7 @@ export function initStoryUI( app ) {
 	};
 
 	S.ui = api;
+	if ( S._held?.size ) api.carry( [ ...S._held ] );
 	return api;
 
 }

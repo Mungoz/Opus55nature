@@ -350,6 +350,11 @@ void main() {
 		float indoor = max( inRoom( vWorldPos, uRoom, uRoomSize, uRoomPitch ), inRoom( vWorldPos, uRoom2, uRoom2Size, uRoom2Pitch ) );
 		sh *= 1.0 - indoor;
 		ao *= mix( 1.0, 0.1, indoor );
+		// (no rain indoors: nothing in the room soaked and glossy after the storm)
+		gRainReach = 1.0 - indoor;
+		// under the forest's canopy, as the ground there is: shaded (a clearing's props otherwise
+		// shone out of the dim wood by day)
+		ao *= 1.0 - 0.4 * smoothstep( 0.35, 0.9, biomeAt( vWorldPos.xz ).g ) * ( 1.0 - indoor );
 	}
 	// wood and stone darken and grow a skin of algae where the water laps them
 	float wl = vWorldPos.y - uWaterLevel;
