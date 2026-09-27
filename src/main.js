@@ -114,9 +114,6 @@ if ( app ) app.load( ( f, text ) => {
 	}
 
 	document.body.classList.add( 'ready' );
-	// an unfinished walk can be taken up again where it was left
-	let resume = null;
-	const saved = __HORROR__ && ! app.story.jump ? app.story.saved() : null;
 	const enter = () => {
 
 		if ( document.body.classList.contains( 'entered' ) ) return;
@@ -124,30 +121,9 @@ if ( app ) app.load( ( f, text ) => {
 		app.audio.start();
 		app.audio.setVolume( ui.settings.volume );
 		app.canvas.focus();
-		if ( __HORROR__ ) {
-
-			if ( ! resume ) app.story.clearSave();
-			app.story.begin( resume );
-
-		}
+		if ( __HORROR__ ) app.story.begin();
 
 	};
-
-	if ( saved ) {
-
-		const b = document.createElement( 'button' );
-		b.type = 'button';
-		b.className = 'enter enter-continue';
-		b.textContent = 'Continue from ' + saved.name;
-		enterBtn.after( b );
-		b.addEventListener( 'click', () => {
-
-			resume = saved;
-			enter();
-
-		} );
-
-	}
 
 	enterBtn.addEventListener( 'click', enter );
 	window.addEventListener( 'keydown', ( e ) => {

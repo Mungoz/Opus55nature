@@ -78,7 +78,7 @@ The route is about 1.7 km of path, 14–16 minutes with the reading, the storm a
 | 4 | The signpost at the junction (~40, 760), the wayside cross, the walkers' register | 90 m | 16:46 → 16:49 | Peaks swallowed by cloud | Read: the register; E7 a flock of finches bursts out of the rowans; the cowbell, once, from up the valley |
 | 5 | West along the south bank to the footbridge over its deep, slow pool (~−22, 736) | 90 m | 16:49 → 16:53 | First drops on the pool, wind | E8 a dipper under the bridge, trout holding in the tail of the pool; **F2** looking up the pool, the reflection shows someone on the bank; the bank is empty |
 | 6 | The hut (−69, 712). The storm breaks as you reach the porch | 60 m | 16:53 → 17:01 | The storm | Rain on the shingles; read: the hut book; **F3** in the lightning flashes, a figure at the far side of the pen, nearer at every flash; the cowbell from the empty pen |
-| 7 | The storm, sheltering under the porch | n/a | 17:01 → 17:26 (about 3 min) | Storm, then clearing | Clears after the hut book is read or after 3 minutes; **F4** stepping out, the trough by the door (now uncovered) shows the doorway behind you with someone standing in it; the door, which was shut, is open |
+| 7 | The storm, sheltering under the porch | n/a | 17:01 → 17:26 (about 3 min) | Storm, then clearing | Clears after the hut book is read, after 2½ minutes, or as you walk on; **F4** (restaged after playtesting, see 5.4): once the storm has gone and you are out in the yard, the door creaks open behind you on a lamp lit inside, no one in the doorway; then the trough's water stirs. Look into it and someone is standing across the trough from you, in the water only |
 | 8 | The tarn (−110, 682) in the mist | 60 m | 17:30 | Blue hour, mist rising | E9 the heron stands on the far shore; **F5** in the tarn's reflection the figure stands beside the heron; the heron stares at the empty place beside it and lifts off croaking; rings spread from an empty patch of water |
 | 9 | Along the plunge pool's north rim under the waterfall | 110 m | 17:34 | Blue hour | J.'s boots, paired neatly on the shingle, toes to the water; E10 the choughs stop wheeling and settle along a ledge in a silent row, all facing the same way |
 | 10 | North through the larch wood on the valley's west side | 260 m | 17:38 → 17:47 | Dusk under the trees | E11 deer standing frozen in the trees, all staring past you, back the way you came; E12 a red squirrel scolding at something behind you; E13 the bear rises on its hind legs, scenting, then crashes away downhill; cairns on stumps and stones along the path |
@@ -130,6 +130,7 @@ The valley's existing animals are cast in short scripted scenes along the route.
 - **You never see your own reflection from a deck**, and a follower on the boards is hidden the same way (the planks sit where its mirror image would be). The follower has to stand off the boards, in the water.
 - **At night a dark figure reads only against something light in the mirror.** Near water, seen steeply, mirrors the dark mountainside at low reflectance, and the strip between the boards and the bank mirrors the dark bank. The pale mist band at the far shore is the brightest thing in the lake's mirror, and it sits at grazing angles: the follower starts about 16 m back, where its mirror image lies against it.
 - **Measure sightlines before staging.** `tools/out/q_flockview.js` scores where a flock (or anything) stays in clear view from the path, crowns included. The murmuration first wheeled behind the strand's trees and the island.
+- **A small water shows only what stands on its far side, close.** The trough is 0.5 m wide: the doorway mirrored in it could be seen only from a strip about a metre wide on the trough's line, beyond its far end. Playtesting found no one stood there, and the beat that waited for you to walk past the trough's end never fired at all, because the path doubles back there and progress stuck at the hut. F4 now waits on the storm's end, not on progress, and stands the figure across the trough from wherever you are (moving only while unseen), so looking down into it from either side, or from either end, shows it. The trough is also see-through to the sight test now: as part of the hut's walls it blocked every line into its own water.
 - **Murmurations need a ribbon.** A flock pulled to one point balls up. Each bird follows the loop a moment behind the others, so the flock streams out along it and folds at the turns. A column the flock parts round (rather than a sphere) reads as something standing there.
 
 ## 6. Map layout and performance: expect big changes
@@ -260,6 +261,8 @@ Tasks:
   - after dark, leaving the path brings thicker mist, a low drone and staring animals;
   - at about 150 m you ease to a stop in a thicket.
 - [x] If you have been lost for about 90 seconds, the cowbell rings from the direction of the path.
+- [x] Nudges (added after playtesting: "I don't know where to go after the hut"): a quiet italic line near the top of the screen, shown whether captions are on or not, once each. The boat log (25 s at the jetty), the hut book (30 s into the storm), the way on (30 s after the trough, if you are still in the yard: round behind the hut, up to the tarn, follow the red and white marks), and being lost (25 s off the path).
+- [x] Steps up to the hut: flag treads on rubble along the porch's whole front, a hand's height apiece, walked as steps, not a ramp; the porch's sides are closed where they stand clear of the ground.
 
 ### 9.3 Collision
 - [x] A 2D collision grid of 4 m cells, built at load, pushing out a player circle of about 0.3 m. You slide along obstacles rather than sticking to them.
@@ -317,7 +320,7 @@ Tasks:
 - [x] Valley mist rises as the storm clears.
 
 ### 9.10 Sound (all synthesised)
-- [x] Footsteps that change with the ground: grass, shingle, wood, forest floor.
+- [x] Footsteps that change with the ground: grass, wet grass, forest floor, gravel, shingle, planks, flagstones, mud. **Rebuilt after playtesting** ("they sound ridiculous": pitched blips and noise bursts). Now eight takes per ground made at load (`src/story/steps.js`): a heel strike, the roll and a toe-off; gravel as a few hundred stone clicks, shingle as stones knocking in two partials, planks as a knock ringing in the board's modes, mud as a squelch and the heel's suck. Never the same take twice running, varied in pitch and level, each foot panned slightly. `tools/stepsrender.mjs` renders them to WAVs and a spectrogram.
 - [x] Rain drumming on shingles while under the porch, and drips afterwards.
 - [x] The cowbell, placed in 3D.
 - [x] Echoed footsteps: yours, about 0.4 s late, from behind.

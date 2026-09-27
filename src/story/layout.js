@@ -116,7 +116,7 @@ export const ROUTE = [
 	H( - 1.9, 24 ),
 	H( - 2.3, 14.5, { id: 'troughView' } ),
 	H( - 2.4, 10.2 ),
-	H( - 1.6, 7.2 ),
+	H( - 1.85, 6.85 ),
 	H( - 0.3, 5.4, { id: 'hut' } ),
 	// 8. after the storm: back out along the trough's other side to its far end, then round
 	// behind the hut and the pen to the tarn
@@ -264,13 +264,14 @@ export function paintPuddles( g, td ) {
 
 	}
 
-	// and in the hut's trodden yard, where the rain off the roof lands
+	// and in the hut's trodden yard, either side of the trough (from the yard, they mirror the
+	// doorway where the trough does not: see the F4 beat)
 	const hut = PLACES.hut;
-	for ( const [ lx, lz, rx, rz ] of [ [ 1.6, 6.4, 1.1, 0.6 ], [ - 2.1, 8.9, 0.8, 0.5 ] ] ) {
+	for ( const [ lx, lz, rx, rz ] of [ [ 0.8, 8.0, 1.0, 0.6 ], [ - 2.45, 8.2, 0.95, 0.55 ] ] ) {
 
 		const x = hut.x + Math.cos( hut.yaw ) * lx + Math.sin( hut.yaw ) * lz, z = hut.z - Math.sin( hut.yaw ) * lx + Math.cos( hut.yaw ) * lz;
 		g.blob( 2, x, z, rx, rz, hut.yaw, 1, 0.55 );
-		out.push( { d: ids.hut, x, z, rx, rz, yaw: hut.yaw, level: td.heightAt( x, z ) + 0.012 } );
+		out.push( { d: ids.hut, x, z, rx, rz, yaw: hut.yaw, level: td.heightAt( x, z ) + 0.012, yard: true } );
 
 	}
 
@@ -363,7 +364,8 @@ export function faunaAt( td ) {
 		},
 		fowl: {
 			swans: false,
-			mallards: [ [ 40, 402, 6 ], [ - 170, 330, 5 ], [ - 225, 300, 3 ] ],
+			// (the first party well out in the bay, clear of the boat's way in to the jetty)
+			mallards: [ [ 0, 365, 6 ], [ - 170, 330, 5 ], [ - 225, 300, 3 ] ],
 			bay: { x0: - 260, x1: 120, z0: 240, z1: 452 },
 		},
 	};

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildTake, GROUNDS, TAKES } from './steps.js';
 
 // The horror edition's sounds, synthesised like the rest of the soundscape (nothing is
 // sampled): a cowbell, footsteps on each kind of ground and their echo, gate and door
@@ -67,6 +68,12 @@ export class StorySound {
 		this.roof.connect( bp ).connect( this.roofGain ).connect( A.master );
 		this.roof.start();
 		// wind in the roof and the rain's roar under the eave are the soundscape's own
+		// the footsteps: takes of each kind of ground (steps.js), made one a frame (a few ms each)
+		// from here on - all of them long before the first step off the boat
+		this.steps = {};
+		this._toMake = GROUNDS.flatMap( ( g ) => Array( TAKES ).fill( g ) );
+		this._take = {};
+		this._foot = 1;
 
 	}
 
@@ -186,80 +193,53 @@ export class StorySound {
 	}
 
 	// ------------------------------------------------------------------ steps
-	// one footstep on the kind of ground underfoot: grass, gravel, wood, earth (forest floor),
-	// shingle, wet (mud); from behind when echo
+	// one footstep on the kind of ground underfoot (steps.js: grass, wet, earth, gravel, shingle,
+	// wood, stone, mud): a take of it, never the same one twice running, a little faster or
+	// slower, louder or softer, each foot a touch to its own side; from p (an echo) if given
 	step( surface, p = null, gain = 1, when = 0 ) {
 
 		if ( ! this.on ) return;
-		const dest = this._at( p, 3 );
-		const t = this.a.now() + 0.01 + when;
-		const g = gain * ( 0.8 + Math.random() * 0.4 );
-		switch ( surface ) {
+		this._build();
+		// (one needed before its turn: made now)
+		if ( ! this.steps[ surface ]?.length && GROUNDS.includes( surface ) ) this._makeTake( surface );
+		const takes = this.steps[ surface ] ?? this.steps.grass;
+		if ( ! takes?.length ) return;
+		let k = Math.floor( Math.random() * takes.length );
+		if ( k === this._take[ surface ] ) k = ( k + 1 ) % takes.length;
+		this._take[ surface ] = k;
+		const ctx = this.ctx, t = this.a.now() + 0.01 + when;
+		const src = ctx.createBufferSource();
+		src.buffer = takes[ k ];
+		src.playbackRate.value = 0.93 + Math.random() * 0.14;
+		const g = ctx.createGain();
+		g.gain.value = gain * ( 0.8 + Math.random() * 0.35 );
+		let dest;
+		if ( p ) dest = this._at( p, 3 );
+		else {
 
-			case 'gravel': {
+			dest = this._at( null );
+			this._foot = - this._foot;
+			if ( ctx.createStereoPanner ) {
 
-				// crunch: a spray of tiny stone clicks over a tenth of a second
-				this._noise( dest, t, 0.11, 'bandpass', 2400 + Math.random() * 800, 0.9, 0.16 * g );
-				for ( let i = 0; i < 7; i ++ ) this._noise( dest, t + Math.random() * 0.09, 0.012, 'highpass', 3000 + Math.random() * 3000, 0.7, 0.12 * g * Math.random(), 0.001 );
-				break;
-
-			}
-
-			case 'shingle': {
-
-				// stones knocking together as they shift
-				for ( let i = 0; i < 4; i ++ ) {
-
-					const tt = t + Math.random() * 0.08;
-					this.a._tone( dest, tt, 0.03, 1400 + Math.random() * 1600, 1100, 0.1 * g );
-					this._noise( dest, tt, 0.025, 'bandpass', 2600, 2, 0.08 * g, 0.001 );
-
-				}
-
-				break;
-
-			}
-
-			case 'wood': {
-
-				// a hollow knock on planks, and a faint give
-				this.a._tone( dest, t, 0.09, 190, 140, 0.35 * g );
-				this.a._tone( dest, t, 0.05, 520, 400, 0.12 * g );
-				this._noise( dest, t, 0.06, 'bandpass', 900, 1.4, 0.1 * g, 0.002 );
-				if ( Math.random() < 0.12 ) this.creak( p, 0.15, 0.25 );
-				break;
-
-			}
-
-			case 'earth': {
-
-				// the forest floor: needles and soft earth, now and then a twig
-				this._noise( dest, t, 0.12, 'lowpass', 700, 0.7, 0.14 * g, 0.01 );
-				this._noise( dest, t + 0.02, 0.09, 'bandpass', 2600, 0.8, 0.05 * g );
-				if ( Math.random() < 0.1 ) this._noise( dest, t + 0.05, 0.02, 'highpass', 2500, 1, 0.2 * g, 0.001 );
-				break;
-
-			}
-
-			case 'wet': {
-
-				// sucking mud and wet grass
-				const f = this._noise( dest, t, 0.18, 'lowpass', 1400, 2, 0.14 * g, 0.02 );
-				f.frequency.exponentialRampToValueAtTime( 300, t + 0.16 );
-				this._noise( dest, t + 0.03, 0.1, 'bandpass', 3200, 1, 0.05 * g );
-				break;
-
-			}
-
-			default: {
-
-				// grass: a soft brush of stems and a dull pad
-				this._noise( dest, t, 0.14, 'bandpass', 3000 + Math.random() * 1000, 0.6, 0.07 * g, 0.02 );
-				this._noise( dest, t, 0.08, 'lowpass', 400, 0.7, 0.09 * g, 0.008 );
+				const pan = ctx.createStereoPanner();
+				pan.pan.value = this._foot * 0.12;
+				pan.connect( dest );
+				dest = pan;
 
 			}
 
 		}
+
+		src.connect( g ).connect( dest );
+		src.start( t );
+
+	}
+
+	_makeTake( g ) {
+
+		const i = this._toMake.indexOf( g );
+		if ( i >= 0 ) this._toMake.splice( i, 1 );
+		( this.steps[ g ] ??= [] ).push( buildTake( this.ctx, g ) );
 
 	}
 
@@ -672,6 +652,8 @@ export class StorySound {
 
 		if ( ! this.on ) return;
 		this._build();
+		// (a footstep take a frame, until there are all of them)
+		if ( this._toMake.length ) this._makeTake( this._toMake[ 0 ] );
 		const now = this.ctx.currentTime;
 		this.droneGain.gain.setTargetAtTime( 0.1 * this.drone, now, 0.8 );
 		this.roofGain.gain.setTargetAtTime( 0.5 * this.porch * env.rain, now, 0.4 );

@@ -26,6 +26,16 @@ body.horror.locked #scene { cursor: none; }
 }
 #story-caption.show { opacity: 1; }
 
+/* a nudge: what to do, where to go - quiet, high up, gone in a few seconds */
+#story-hint {
+	position: absolute; left: 50%; top: 15vh; transform: translateX(-50%);
+	max-width: min(80vw, 640px); text-align: center;
+	font-family: var(--serif, Georgia, serif); font-style: italic; font-size: 20px; letter-spacing: 0.02em;
+	color: rgba(246, 240, 228, 0.95); text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 1px 12px rgba(0, 0, 0, 1);
+	opacity: 0; transition: opacity 1.4s ease; pointer-events: none;
+}
+#story-hint.show { opacity: 1; }
+
 /* the dot that says something here can be read or used */
 #story-prompt {
 	position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { propMaterial, LAMP, M, col } from './kit.js';
+import { propMaterial, LAMP, INSIDE, M, col } from './kit.js';
+
+const INSIDE_LAMP = 0.07; // how bright the hut's inside glows with its lamp lit
 import { buildHut, HUT } from './hut.js';
 import { buildJetty, buildBoat, boatWaterline, mooring, JETTY, BOAT, rope as ropeTo } from './jetty.js';
 import { buildBridge } from './bridge.js';
@@ -332,7 +334,12 @@ export class StoryProps {
 			C.circle( p.x, p.z, 0.42, 'hut' );
 
 		}
-		box( HUT.trough.x, HUT.trough.z, 0.38, 1.35 );
+		{
+
+			const w2 = f.toWorld( HUT.trough.x, 0, HUT.trough.z );
+			C.box( w2.x, w2.z, 0.38, 1.35, f.yaw, 'trough' );
+
+		}
 		box( HUT.W / 2 + 0.33, 0, 0.3, HUT.L / 2 - 0.3 );
 		for ( const x of [ - HUT.W / 2 + 0.1, HUT.W / 2 - 0.1 ] ) {
 
@@ -354,10 +361,24 @@ export class StoryProps {
 		// the porch floor
 		const pc = f.toWorld( 0, 0, HUT.L / 2 + HUT.PORCH / 2 + 0.02 );
 		C.deck( pc.x, pc.z, HUT.W / 2 + 0.15, HUT.PORCH / 2 + 0.05, f.yaw, f.y - 0.04, 'hut' );
-		// down off the porch: its whole front edge is a step (a ramp, for walking)
-		const step = f.toWorld( 0, 0, HUT.L / 2 + HUT.PORCH + 0.4 );
-		const gs = td.heightAt( step.x, step.z );
-		C.deck( step.x, step.z, HUT.W / 2 + 0.1, 0.45, f.yaw, ( lx, lz ) => THREE.MathUtils.lerp( f.y - 0.04, Math.max( gs, f.y - 0.6 ), ( lz + 0.45 ) / 0.9 ), 'hut' );
+		// down off the porch: the steps along its whole front, a tread at a time
+		const ST = HUT.steps;
+		if ( ST && ST.n > 1 ) {
+
+			const half = ( ST.n - 1 ) * ST.tread / 2;
+			const sc = f.toWorld( 0, 0, ST.z0 + half );
+			C.deck( sc.x, sc.z, HUT.W / 2 + 0.15, half + 0.03, f.yaw, ( lx, lz ) => f.y + ST.fy - ( 1 + THREE.MathUtils.clamp( Math.floor( ( lz + half ) / ST.tread ), 0, ST.n - 2 ) ) * ST.rise, 'hut' );
+
+		}
+
+		// (and up its sides, where they stand clear of the ground, there is no way: the steps are)
+		for ( const sx of [ - 1, 1 ] ) {
+
+			const a = f.toWorld( sx * ( HUT.W / 2 + 0.2 ), 0, HUT.L / 2 + 0.1 ), b = f.toWorld( sx * ( HUT.W / 2 + 0.2 ), 0, HUT.L / 2 + HUT.PORCH + 0.05 );
+			const m = f.toWorld( sx * ( HUT.W / 2 + 0.45 ), 0, HUT.L / 2 + HUT.PORCH / 2 );
+			if ( td.heightAt( m.x, m.z ) < f.y - 0.3 ) C.capsule( a.x, a.z, b.x, b.z, 0.08, 'hut' );
+
+		}
 		// under the porch roof: out of the rain
 		this.porch = { frame: f, x0: - HUT.W / 2 - 0.3, x1: HUT.W / 2 + 0.3, z0: HUT.L / 2 - 0.2, z1: HUT.L / 2 + HUT.PORCH + 0.2 };
 		// no rain falls under the roof (over the hut and its porch, out to the eaves)
@@ -372,6 +393,8 @@ export class StoryProps {
 		}
 		this.bookTin = f.toWorld( - 0.05, 1.3, HUT.L / 2 + 0.07 );
 		this.door = f.toWorld( HUT.door.x, 0, HUT.door.z );
+		// standing in the doorway, on the threshold
+		this.doorway = f.toWorld( HUT.door.x, 0, HUT.door.z + 0.15 );
 
 	}
 
@@ -582,6 +605,18 @@ export class StoryProps {
 
 	setDoor( open ) { this.hut.hinge.rotation.y = open ? 1.65 : 0; }
 
+	// a lamp lit inside the hut: the inside glows through the door, and its light falls out over
+	// the porch (the lantern light is free until the jetty's is lit, at the strand)
+	lightInside( on ) {
+
+		const f = this.hutFrame, c = f.toWorld( - 0.2, 0, 0 ), door = f.toWorld( - 0.8, 1.0, HUT.L / 2 - 0.4 );
+		this._inside = on ? { c, door } : null;
+		INSIDE.value.set( c.x, f.y, c.z, on ? INSIDE_LAMP : 0 );
+		if ( on ) LAMP.value.set( door.x, door.y, door.z, 0.9 );
+		else if ( LAMP.value.distanceTo?.( new THREE.Vector4( door.x, door.y, door.z, LAMP.value.w ) ) < 0.1 ) LAMP.value.w = 0;
+
+	}
+
 	// The door as the water shows it: 'same' (as it is), or 'open' while the real one is shut -
 	// the real door drops out of the reflections and the open one joins them.
 	setDoorReflection( mode ) {
@@ -690,6 +725,7 @@ export class StoryProps {
 
 	lightLamp( on ) {
 
+		this.lampLit = on;
 		LAMP.value.set( this.lamp.x, this.lamp.y, this.lamp.z, on ? 1.6 : 0 );
 		if ( ! this.glow ) {
 
@@ -706,6 +742,14 @@ export class StoryProps {
 	update( dt, time ) {
 
 		this.glow?.update( dt, time );
+		// the lamp inside the hut: a wick's breathing
+		if ( this._inside ) {
+
+			const k = 0.88 + 0.08 * Math.sin( time * 2.3 ) + 0.05 * Math.sin( time * 7.9 + Math.sin( time * 1.7 ) * 2 );
+			INSIDE.value.w = INSIDE_LAMP * k;
+			if ( ! this.lampLit ) LAMP.value.w = 0.9 * k;
+
+		}
 
 	}
 

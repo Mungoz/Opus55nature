@@ -25,6 +25,19 @@ export class PuddleMirror {
 		w.mesh.visible = false;
 		this.current = null;
 		this.range = 16;
+		// (a beat may keep the mirror to a few of them: a list, or null for any)
+		this.focus = null;
+
+	}
+
+	// is (x, z) on the mirrored puddle?
+	contains( x, z ) {
+
+		const p = this.current;
+		if ( ! p || ! this.water.mesh.visible ) return false;
+		const dx = x - p.x, dz = z - p.z, c = Math.cos( p.yaw ), s = Math.sin( p.yaw );
+		const u = ( dx * c - dz * s ) / ( p.rx * this.k ), v = ( dx * s + dz * c ) / ( p.rz * this.k );
+		return u * u + v * v < 0.9;
 
 	}
 
@@ -33,7 +46,7 @@ export class PuddleMirror {
 		const w = this.water, fill = U.uPuddle?.value ?? 0;
 		const c = this.app.camera.position;
 		let best = null, bd = this.range;
-		if ( fill > 0.12 ) for ( const p of this.puddles ) {
+		if ( fill > 0.12 ) for ( const p of this.focus ?? this.puddles ) {
 
 			const d = Math.hypot( p.x - c.x, p.z - c.z );
 			if ( d < bd ) { bd = d; best = p; }
@@ -50,6 +63,7 @@ export class PuddleMirror {
 
 		// (as the painted puddle dries back from its edges, so does the mirror)
 		const k = 0.8 * THREE.MathUtils.smoothstep( fill, 0.1, 0.5 );
+		this.k = k;
 		w.mesh.position.set( best.x, best.level, best.z );
 		w.mesh.rotation.set( - Math.PI / 2, 0, best.yaw );
 		w.mesh.scale.set( best.rx * k, best.rz * k, 1 );

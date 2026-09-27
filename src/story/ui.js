@@ -65,6 +65,7 @@ export function initStoryUI( app ) {
 	const fadeEl = el( 'div', { id: 'story-fade' }, root );
 	const card = el( 'div', { id: 'story-card' }, root );
 	const caption = el( 'div', { id: 'story-caption' }, root );
+	const hintEl = el( 'div', { id: 'story-hint' }, root );
 	const prompt = el( 'div', { id: 'story-prompt' }, root );
 	el( 'i', {}, prompt );
 	const promptLabel = el( 'span', {}, prompt );
@@ -187,7 +188,7 @@ export function initStoryUI( app ) {
 	app.controls.keys.delete( 'KeyE' );
 
 	// ---------- the API the story drives ----------
-	let capTimer = 0;
+	let capTimer = 0, hintTimer = 0;
 	const api = {
 		settings,
 		lock,
@@ -213,6 +214,14 @@ export function initStoryUI( app ) {
 			caption.textContent = text;
 			caption.classList.add( 'show' );
 			capTimer = seconds;
+
+		},
+		// a nudge, when you seem not to know what to do next (shown whether captions are on or not)
+		hint( text, seconds = 7 ) {
+
+			hintEl.textContent = text;
+			hintEl.classList.add( 'show' );
+			hintTimer = seconds;
 
 		},
 		// pages: [ { head, entries: [ { text, hand, faint, scrawl } ] } ]
@@ -265,6 +274,7 @@ export function initStoryUI( app ) {
 		update( dt ) {
 
 			if ( capTimer > 0 && ( capTimer -= dt ) <= 0 ) caption.classList.remove( 'show' );
+			if ( hintTimer > 0 && ( hintTimer -= dt ) <= 0 ) hintEl.classList.remove( 'show' );
 			const f = S.focus;
 			prompt.classList.toggle( 'show', !! f && S.input && ! paused );
 			if ( f ) promptLabel.textContent = touch ? '' : ( f.prompt || 'read' );

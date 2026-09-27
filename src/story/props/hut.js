@@ -406,8 +406,42 @@ export function buildHut( ground ) {
 			k.add( g, M.STONE, mixc( '#77726a', R() < 0.5 ? '#6a6258' : '#80786c', R() ).multiplyScalar( 0.85 + 0.25 * R() ), [ 1, 0, 0 ], [ cx, fy, cz ] );
 
 		}
-		const sg = ground( 0, L / 2 + PORCH + 0.45 );
-		if ( sg < fy - 0.2 ) k.stone( - 0.4, sg, L / 2 + PORCH + 0.45, 0.55, ( fy - sg ) * 0.85, 0.3, '#99948a', 7 );
+		// steps down off it, the whole of its front: treads of big flags, each on its course of
+		// rubble, a hand's height apiece (the last one down is onto the trampled earth)
+		{
+
+			const z0 = L / 2 + PORCH + 0.07, TREAD = 0.3;
+			const drop = fy - ground( 0, z0 + 0.45 );
+			const n = Math.max( 1, Math.round( drop / 0.19 ) ), rise = drop / n;
+			HUT.steps = { n, rise, tread: TREAD, z0, fy };
+			for ( let i = 1; i < n; i ++ ) {
+
+				const top = fy - i * rise, za = z0 + ( i - 1 ) * TREAD, zc = za + TREAD / 2;
+				let x = - W / 2 - 0.15;
+				const x1 = W / 2 + 0.15;
+				while ( x < x1 - 0.05 ) {
+
+					let len = 0.75 + R() * 0.65;
+					if ( x1 - ( x + len ) < 0.4 ) len = x1 - x;
+					const xc = x + len / 2;
+					const gmin = Math.min( ground( x, za ), ground( x + len, za ), ground( x, za + TREAD ), ground( x + len, za + TREAD ) );
+					if ( gmin < top - 0.06 ) {
+
+						// the course under it, down into the ground
+						k.box( xc, ( gmin - 0.12 + top - 0.06 ) / 2, zc - 0.01, len - 0.01, top - 0.06 - gmin + 0.12, TREAD - 0.02, M.RUBBLE, '#8a8479' );
+						// the flag, its nose a little proud of the course
+						const c = mixc( '#7d776e', R() < 0.5 ? '#6f675c' : '#857d70', R() ).multiplyScalar( 0.85 + 0.25 * R() );
+						k.box( xc, top - 0.035, zc + 0.02, len - 0.035, 0.07, TREAD + 0.05, M.STONE, c, { rot: [ ( R() - 0.5 ) * 0.02, ( R() - 0.5 ) * 0.035, ( R() - 0.5 ) * 0.02 ], round: 0.015 } );
+
+					}
+
+					x += len;
+
+				}
+
+			}
+
+		}
 		// a bench: a split half-log on two stumps, against the wall under the window
 		const bx = 1.3, bz = L / 2 + 0.33;
 		for ( const dx of [ - 0.7, 0.7 ] ) k.pole( new THREE.Vector3( bx + dx, fy, bz ), new THREE.Vector3( bx + dx, fy + 0.4, bz ), 0.11, M.LOG, col( '#6b5037' ), dx );
@@ -513,7 +547,9 @@ export function buildHut( ground ) {
 
 		k.add( half( ro, false ), M.BARK, col( '#5f4b3a' ), [ 0, 0, 1 ], [ tp.x, axisY, tp.z ] );
 		k.add( half( ri, true ), M.LOG, col( '#16120e' ), [ 0, 0, 1 ], [ tp.x, axisY, tp.z ] );
-		for ( const xs of [ - 1, 1 ] ) k.box( tp.x + xs * ( ri + ro ) / 2, axisY - 0.005, tp.z, ro - ri, 0.01, tl, M.LOG, col( '#6a5440' ), { axis: [ 0, 0, 1 ] } );
+		// (the rims a hair inside the log's cut faces and short of its end caps, and the solid ends
+		// short of the caps too: faces lying in one plane fought for the pixels, a flicker of dots)
+		for ( const xs of [ - 1, 1 ] ) k.box( tp.x + xs * ( ri + ro ) / 2, axisY - 0.005, tp.z, ro - ri - 0.006, 0.01, tl - 0.008, M.LOG, col( '#6a5440' ), { axis: [ 0, 0, 1 ] } );
 		for ( const zs of [ - 1, 1 ] ) {
 
 			const e = new THREE.CircleGeometry( ro, 20, Math.PI, Math.PI );
@@ -523,7 +559,7 @@ export function buildHut( ground ) {
 			e.translate( tp.x, axisY, tp.z + zs * tl / 2 );
 			k.add( e, M.END, col( '#7a6248' ), [ 0, 0, 1 ], [ tp.x, axisY, tp.z + zs * tl / 2 ] );
 			// solid ends inside the hollow
-			k.box( tp.x, axisY - ri / 2, tp.z + zs * ( tl / 2 - 0.06 ), ri * 1.6, ri, 0.12, M.LOG, col( '#1c1712' ), { axis: [ 0, 0, 1 ] } );
+			k.box( tp.x, axisY - ri / 2 - 0.004, tp.z + zs * ( tl / 2 - 0.07 ), ri * 1.6, ri, 0.12, M.LOG, col( '#1c1712' ), { axis: [ 0, 0, 1 ] } );
 
 		}
 

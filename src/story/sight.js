@@ -3,7 +3,7 @@ import * as THREE from 'three';
 const _p = new THREE.Vector3(), _m = new THREE.Vector3(), _r = new THREE.Vector3(), _f = new THREE.Vector3();
 const HEIGHTS = [ 1.72, 1.35, 0.95, 0.5 ]; // hat, chest, hips, knees
 // how tall each kind of obstacle stands (m); 0: see-through
-const HEIGHT = { tree: 40, rock: 0, log: 0.55, stump: 0.6, hut: 5.5, fence: 1.15, gate: 1.2, bridge: 0, jetty: 0, post: 1.2, signpost: 2.6, cross: 3, boatJ: 0.8, boatEnd: 0.9 };
+const HEIGHT = { trough: 0, tree: 40, rock: 0, log: 0.55, stump: 0.6, hut: 5.5, fence: 1.15, gate: 1.2, bridge: 0, jetty: 0, post: 1.2, signpost: 2.6, cross: 3, boatJ: 0.8, boatEnd: 0.9 };
 
 // closest approach of segments p (a-b) and q (c-d) in the plane: [ t along p, distance ]
 function segSeg( ax, az, bx, bz, cx, cz, dx, dz ) {
@@ -140,6 +140,9 @@ export class Sight {
 
 		}
 
+		// the puddle with the mirror (the one nearest you)
+		const PM = this.story.puddles;
+		if ( PM?.current && PM.water.mesh.visible ) out.push( { name: 'puddle', level: PM.current.level, contains: ( x, z ) => PM.contains( x, z ) } );
 		// the stream: its mirror is level with the water nearest the camera
 		const S = this.story;
 		out.push( { name: 'stream', level: null, contains: ( x, z ) => {

@@ -384,6 +384,15 @@ export class Mammals {
 		const rng = this.rng;
 		d.timer -= dt;
 		if ( dist > 60 ) d.wary = false;
+		// an edition's threat (this.threat, a point): with nothing else to do, every deer stands
+		// and stares at it - unless you come too close, when it bolts as ever
+		if ( ! d.cmd && this.threat && dist >= 16 && d.state !== 'flee' ) {
+
+			d._threatCmd ??= { do: 'stare', face: true, auto: true };
+			d._threatCmd.watch = this.threat;
+			d.cmd = d._threatCmd;
+
+		} else if ( d.cmd?.auto && ( ! this.threat || dist < 16 ) ) d.cmd = null;
 		if ( d.cmd ) this._deerCmd( d, dt );
 		else if ( d.forced ) {
 

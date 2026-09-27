@@ -9,7 +9,7 @@ import fs from 'node:fs';
 const [ beat, prefix, stepsJson, turbo = '2', extra = '' ] = process.argv.slice( 2 );
 const steps = JSON.parse( stepsJson.startsWith( '@' ) ? fs.readFileSync( stepsJson.slice( 1 ), 'utf8' ) : stepsJson );
 fs.mkdirSync( 'shots/beats', { recursive: true } );
-const browser = await puppeteer.launch( { executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true, args: [ '--ignore-gpu-blocklist', '--window-size=1600,900', '--autoplay-policy=no-user-gesture-required' ] } );
+const browser = await puppeteer.launch( { protocolTimeout: 1200000, executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true, args: [ '--ignore-gpu-blocklist', '--window-size=1600,900', '--autoplay-policy=no-user-gesture-required' ] } );
 const page = await browser.newPage();
 await page.setViewport( { width: 1600, height: 900 } );
 page.on( 'pageerror', ( e ) => console.log( 'pageerror ' + e.message ) );
@@ -31,6 +31,15 @@ for ( const st of steps ) {
 
 		const r = await page.evaluate( `(() => { const S = app.story; ${st.eval} })()` );
 		if ( r !== undefined ) console.log( JSON.stringify( r ) );
+
+	}
+
+	// (a data URL the page left in window.__rt, saved as a PNG: a render target read back)
+	if ( st.saveData ) {
+
+		const d = await page.evaluate( () => window.__rt );
+		fs.writeFileSync( `shots/beats/${prefix}-${st.saveData}.png`, Buffer.from( d.split( ',' )[ 1 ], 'base64' ) );
+		console.log( 'saved', `${prefix}-${st.saveData}` );
 
 	}
 

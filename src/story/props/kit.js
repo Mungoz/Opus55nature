@@ -56,6 +56,7 @@ varying vec3 vCenter;
 varying float vMat;
 varying float vAO;
 uniform vec4 uLamp;
+uniform vec4 uInside;
 
 // bump mapping without tangents (Mikkelsen): tilt N by the screen-space slope of a height
 vec3 bump( vec3 N, float h, float k ) {
@@ -63,8 +64,10 @@ vec3 bump( vec3 N, float h, float k ) {
 	float hx = dFdx( h ), hy = dFdy( h );
 	vec3 r1 = cross( dpy, N ), r2 = cross( N, dpx );
 	float det = dot( dpx, r1 );
-	vec3 g = sign( det ) * ( hx * r1 + hy * r2 );
-	return normalize( abs( det ) * N - g * k );
+	vec3 g = sign( det ) * ( hx * r1 + hy * r2 ) * k;
+	float tilt = length( g ) / max( abs( det ), 1e-12 );
+	g *= min( 1.0, 0.36 / max( tilt, 1e-6 ) );
+	return normalize( abs( det ) * N - g );
 }
 
 // weathered wood along a grain axis: long streaks, finer fibres, drying checks, a knot or two
@@ -73,10 +76,12 @@ vec4 wood( vec3 p, vec3 ax, float fine ) {
 	vec3 q = p - ax * along;
 	vec2 c = vec2( q.x + q.z * 0.8 + q.y * 0.6, q.y - q.x * 0.5 + q.z * 0.3 );
 	float s1 = gnoise3( vec3( along * 0.7, c * 30.0 ) );
-	float s2 = gnoise3( vec3( along * 2.2, c * 110.0 * fine ) );
-	float fib = gnoise3( vec3( along * 9.0, c * 380.0 * fine ) );
+	float px = length( fwidth( p ) ) * 1.6;
+	float s2 = gnoise3( vec3( along * 2.2, c * 110.0 * fine ) ) * ( 1.0 - smoothstep( 0.35, 0.9, px * 110.0 * fine ) );
+	float fib = gnoise3( vec3( along * 9.0, c * 380.0 * fine ) ) * ( 1.0 - smoothstep( 0.35, 0.9, px * 380.0 * fine ) );
 	float ck = abs( gnoise3( vec3( along * 0.28, c * 13.0 ) ) );
-	float check = ( 1.0 - smoothstep( 0.0, 0.035, ck ) ) * smoothstep( 0.2, 0.6, gnoise3( vec3( along * 0.5, c * 4.0 ) ) + 0.5 );
+	float aw = fwidth( ck );
+	float check = ( 1.0 - smoothstep( 0.0, 0.035 + aw, ck ) ) * min( 1.0, 0.035 / ( 0.035 + aw ) * 1.3 ) * smoothstep( 0.2, 0.6, gnoise3( vec3( along * 0.5, c * 4.0 ) ) + 0.5 );
 	// knots: small dark ovals stretched along the grain
 	vec3 kq = vec3( along * 1.6, c * 9.0 );
 	float kn = smoothstep( 0.8, 0.93, gnoise3( kq + 11.0 ) );
@@ -138,7 +143,8 @@ void main() {
 				float along = dot( p, ax );
 				vec3 q = p - ax * along;
 				float s = ( abs( ax.y ) > 0.5 ? q.x + q.z : q.y + q.x * 0.001 ) / 0.17;
-				float seam = smoothstep( 0.04, 0.0, abs( fract( s ) - 0.5 ) - 0.46 );
+				float sw = fwidth( s );
+				float seam = smoothstep( 0.04 + sw, 0.0, abs( fract( s ) - 0.5 ) - 0.46 ) * min( 1.0, 0.08 / ( 0.08 + sw ) * 1.3 );
 				alb *= ( 1.0 - 0.8 * seam ) * ( 0.85 + 0.3 * hash11( floor( s ) + 3.0 ) );
 				h -= seam * 0.004;
 			}
@@ -146,7 +152,7 @@ void main() {
 				// bark: furrowed, dark, grey on its ridges
 				float along = dot( p, ax );
 				vec3 q = p - ax * along;
-				float f = gnoise3( vec3( along * 3.0, ( q.x + q.y + q.z ) * 60.0, 0.0 ) );
+				float f = gnoise3( vec3( along * 3.0, ( q.x + q.y + q.z ) * 60.0, 0.0 ) ) * ( 1.0 - smoothstep( 0.35, 0.9, length( fwidth( p ) ) * 100.0 ) );
 				alb *= 0.7 + 0.45 * smoothstep( -0.2, 0.5, f );
 				h += f * 0.004;
 			}
@@ -165,7 +171,7 @@ void main() {
 		float hue = hash11( id * 5.0 );
 		stone *= mix( vec3( 1.06, 1.0, 0.9 ), vec3( 0.92, 0.97, 1.04 ), hue );
 		stone = mix( stone, vec3( 0.36, 0.27, 0.17 ), step( 0.8, hue ) * 0.4 );
-		stone *= 0.85 + 0.25 * gnoise3( p * 7.0 + id * 3.0 ) + 0.14 * gnoise3( p * 38.0 + id );
+		stone *= 0.85 + 0.25 * gnoise3( p * 7.0 + id * 3.0 ) + 0.14 * gnoise3( p * 38.0 + id ) * ( 1.0 - smoothstep( 0.35, 0.9, length( fwidth( p ) ) * 60.0 ) );
 		vec3 joint = m == 11 ? vec3( 0.13, 0.11, 0.08 ) : vec3( 0.19, 0.17, 0.14 );
 		alb = mix( joint * ( 0.8 + 0.4 * gnoise3( p * 20.0 ) ), stone, r.x );
 		// lichen: grey-green rosettes and a few bright yellow spots on the faces that catch rain
@@ -181,7 +187,7 @@ void main() {
 		rough = 0.9;
 	} else if ( m == 10 ) {
 		// loose stones and boulders: grainy, a little lichen
-		float g = gnoise3( p * 9.0 ) * 0.6 + gnoise3( p * 37.0 ) * 0.4;
+		float g = gnoise3( p * 9.0 ) * 0.6 + gnoise3( p * 37.0 ) * 0.4 * ( 1.0 - smoothstep( 0.35, 0.9, length( fwidth( p ) ) * 60.0 ) );
 		alb *= 0.78 + 0.4 * g;
 		alb *= 0.9 + 0.2 * gnoise3( vCenter * 5.0 + 1.0 );
 		float lich = smoothstep( 0.3, 0.75, gnoise3( p * 5.0 + vCenter * 3.0 ) ) * saturate( n0.y + 0.3 );
@@ -327,6 +333,8 @@ void main() {
 		float d2 = dot( Ld, Ld );
 		col += alb / PI * vec3( 1.0, 0.62, 0.3 ) * uLamp.w * saturate( dot( N, Ld * inversesqrt( d2 ) ) * 0.8 + 0.2 ) / ( d2 + 0.3 ) * mix( 0.6, 1.0, ao );
 	}
+	// the hut's dark inside, with a lamp lit in it: warm, brightest low down where the lamp is
+	if ( m == 5 && uInside.w > 0.0 && distance( vWorldPos, uInside.xyz ) < 4.5 ) col += vec3( 1.0, 0.52, 0.2 ) * uInside.w * ( 0.45 + 0.55 * smoothstep( 1.8, 0.2, vWorldPos.y - uInside.y + 1.0 ) );
 	if ( mirror > 0.0 ) {
 		vec3 R = reflect( -V, vec3( 0.0, 1.0, 0.0 ) );
 		float fr = 0.02 + 0.98 * pow( 1.0 - saturate( V.y ), 5.0 );
@@ -340,13 +348,16 @@ void main() {
 `;
 
 export const LAMP = { value: new THREE.Vector4( 0, 0, 0, 0 ) };
+// a lamp lit inside the hut: the dark inside, seen through the door and the gaps, glows with it
+// (position of the room's middle, brightness)
+export const INSIDE = { value: new THREE.Vector4( 0, 0, 0, 0 ) };
 
 export function propMaterial( { side = THREE.FrontSide } = {} ) {
 
 	return new THREE.ShaderMaterial( {
 		vertexShader: vert,
 		fragmentShader: frag,
-		uniforms: { ...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ), ...sharedUniforms(), uLamp: LAMP },
+		uniforms: { ...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ), ...sharedUniforms(), uLamp: LAMP, uInside: INSIDE },
 		lights: true,
 		side,
 	} );

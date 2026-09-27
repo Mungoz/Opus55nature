@@ -13,6 +13,14 @@ import { PuddleMirror } from './puddles.js';
 
 const _v = new THREE.Vector3();
 const _n = { dist: 0, d: 0, side: 0 };
+// what the nudges say, and when they are not needed
+const HINTS = {
+	boatlog: { text: 'The box on the jetty\'s end holds the boat log.', done: ( S ) => S.flags.boatlogRead || S.progress > S.path.ids.jettyLand + 30 },
+	hutbook: { text: 'The hut book is in the tin, beside the door.', done: ( S ) => S.flags.hutbookRead },
+	wayon: { text: 'The way goes on round behind the hut, up to the tarn. Follow the red and white marks.', sec: 9, done: ( S ) => S.progress > S.path.ids.troughEnd + 22 },
+	lost: { text: 'The path is back the way you came.', sec: 6, done: ( S ) => S.lost < 1 },
+};
+const _f = { dist: 0, d: 0, side: 0 }, _g = { dist: 0, d: 0, side: 0 };
 const _frustum = new THREE.Frustum(), _m4 = new THREE.Matrix4(), _sph = new THREE.Sphere();
 const lerp = THREE.MathUtils.lerp;
 
@@ -107,7 +115,7 @@ export class Story {
 		}
 
 		const P = this.props;
-		this.addInteractable( { id: 'boatlog', x: P.logBox.x, y: P.logBox.y, z: P.logBox.z, prompt: 'open the box', use: ( S ) => S.ui.read( READS.boatlog ) } );
+		this.addInteractable( { id: 'boatlog', x: P.logBox.x, y: P.logBox.y, z: P.logBox.z, prompt: 'open the box', use: ( S ) => S.ui.read( READS.boatlog, () => ( S.flags.boatlogRead = true ) ) } );
 		this.addInteractable( { id: 'hutbook', x: P.bookTin.x, y: P.bookTin.y, z: P.bookTin.z, prompt: 'open the tin', use: ( S ) => S.ui.read( READS.hutbook, () => {
 
 			S.flags.hutbookRead = true;
@@ -462,7 +470,23 @@ export class Story {
 
 	}
 
-	hint() {}
+	// a nudge, if you seem not to know what to do: sec seconds from now, unless it has been done
+	// by then (each once)
+	hint( id, sec ) {
+
+		const H = HINTS[ id ];
+		if ( ! H || this._hinted?.has( id ) ) return;
+		( this._hinted ??= new Set() ).add( id );
+		const t0 = this.time;
+		this.until( () => this.time - t0 > sec || H.done( this ) ).then( () => {
+
+			if ( H.done( this ) || this.ended || ! this.begun ) return;
+			if ( this.reading ) return this.until( () => ! this.reading ).then( () => ! H.done( this ) && this.ui.hint( H.text, H.sec ?? 7 ) );
+			this.ui.hint( H.text, H.sec ?? 7 );
+
+		} );
+
+	}
 
 	// a footstep: the ground underfoot decides its sound; later, an echo from behind
 	_step() {
@@ -474,17 +498,20 @@ export class Story {
 		const bio = this._bio || ( this._bio = [ 0, 0, 0, 0 ] );
 		td.biomeAt( x, z, bio );
 		const h = td.heightAt( x, z );
-		if ( this.collision.onDeck( x, z ) ) s = 'wood';
+		const deck = this.collision.onDeck( x, z );
+		// (the hut's porch and its steps are flags; the jetty, the bridge and the boardwalk, planks)
+		if ( deck ) s = deck.tag === 'hut' ? 'stone' : 'wood';
 		else if ( this.ground.trailDist( x, z ) < 0.45 ) s = 'gravel';
 		else if ( bio[ 3 ] > 0.4 || h < 0.9 ) s = 'shingle';
+		else if ( this.waterAt( x, z ) > h - 0.3 ) s = 'mud';
 		else if ( bio[ 1 ] > 0.5 ) s = 'earth';
-		else if ( this.app.weather.wetness > 0.5 || this.waterAt( x, z ) > h - 0.3 ) s = 'wet';
+		else if ( this.app.weather.wetness > 0.5 ) s = 'wet';
 		this.sound.step( s, null, 0.9 );
 		if ( this.echo ) {
 
 			// half a beat late, from a few steps behind
 			const b = this.behind( 3 );
-			this.sound.step( s === 'wood' ? 'wood' : 'shingle', new THREE.Vector3( b.x, td.heightAt( b.x, b.z ) + 0.1, b.z ), 0.75, 0.38 );
+			this.sound.step( s === 'wood' || s === 'stone' ? s : 'shingle', new THREE.Vector3( b.x, td.heightAt( b.x, b.z ) + 0.1, b.z ), 0.75, 0.38 );
 
 		}
 
@@ -584,14 +611,24 @@ export class Story {
 		// (a small window ahead, so a stretch of the path that doubles back close by is never
 		// taken for the one you are on)
 		this.path.nearest( cam.x, cam.z, Math.max( 0, this.progress - 40 ), this.progress + 9, _n );
+		// further on than the story thought (you walked ahead, or round a bend it had not
+		// followed): look on along the way, and catch up
+		if ( _n.dist > 14 ) {
+
+			this.path.nearest( cam.x, cam.z, this.progress + 9, this.progress + 600, _f );
+			if ( _f.dist < 10 ) { _n.dist = _f.dist; _n.d = _f.d; }
+
+		}
+
 		this.near = { dist: _n.dist, d: _n.d };
 		// a beat that holds the way on (the storm) caps progress at its place until it is done
 		let cap = this.progressCap ?? Infinity;
 		for ( const b of this.beats ) if ( b.hold && b.state !== 'done' && ! b.released ) cap = Math.min( cap, this._beatAt( b ) + ( b.holdAt ?? 2.5 ) );
 		this.cap = cap;
 		if ( _n.dist < 18 && _n.d > this.progress ) this.progress = Math.min( _n.d, cap );
-		// beyond the free band: denser going, and a stop
-		const over = Math.max( 0, _n.dist - 25 );
+		// beyond the free band (measured from the nearest point anywhere on the way): a stop
+		this.path.nearest( cam.x, cam.z, 0, Infinity, _g );
+		const over = Math.max( 0, _g.dist - 25 );
 		this.offPath = over;
 		// (heavy rain out in the open slows you too)
 		const inRain = this.app.weather.state.rain > 0.4 && ! this.props.underPorch( cam.x, cam.z );
@@ -601,7 +638,7 @@ export class Story {
 		if ( over > 125 && ! this.noclip ) {
 
 			// ease back: you can't go further out
-			const back = this.path.at( _n.d );
+			const back = this.path.at( _g.d );
 			const dx = cam.x - back.x, dz = cam.z - back.z, l = Math.hypot( dx, dz );
 			const lim = 150;
 			if ( l > lim ) { cam.x = back.x + dx / l * lim; cam.z = back.z + dz / l * lim; }
@@ -609,8 +646,14 @@ export class Story {
 		}
 
 		this.lost = over > 12 ? this.lost + dt : Math.max( 0, this.lost - dt * 2 );
+		if ( this.lost > 25 && this.time > ( this._lostHint ?? 0 ) ) {
+
+			this._lostHint = this.time + 90;
+			this.ui.hint( HINTS.lost.text, HINTS.lost.sec );
+
+		}
 		// checkpoints: somewhere quiet between the beats, saved as you pass it
-		if ( this.begun && ! this.jump && ! this.ended ) {
+		if ( this.saveCheckpoints && this.begun && ! this.jump && ! this.ended ) {
 
 			const k = ( this._checkpoint ?? - 1 ) + 1;
 			if ( k < CHECKPOINTS.length && this.progress > this.path.ids[ CHECKPOINTS[ k ][ 0 ] ] ) {
@@ -690,7 +733,10 @@ export class Story {
 		if ( Math.hypot( target.x - this.cam.x, target.z - this.cam.z ) > 0.3 ) keys.add( 'KeyW' );
 		// stuck? back off and step aside, one way then the other
 		keys.delete( 'KeyS' ); keys.delete( 'KeyA' ); keys.delete( 'KeyD' );
-		A.stuck = Math.hypot( c.velocity.x, c.velocity.z ) < 0.3 && keys.has( 'KeyW' ) ? ( A.stuck ?? 0 ) + dt : Math.max( 0, ( A.stuck ?? 0 ) - dt * 0.5 );
+		// (by how far it has really gone: walking into a wall, the velocity stays up)
+		const went = A.lastX === undefined ? 1 : Math.hypot( this.cam.x - A.lastX, this.cam.z - A.lastZ ) / Math.max( dt, 1e-3 );
+		A.lastX = this.cam.x; A.lastZ = this.cam.z;
+		A.stuck = went < 0.3 && keys.has( 'KeyW' ) ? ( A.stuck ?? 0 ) + dt : Math.max( 0, ( A.stuck ?? 0 ) - dt * 0.5 );
 		if ( A.stuck > 1.5 ) {
 
 			A.unstick = 1.2;
@@ -739,6 +785,15 @@ export class Story {
 
 			if ( b.state !== 'waiting' || ! this.begun ) continue;
 			if ( this.progress < this._beatAt( b ) ) continue;
+			// (one you have walked well past, as when you have gone on ahead: its moment has gone)
+			if ( this.progress > this._beatAt( b ) + 45 ) {
+
+				b.state = 'done';
+				this.log.push( [ b.id, Math.round( this.time ), 'passed' ] );
+				try { b.skip?.( this ); } catch ( e ) { console.error( 'skip', b.id, e ); }
+				continue;
+
+			}
 			if ( b.when && ! b.when( this ) ) continue;
 			b.state = 'running';
 			this.log.push( [ b.id, Math.round( this.time ), Math.round( this.progress ) ] );
@@ -756,6 +811,16 @@ export class Story {
 		this.you?.update( dt );
 		this.props?.update( dt, this.time );
 		this.puddles?.update();
+		// where it is, for the animals to stare at: the figure when it is out; else following,
+		// a way behind you on the path
+		{
+
+			const F = this.figure, T = this._threat ??= new THREE.Vector3();
+			if ( F && F.mode !== 'hidden' ) T.copy( F.pos );
+			else { const b = this.behind( 55 ); T.set( b.x, 0, b.z ); }
+			this.app.mammals.threat = T;
+
+		}
 		// night: the far meadow drawn to two thirds of its reach, a little thinner (unseen in the dark)
 		if ( this._lod ) {
 

@@ -150,7 +150,7 @@ export class BoatScene {
 
 			const bp = b.mesh.position, d = bp.distanceTo( berth );
 			for ( const g of app.moreBirds.grebes ) if ( g.state === 'swim' && g.pos.distanceTo( bp ) < 20 ) g.dive_now = true;
-			app.waterfowl.fear = { p: bp.clone(), r: 14 };
+			app.waterfowl.fear = { p: bp.clone(), r: 32 };
 			if ( ! geese && S.time - t0 > 4.5 ) {
 
 				geese = true;

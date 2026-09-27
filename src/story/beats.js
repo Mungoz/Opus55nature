@@ -434,7 +434,7 @@ export const BEATS = [
 	// a figure at the far side of the pen, nearer at every flash (F3); the cowbell from the
 	// empty pen. The hut book. It clears after the book is read, or three minutes.
 	{
-		id: 'storm', at: 'hut', lead: - 2, hold: true, holdAt: 2.5,
+		id: 'storm', at: 'hut', lead: - 2,
 		run: async ( S ) => {
 
 			const app = S.app, P = S.props, f = P.hutFrame;
@@ -481,9 +481,9 @@ export const BEATS = [
 
 			await S.until( () => P.underPorch( S.cam.x, S.cam.z ) || S.time - t0 > 20 );
 			await S.wait( 6 );
-			// at least a minute of it; then it clears once the book has been read (and put back a
-			// little while), or after three minutes
-			const over = () => S.time - t0 > 180 || ( S.time - t0 > 65 && S.flags.hutbookRead && S.time - S.flags.hutbookAt > 9 );
+			// it clears a little after the book has been read and put back, or after two and a half
+			// minutes - or as you walk on from the hut, the storm going off down the valley
+			const over = () => S.time - t0 > 150 || ( S.time - t0 > 35 && S.flags.hutbookRead && S.time - S.flags.hutbookAt > 12 ) || S.progress > S.path.ids.troughEnd + 18;
 			while ( ! over() ) {
 
 				// the next flash, and in it, the next place (unless you are out there yourself)
@@ -518,7 +518,9 @@ export const BEATS = [
 
 				}
 
-				await S.wait( 11 + Math.random() * 8 );
+				// (the next flash in a while - but look up often for the end)
+				const tw = S.time + 11 + Math.random() * 8;
+				await S.until( () => S.time > tw || over() );
 
 			}
 
@@ -533,9 +535,13 @@ export const BEATS = [
 			S.clockRate = null;
 			S.skyOverride = { ...STORM, rain: 0, storm: 0, wind: 0.8, clouds: 0.8, overcast: 0.7, lowCloud: 0.004, mist: 0.0018 };
 			S.release( 'storm' );
+			S.flags.stormOver = true;
+			const tClear = S.time;
 			// and from up behind the hut, on the way to the tarn, the cowbell - the way on
 			const bell = async () => {
 
+				// (once the door and the trough are done with, or you have gone on)
+				await S.until( () => S.flags.doorDone || S.time - tClear > 90 );
 				for ( let k = 0; k < 6 && S.progress < S.path.ids.troughEnd + 30; k ++ ) {
 
 					await S.wait( k ? 14 : 9 );
@@ -556,6 +562,7 @@ export const BEATS = [
 
 			S.props.setTroughCover( false );
 			S.flags.troughOpen = true;
+			S.flags.stormOver = true;
 			// the ground as the storm leaves it: soaked, the puddles full
 			S.app.weather.wetness = 1;
 			S.app.weather.puddle = 1;
@@ -563,31 +570,105 @@ export const BEATS = [
 		},
 	},
 
-	// F4: walking out past the trough, the door creaks behind you. Turn: the door stands open,
-	// the doorway empty - and in the trough's still water, someone is standing in it.
+	// F4: the storm gone, you go out into the yard. Behind you the hut's door creaks open, and
+	// there is a lamp lit inside - no one in the doorway. Then the trough's water stirs, slopping
+	// against the wood. Look down into it (or into the puddles either side of it): in the water,
+	// someone is standing in the lit doorway. Look up: the doorway is empty.
+	// (Only the lamplight shows it: a dark figure mirrored against the dusk sky is invisible. The
+	// trough, and a puddle either side of it, mirror the doorway to most of the yard.)
 	{
-		id: 'F4-trough', at: 'troughEnd', lead: - 1.5,
+		id: 'F4-trough', at: 'hut', lead: 0,
+		when: ( S ) => S.flags.stormOver,
 		run: async ( S ) => {
 
-			const P = S.props, f = P.hutFrame;
-			await S.untilOffscreen( P.door, 2.5 );
-			P.setDoor( true );
-			const d = f.toWorld( - 0.8, 0.3, 4.4 );
-			S.figure.place( d.x, d.z, f.yaw );
-			S.figure.pos.y = f.y - 0.02;
-			S.figure._apply();
-			S.figure.tilt = 0.62;
-			S.figure.setMode( 'reflect' );
-			S.sound.creak( V( d.x, f.y + 1, d.z ), 2.2, 0.55, 120, 175 );
-			S.ui.caption( '[ a door creaks open, behind you ]', 3.5 );
+			const P = S.props, f = P.hutFrame, tl = P.troughLocal, F = S.figure;
+			const doorAt = V( P.door.x, P.door.y + 1, P.door.z );
+			const tw = P.troughPos;
+			const dTrough = () => Math.hypot( S.cam.x - tw.x, S.cam.z - tw.z );
+			if ( ! S.flags.troughOpen ) { P.setTroughCover( false ); S.flags.troughOpen = true; }
+			// out from under the roof, in the yard, the door out of your view a moment - or if you
+			// stand and watch it, in a while all the same
 			const t0 = S.time;
-			await S.until( () => ( S.sight.water === 'trough' && S.seenFor > 1.0 ) || S.time - t0 > 20 || dist2( d, S.cam.x, S.cam.z ) > 22 );
-			if ( S.sight.water === 'trough' ) S.drone( 0.8, 5 );
-			await S.untilUnseen( 0.8 );
-			S.figure.setMode( 'hidden' );
+			let since = S.time;
+			await S.until( () => {
+
+				const d = Math.hypot( S.cam.x - doorAt.x, S.cam.z - doorAt.z );
+				const yard = d > 3 && ! P.underPorch( S.cam.x, S.cam.z );
+				if ( ! ( yard && S.offscreen( doorAt, 1.2 ) ) ) since = S.time;
+				return S.time - since > 0.4 || ( yard && S.time - t0 > 14 ) || S.time - t0 > 45;
+
+			} );
+			const behind = S.offscreen( doorAt, 1.2 );
+			// the door swings in, slowly, on the lamplight
+			P.lightInside( true );
+			const ts = S.time;
+			S.every( () => {
+
+				const k = Math.min( 1, ( S.time - ts ) / 2.4 );
+				P.hut.hinge.rotation.y = 1.65 * ( 1 - Math.pow( 1 - k, 2.2 ) );
+				return k >= 1;
+
+			} );
+			S.sound.creak( doorAt, 2.4, 0.55, 120, 175 );
+			S.ui.caption( behind ? '[ the hut door creaks open, behind you ]' : '[ the hut door creaks open ]', 4 );
+			// the doorway: the lamp, and no one. Then, while you look (or in a few seconds), the
+			// water in the trough moves
+			let seenDoor = 0;
+			const td = S.time;
+			await S.until( () => {
+
+				if ( ! S.offscreen( doorAt, 0.6 ) ) seenDoor += 1 / 60;
+				return ( seenDoor > 1.2 && S.time - td > 3 ) || S.time - td > 7;
+
+			} );
+			// in the doorway, against the lamp
+			const d = P.doorway;
+			F.place( d.x, d.z, f.yaw, f.y - 0.02 );
+			F.tilt = 0.6;
+			F.setMode( 'reflect' );
+			// the puddles' one mirror kept to the two in the yard while this lasts
+			S.puddles.focus = S.puddles.puddles.filter( ( p ) => p.yard );
+			const water = P.troughWater;
+			const stir = ( n, gain ) => {
+
+				for ( let i = 0; i < n; i ++ ) {
+
+					const q = f.toWorld( tl.x + ( Math.random() - 0.5 ) * 0.3, 0, tl.z + ( Math.random() - 0.5 ) * 2 );
+					water.addRipple( q.x, q.z, 0.25 + Math.random() * 0.2, i * 0.35 + Math.random() * 0.2 );
+
+				}
+
+				S.sound.wade( V( tw.x, tw.y, tw.z ), gain );
+				setTimeout( () => S.sound.drip( V( tw.x, tw.y, tw.z ), 0.25 ), 500 );
+
+			};
+
+			stir( 5, 0.3 );
+			S.ui.caption( '[ water moving, in the trough ]', 4 );
+			// a slop against the wood now and then, until you look into it
+			const tStir = S.time;
+			let next = S.time + 5;
+			await S.until( () => {
+
+				if ( S.time > next && ! S.sight.water ) { stir( 3, 0.2 ); next = S.time + 5 + Math.random() * 3; }
+				return ( S.sight.water && S.seenFor > 0.8 ) || S.time - tStir > 80 || dTrough() > 35;
+
+			} );
+			if ( S.sight.water ) {
+
+				S.drone( 0.85, 5 );
+				// (and the water stills round it)
+				await S.untilUnseen( 0.5 );
+
+			}
+
+			F.setMode( 'hidden' );
+			S.puddles.focus = null;
+			S.flags.doorDone = true;
+			S.hint( 'wayon', 30 );
 
 		},
-		skip: ( S ) => S.props.setDoor( true ),
+		skip: ( S ) => { S.props.setDoor( true ); S.props.lightInside( true ); S.flags.doorDone = true; },
 	},
 
 	// E9 and F5: the heron on the far shore of the tarn. In the water, someone is standing in
