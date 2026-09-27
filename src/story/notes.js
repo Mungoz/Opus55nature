@@ -148,6 +148,11 @@ export const READS = {
 		pages: [ { head: 'Forest district Larchmere · felling 1994', image: null, entries: [] } ],
 	},
 
+	photo: {
+		title: 'The camera',
+		pages: [ { head: 'The last photograph on the film', image: null, entries: [] } ],
+	},
+
 	notebook: {
 		title: 'A damp notebook',
 		pages: [ {

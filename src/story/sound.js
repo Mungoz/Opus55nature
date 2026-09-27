@@ -366,6 +366,22 @@ export class StorySound {
 
 	}
 
+	// a woodpecker drumming on a dead trunk: a burst of knocks, quickening and fading
+	drum( p, gain = 0.4 ) {
+
+		if ( ! this.on ) return;
+		const dest = this._at( p, 12 ), t0 = this.a.now() + 0.02;
+		const n = 14 + Math.floor( Math.random() * 8 ), f = 600 + Math.random() * 300;
+		for ( let i = 0; i < n; i ++ ) {
+
+			const t = t0 + i * ( 0.05 - i * 0.0008 ), g = gain * ( 1 - i / n * 0.7 );
+			this.a._tone( dest, t, 0.03, f, f * 0.8, 0.25 * g );
+			this._noise( dest, t, 0.02, 'bandpass', 1800, 1.5, 0.2 * g, 0.001 );
+
+		}
+
+	}
+
 	// a field telephone cranked: the crank's rattle, then static, and under the static a voice,
 	// slow, a word at a time (a murmur of formants; what it says is only in the caption)
 	radio( p, seconds = 9 ) {

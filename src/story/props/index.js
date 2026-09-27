@@ -14,6 +14,9 @@ import { PLACES, BOARDWALK, BANKS } from '../layout.js';
 import { buildBoardwalk } from './boardwalk.js';
 import { buildStand } from './stand.js';
 import { buildLodge } from './lodge.js';
+import { buildShrine } from './shrine.js';
+import { buildClearing, buildGullyBridge } from './clearing.js';
+import { buildCamp, buildKiln } from './camp.js';
 import { drawValleyMap } from './map.js';
 import { woodsAt } from '../layout.js';
 import { Water } from '../../world/water.js';
@@ -535,6 +538,18 @@ export class StoryProps {
 		const P = PLACES.stand;
 		this.stand = this._placeProp( buildStand, P.x, P.z, P.yaw, 'stand' );
 		this._lodge();
+		this._plaque();
+		this._poster();
+		// the wayside shrine at the wood's edge: candles lit, J.'s photograph on the post, a card
+		const Sh = PLACES.shrine;
+		this.shrine = this._placeProp( buildShrine, Sh.x, Sh.z, Sh.yaw, 'shrine' );
+		this.shrine.parts.flames.castShadow = false;
+		// the woodcutters' clearing (the planks), the camp, the charcoal burners'
+		const Cl = PLACES.clearing, Ca = PLACES.camp, Ki = PLACES.kiln;
+		this.clearing = this._placeProp( buildClearing, Cl.x, Cl.z, Cl.yaw, 'clearing' );
+		this.camp = this._placeProp( buildCamp, Ca.x, Ca.z, Ca.yaw, 'camp' );
+		this.kiln = this._placeProp( buildKiln, Ki.x, Ki.z, Ki.yaw, 'kiln' );
+		this._gullyBridge();
 
 	}
 
@@ -634,6 +649,118 @@ export class StoryProps {
 
 	}
 
+	// the plaque at the plunge pool: bronze, green at its edges, on a boulder by the path
+	_plaque() {
+
+		const P = PLACES.plaque, td = this.app.terrainData;
+		const f = new Frame( P.x, td.heightAt( P.x, P.z ), P.z, P.yaw );
+		const k = new Kit( ( x, z ) => { const w = f.toWorld( x, 0, z ); return td.heightAt( w.x, w.z ) - f.y; } );
+		k.stone( 0, - 0.2, - 0.15, 0.75, 0.95, 0.6, '#8a857b', 17, [ 0.15, 0.3, - 0.1 ] );
+		k.box( 0, 0.55, 0.36, 0.34, 0.24, 0.02, M.BRONZE, '#6b5a36', { rot: [ - 0.25, 0, 0 ], round: 0.005 } );
+		for ( const [ x, y ] of [ [ - 0.14, 0.65 ], [ 0.14, 0.65 ], [ - 0.14, 0.45 ], [ 0.14, 0.45 ] ] ) k.box( x, y + 0.005, 0.372, 0.018, 0.018, 0.01, M.BRONZE, '#4a3e24', { rot: [ - 0.25, 0, 0 ] } );
+		const m = this._mesh( k.build(), this.material, 'plaque' );
+		m.position.set( f.x, f.y, f.z );
+		m.rotation.y = P.yaw;
+		this.group.add( m );
+		this.story.collision.circle( f.x, f.z, 0.55, 'rock' );
+		this.plaque = f.toWorld( 0, 0.55, 0.45 );
+
+	}
+
+	// the MISSING poster: a printed sheet nailed to a trunk, rained on, facing the path
+	_poster() {
+
+		const P = PLACES.poster, td = this.app.terrainData, path = this.story.path;
+		let best = null, bd = 6;
+		for ( const t of this.app.forest.trees ) {
+
+			if ( Math.abs( t.x - P.x ) > 6 || Math.abs( t.z - P.z ) > 6 ) continue;
+			const d = Math.hypot( t.x - P.x, t.z - P.z );
+			if ( d < bd && this.app.forest.variants[ t.variant ].trunk ) { bd = d; best = t; }
+
+		}
+
+		const s = path.at( path.nearest( P.x, P.z ).d );
+		const tx = best ? best.x : P.x, tz = best ? best.z : P.z;
+		const r = best ? this.app.forest.variants[ best.variant ].trunk * best.s * 0.85 : 0.05;
+		const nx = s.x - tx, nz = s.z - tz, nl = Math.hypot( nx, nz ) || 1;
+		const yaw = Math.atan2( nx / nl, nz / nl );
+		const y = td.heightAt( tx, tz ) + 1.45;
+		// the sheet: a printed MISSING notice, a photograph, the rain run down it
+		const c = document.createElement( 'canvas' );
+		c.width = 360; c.height = 500;
+		const g = c.getContext( '2d' );
+		g.fillStyle = '#e8e2d2'; g.fillRect( 0, 0, 360, 500 );
+		g.fillStyle = '#9a1c16'; g.font = 'bold 58px Arial, sans-serif'; g.textAlign = 'center';
+		g.fillText( 'MISSING', 180, 72 );
+		g.fillStyle = '#6a6660'; g.fillRect( 105, 96, 150, 180 );
+		// the photograph: a man's head and shoulders, grey, a hat
+		g.fillStyle = '#3a3834'; g.beginPath(); g.ellipse( 180, 176, 34, 42, 0, 0, Math.PI * 2 ); g.fill();
+		g.fillRect( 122, 220, 116, 56 );
+		g.fillStyle = '#2a2826'; g.fillRect( 138, 128, 84, 12 ); g.fillRect( 156, 108, 48, 24 );
+		g.fillStyle = '#222'; g.font = 'bold 22px Arial, sans-serif';
+		g.fillText( 'J. B., 58, herder', 180, 312 );
+		g.font = '17px Arial, sans-serif';
+		for ( const [ i, t ] of [ 'Alp Larchmere. Last seen 9 October', 'at the alp hut above the lake.', 'Long dark wool coat, felt hat,', 'a stick. Anyone who has seen him:', 'the police post in the village.' ].entries() ) g.fillText( t, 180, 344 + i * 24 );
+		// rain streaks and a torn corner
+		for ( let i = 0; i < 70; i ++ ) {
+
+			g.fillStyle = `rgba(90,80,60,${ 0.04 + Math.random() * 0.06 })`;
+			g.fillRect( Math.random() * 360, Math.random() * 200, 2 + Math.random() * 3, 80 + Math.random() * 220 );
+
+		}
+
+		g.clearRect( 316, 452, 44, 48 );
+		const tex = new THREE.CanvasTexture( c );
+		tex.colorSpace = THREE.SRGBColorSpace;
+		const geo = new THREE.PlaneGeometry( 0.3, 0.42, 6, 1 );
+		// (curved a little round the trunk)
+		const pos = geo.getAttribute( 'position' );
+		for ( let i = 0; i < pos.count; i ++ ) pos.setZ( i, - ( pos.getX( i ) ** 2 ) / ( 2 * Math.max( 0.12, r ) ) );
+		geo.computeVertexNormals();
+		const m = new THREE.Mesh( geo, paintedMaterial( tex, { rough: 0.9 } ) );
+		m.position.set( tx + nx / nl * ( r + 0.012 ), y, tz + nz / nl * ( r + 0.012 ) );
+		m.rotation.y = yaw;
+		m.name = 'missing-poster';
+		this.group.add( m );
+		this.poster = m.position.clone();
+
+	}
+
+	// the gully's footbridge: its deck to walk on, a rail of stops along both sides, and the gap
+	// where its middle planks are gone closed off until a plank is laid over it
+	_gullyBridge() {
+
+		const P = PLACES.gullyBridge, C = this.story.collision;
+		const span = P.span;
+		const B = this.gullyBridge = this._placeProp( ( ground ) => buildGullyBridge( ground, span ), P.x, P.z, P.yaw, 'gullybridge' );
+		const I = B.info, f = B.frame, half = span / 2;
+		B.parts.laid.visible = false;
+		const yA = I.ends[ 0 ][ 1 ], yB = I.ends[ 1 ][ 1 ];
+		const c = f.toWorld( 0, 0, 0 );
+		C.deck( c.x, c.z, I.width / 2 + 0.05, half, f.yaw, ( lx, lz ) => f.y + yA + ( yB - yA ) * ( lz + half ) / span, 'bridge' );
+		const seg = ( ax, az, bx, bz, r, tag ) => {
+
+			const a = f.toWorld( ax, 0, az ), b = f.toWorld( bx, 0, bz );
+			C.capsule( a.x, a.z, b.x, b.z, r, tag );
+
+		};
+
+		for ( const sx of [ - 1, 1 ] ) seg( sx * ( I.width / 2 + 0.12 ), - half + 0.4, sx * ( I.width / 2 + 0.12 ), half - 0.4, 0.08, 'gullyrail' );
+		for ( const z of I.gap ) seg( - I.width / 2, z + ( z < 0 ? - 0.18 : 0.18 ), I.width / 2, z + ( z < 0 ? - 0.18 : 0.18 ), 0.08, 'gap' );
+		B.gapAt = f.toWorld( 0, ( yA + yB ) / 2 + 0.6, ( I.gap[ 0 ] + I.gap[ 1 ] ) / 2 );
+		B.near = [ f.toWorld( 0, yA + 1, I.gap[ 0 ] - 0.9 ), f.toWorld( 0, yB + 1, I.gap[ 1 ] + 0.9 ) ];
+
+	}
+
+	// the plank laid over the gap: the way across
+	layPlank() {
+
+		this.gullyBridge.parts.laid.visible = true;
+		this.story.collision.remove( 'gap' );
+
+	}
+
 	// the shed: unlocked (the padlock gone), its door swung open, its doorway clear
 	openShed() {
 
@@ -674,8 +801,8 @@ export class StoryProps {
 
 			};
 
-			run( l * 0.08, tx - 2.4 );
-			run( tx + 2.4, l * 0.92 );
+			run( l * 0.08, tx - 0.95 );
+			run( tx + 0.95, l * 0.92 );
 
 		}
 

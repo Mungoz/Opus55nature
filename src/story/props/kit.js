@@ -166,7 +166,9 @@ void main() {
 				vec3 q = p - ax * along;
 				float s = ( abs( ax.y ) > 0.5 ? q.x + q.z : q.y + q.x * 0.001 ) / 0.17;
 				float sw = fwidth( s );
-				float seam = smoothstep( 0.04 + sw, 0.0, abs( fract( s ) - 0.5 ) - 0.46 ) * min( 1.0, 0.08 / ( 0.08 + sw ) * 1.3 );
+				// (0 across a board, rising to 1 in the gap at its edge; its edges were once reversed, which
+				// darkened every board and lit its gaps)
+				float seam = smoothstep( - sw, 0.04, abs( fract( s ) - 0.5 ) - 0.46 ) * min( 1.0, 0.08 / ( 0.08 + sw ) * 1.3 );
 				alb *= ( 1.0 - 0.8 * seam ) * ( 0.85 + 0.3 * hash11( floor( s ) + 3.0 ) );
 				h -= seam * 0.004;
 			}

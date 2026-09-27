@@ -85,6 +85,72 @@ function teleport( a, x, z, heading ) {
 // run is a script (async; S.wait, S.until); skip applies its end state when a debug jump
 // starts past it.
 // ---------------------------------------------------------------------------
+// the black pond (F8, B9): the water's edge where the path comes by it, and where it stands - out
+// in the near half, where its image in the water lies against the pale sky mirrored over the
+// clearing (further out it would lie against the mirrored trees, dark on dark)
+function blackPondSpot( S ) {
+
+	const td = S.app.terrainData, P = td.ponds[ 0 ];
+	const s = S.path.at( S.path.ids.blackpond );
+	const ax = P.c.x - s.x, az = P.c.y - s.z, al = Math.hypot( ax, az ), ux = ax / al, uz = az / al;
+	let ex = s.x, ez = s.z;
+	for ( let k = 0; k < 40 && td.heightAt( ex + ux, ez + uz ) > P.surf + 0.08; k ++ ) { ex += ux * 0.5; ez += uz * 0.5; }
+	let fx = ex + ux * 5.5, fz = ez + uz * 5.5;
+	for ( let k = 0; k < 8 && P.surf - td.heightAt( fx, fz ) > 0.75; k ++ ) { fx -= ux * 0.5; fz -= uz * 0.5; }
+	return { edge: { x: ex, z: ez }, fig: { x: fx, z: fz, y: td.heightAt( fx, fz ) - 0.02 }, u: [ ux, uz ], P };
+
+}
+
+// the camp's camera's last photograph (B9)
+function lastPhoto( S ) {
+
+	const app = S.app, cam = app.camera, F = S.figure, td = app.terrainData, P = td.ponds[ 0 ];
+	const keep = { p: cam.position.clone(), q: cam.quaternion.clone(), fov: cam.fov, mode: F.mode, pos: F.pos.clone(), yaw: F.yaw, tilt: F.tilt };
+	const B = blackPondSpot( S ), fx = B.fig.x, fz = B.fig.z, ex = B.edge.x - B.u[ 0 ] * 1.2, ez = B.edge.z - B.u[ 1 ] * 1.2;
+	// (the film caught what the eye did not: it stands there in the water, plainly, knee-deep)
+	F.place( fx, fz, Math.atan2( ex - fx, ez - fz ), B.fig.y );
+	F.tilt = 0.6;
+	F.setMode( 'direct' );
+	// (from the water's edge, the pond filling the frame)
+	cam.position.set( ex, td.heightAt( ex, ez ) + 1.5, ez );
+	cam.fov = 50;
+	cam.updateProjectionMatrix();
+	cam.lookAt( fx, P.surf - 0.6, fz );
+	cam.updateMatrixWorld();
+	app.forest.update( cam );
+	app.render();
+	const shot = app.renderer.domElement;
+	const c = document.createElement( 'canvas' );
+	c.width = 900; c.height = 600;
+	const g = c.getContext( '2d' );
+	const sw = shot.width, sh = shot.height, k = Math.min( sw / 900, sh / 600 );
+	g.filter = 'sepia(0.3) saturate(0.75) contrast(1.25) brightness(2.3)';
+	g.drawImage( shot, ( sw - 900 * k ) / 2, ( sh - 600 * k ) / 2, 900 * k, 600 * k, 0, 0, 900, 600 );
+	g.filter = 'none';
+	const v = g.createRadialGradient( 450, 300, 180, 450, 300, 560 );
+	v.addColorStop( 0, 'rgba(0,0,0,0)' );
+	v.addColorStop( 1, 'rgba(0,0,0,0.6)' );
+	g.fillStyle = v;
+	g.fillRect( 0, 0, 900, 600 );
+	for ( let i = 0; i < 9000; i ++ ) { g.fillStyle = `rgba(${ Math.random() < 0.5 ? '255,240,220' : '0,0,0' },0.06)`; g.fillRect( Math.random() * 900, Math.random() * 600, 1.5, 1.5 ); }
+	g.font = 'bold 26px "Courier New", monospace';
+	g.fillStyle = 'rgba(255,140,40,0.9)';
+	g.fillText( "'94 10 13", 690, 568 );
+	// put everything back as it was
+	F.place( keep.pos.x, keep.pos.z, keep.yaw, keep.pos.y );
+	F.tilt = keep.tilt;
+	F.setMode( keep.mode );
+	cam.position.copy( keep.p );
+	cam.quaternion.copy( keep.q );
+	cam.fov = keep.fov;
+	cam.updateProjectionMatrix();
+	cam.updateMatrixWorld();
+	app.forest.update( cam );
+	return c.toDataURL( 'image/jpeg', 0.88 );
+
+}
+
+// ---------------------------------------------------------------------------
 export const BEATS = [
 
 	// ----------------------------------------------------------------- the jetty
@@ -650,6 +716,14 @@ export const BEATS = [
 			S.ui.caption( '[ a gate, behind you ]', 3.5 );
 
 		},
+		// (begun beyond it: it stands open, unchained)
+		skip: ( S ) => {
+
+			S.props.topChain.visible = false;
+			S.props.swingGate( true, S.props.topGate );
+			S.flags.topGateOpen = S.flags.hasKey = true;
+
+		},
 	},
 
 	// F4: the storm gone, you go out into the yard. Behind you the hut's door creaks open, and
@@ -974,6 +1048,148 @@ export const BEATS = [
 		skip: ( S ) => { S.flags.shedKey = true; },
 	},
 
+	// A2 and B2: the plaque at the plunge pool; the MISSING poster at the Black Wood's edge
+	{
+		id: 'A2-plaque', at: 'pool', lead: - 30, keep: true,
+		run: async ( S ) => {
+
+			const p = S.props.plaque, q = S.props.poster;
+			S.addInteractable( { id: 'plaque', x: p.x, y: p.y, z: p.z, r: 2.2, prompt: 'read the plaque', use: ( S2 ) => S2.ui.read( READS.plaque ) } );
+			S.addInteractable( { id: 'poster', x: q.x, y: q.y, z: q.z, r: 2.4, prompt: 'read the notice', use: ( S2 ) => S2.ui.read( READS.missing ) } );
+			// B1: the shrine - the card at its foot, the photograph on its post
+			const sh = S.props.shrine, card = sh.W( sh.info.card ), photo = sh.W( sh.info.photo );
+			S.addInteractable( { id: 'shrinecard', x: card.x, y: card.y, z: card.z, r: 1.9, prompt: 'read the card', use: ( S2 ) => S2.ui.read( READS.shrine ) } );
+			const ph = S.addInteractable( { id: 'photo', x: photo.x, y: photo.y, z: photo.z, r: 1.7, prompt: 'look at the photograph', use: () => {
+
+				ph.used = false;
+				S.ui.caption( '[ a man in a felt hat, squinting into the sun, the lake behind him. On the back: “J., Alp Larchmere, summer ’93” ]', 6 );
+
+			} } );
+
+		},
+	},
+
+	// F8: the black pond. Out in its shallows, where it mirrors the pale sky over the clearing,
+	// someone stands in the water facing away - only in the water. As you pass along the shore
+	// its head turns after you. (The hiker's photographs, B9, show the same.)
+	{
+		id: 'F8-blackpond', at: 'blackpond', lead: - 30,
+		run: async ( S ) => {
+
+			const app = S.app, F = S.figure;
+			// out in the near half, knee-deep, facing away across the pond
+			const B = blackPondSpot( S );
+			F.place( B.fig.x, B.fig.z, Math.atan2( B.u[ 0 ], B.u[ 1 ] ), B.fig.y );
+			F.tilt = 0.55;
+			F.setMode( 'reflect' );
+			const t0 = S.time;
+			// its head turns after you: facing away, then over its shoulder toward you
+			S.every( () => {
+
+				if ( F.mode !== 'reflect' ) { F.headTurn = 0; return true; }
+				const want = Math.atan2( S.cam.x - F.pos.x, S.cam.z - F.pos.z ) - F.yaw;
+				const d = Math.atan2( Math.sin( want ), Math.cos( want ) );
+				F.headTurn += ( THREE.MathUtils.clamp( d, - 1.3, 1.3 ) - F.headTurn ) * 0.012;
+				return false;
+
+			} );
+			await S.until( () => ( S.sight.reflect > 0 && S.seenFor > 2.5 ) || S.time - t0 > 60 || S.progress > S.path.ids.blackpond + 40 );
+			if ( S.sight.reflect > 0 ) S.drone( 0.85, 6 );
+			await S.untilUnseen( 1.0 );
+			for ( let k = 0; k < 3; k ++ ) app.water.addRipple( F.pos.x, F.pos.z, 0.4, k * 0.6 );
+			F.setMode( 'hidden' );
+
+		},
+	},
+
+	// B3 and B4: the woodcutters' clearing - the notice (the footbridge closed, its deck boards
+	// taken up; new planks stacked here), a woodpecker drumming that stops as you come; take a
+	// plank - and the gully's footbridge, its middle planks gone: lay the plank over the gap.
+	{
+		id: 'B3-clearing', at: 'wood', lead: - 35, keep: true,
+		run: async ( S ) => {
+
+			const P = S.props, Cl = P.clearing, B = P.gullyBridge;
+			const n = Cl.W( Cl.info.notice.centre ), pl = Cl.W( Cl.info.plank );
+			S.addInteractable( { id: 'notice', x: n.x, y: n.y, z: n.z, r: 2.4, prompt: 'read the notice', use: ( S2 ) => S2.ui.read( READS.notice, () => ( S.flags.readNotice = true ) ) } );
+			const plank = S.addInteractable( { id: 'plank', x: pl.x, y: pl.y, z: pl.z, r: 2.6, prompt: 'take a plank', use: () => {
+
+				plank.enabled = false;
+				S.hold( 'a plank' );
+				Cl.parts.plank.visible = false;
+				S.sound.knock( pl, 0.35 );
+				S.ui.caption( '[ a plank, on your shoulder ]', 3 );
+
+			} } );
+			let nudged = - 1e3;
+			const gap = S.addInteractable( { id: 'gap', x: B.gapAt.x, y: B.gapAt.y, z: B.gapAt.z, r: 2.4, prompt: 'the bridge', use: () => {
+
+				if ( ! S.holds( 'a plank' ) ) {
+
+					gap.used = false;
+					S.ui.caption( '[ its middle planks are gone; far below, the gully floor ]', 3.5 );
+					if ( S.time - nudged > 20 ) {
+
+						nudged = S.time;
+						S.ui.hint( S.flags.readNotice ? 'There were planks stacked at the clearing, back along the path.' : 'The notice at the clearing, back along the path, may say something about the bridge.', 6 );
+
+					}
+
+					return;
+
+				}
+
+				gap.enabled = false;
+				S.hold( 'a plank', false );
+				P.layPlank();
+				S.flags.plankLaid = true;
+				S.sound.knock( B.gapAt, 0.5 );
+				setTimeout( () => S.sound.knock( B.gapAt, 0.35 ), 300 );
+				S.ui.caption( '[ the plank, laid across the gap ]', 3 );
+
+			} } );
+			S.every( () => {
+
+				if ( ! gap.enabled ) return true;
+				gap.prompt = S.holds( 'a plank' ) ? 'lay the plank' : 'the bridge';
+				return false;
+
+			} );
+			// the woodpecker, somewhere in the trees beyond the clearing, stopping as you come
+			const wp = Cl.W( [ 10, 7, - 6 ] );
+			for ( let k = 0; k < 4 && S.progress < S.path.ids.wood - 4; k ++ ) {
+
+				S.sound.drum( wp, 0.5 );
+				await S.wait( 4 + Math.random() * 4 );
+
+			}
+
+			S.ui.caption( '[ a woodpecker, then nothing ]', 3 );
+
+		},
+		skip: ( S ) => { S.props.layPlank(); S.flags.plankLaid = true; },
+	},
+
+	// B9: the abandoned camp - the tent broken, the rucksack, the notebook, the camera on a rock
+	// (its last photograph: the black pond from its shore, and someone standing out in the
+	// water). B8: the charcoal burners' clearing, the kiln still warm (the bear, E13, is near).
+	{
+		id: 'B9-camp', at: 'camp', lead: - 30, keep: true,
+		run: async ( S ) => {
+
+			const P = S.props, Ca = P.camp;
+			const nb = Ca.W( Ca.info.notebook ), cm = Ca.W( Ca.info.camera );
+			S.addInteractable( { id: 'notebook', x: nb.x, y: nb.y, z: nb.z, r: 2.0, prompt: 'read the notebook', use: ( S2 ) => S2.ui.read( READS.notebook ) } );
+			S.addInteractable( { id: 'camera', x: cm.x, y: cm.y, z: cm.z, r: 2.0, prompt: 'look at the camera', use: ( S2 ) => {
+
+				if ( ! READS.photo.pages[ 0 ].image ) READS.photo.pages[ 0 ].image = lastPhoto( S2 );
+				S2.ui.read( READS.photo );
+
+			} } );
+
+		},
+	},
+
 	// B7: the forester's lodge. Its lamp still lit, its door open. The diary (the oars are in the
 	// shed, the key "up at the stand with H."), the map on the wall, the field telephone - wind
 	// it: under the static a voice, very slow, reading out the places you have been. The shed:
@@ -1120,7 +1336,7 @@ export const BEATS = [
 	// again, as round a falcon, but nothing is there. Then it pours down into the reedbed ahead
 	// and the reeds chatter with it - until you come near, when they stop, all at once.
 	{
-		id: 'E14-starlings', at: 'strand', lead: - 110,
+		id: 'E14-starlings', at: 'strand', lead: - 45,
 		run: async ( S ) => {
 
 			const app = S.app, M = app.starlings, bed = app.layout.REEDBEDS[ 0 ];

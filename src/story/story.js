@@ -30,8 +30,10 @@ const lerp = THREE.MathUtils.lerp;
 
 // Checkpoints to resume an unfinished walk from: quiet places between the beats (none inside the
 // storm), with the name the loader gives them
-const CHECKPOINTS = [ [ 'gate', 'the pasture gate' ], [ 'signpost', 'the signpost' ], [ 'trough', 'the hut, after the storm' ], [ 'tarn', 'the tarn' ], [ 'pool', 'the falls' ], [ 'wood', 'the larch wood' ], [ 'strand', 'the west strand' ] ];
+const CHECKPOINTS = [ [ 'gate', 'the pasture gate' ], [ 'signpost', 'the signpost' ], [ 'trough', 'the hut, after the storm' ], [ 'tarn', 'the tarn' ], [ 'pool', 'the falls' ], [ 'wood', 'the woodcutters’ clearing' ], [ 'stand', 'the hunting stand' ], [ 'strand', 'the west strand' ] ];
 const SAVE = 'larchmere.horror.progress.v1';
+// what the bot leaves alone (it would climb the stand and stay up there)
+const NOBOT = new Set( [ 'climb', 'climbdown', 'binocs', 'radio', 'gap' ] );
 export class Story {
 
 	constructor( app ) {
@@ -752,7 +754,10 @@ export class Story {
 		}
 
 		// read things once
-		const it = this.interactables.find( ( o ) => o.enabled && ! o.used && Math.hypot( o.x - this.cam.x, o.z - this.cam.z ) < o.r * 0.95 );
+		// (the Black Wood's errands, done for it: the plank laid, the oars fetched)
+		if ( this.path.ids.gully && ! this.flags.plankLaid && Math.abs( this.progress - this.path.ids.gully ) < 12 ) { this.props.layPlank(); this.flags.plankLaid = true; }
+		if ( this.path.ids.boat && ! this.flags.oarsIn && this.progress > this.path.ids.boat - 20 ) { this.hold( 'the oars' ); }
+		const it = this.interactables.find( ( o ) => o.enabled && ! o.used && ! NOBOT.has( o.id ) && Math.hypot( o.x - this.cam.x, o.z - this.cam.z ) < o.r * 0.95 );
 		if ( it ) {
 
 			c.targetYaw = Math.atan2( - ( it.x - this.cam.x ), - ( it.z - this.cam.z ) );
@@ -791,7 +796,7 @@ export class Story {
 		{
 
 			const f = this.props.hutFrame, [ lx, lz ] = f.toLocal( this.cam.x, this.cam.z );
-			const inside = lz < 4.1 && Math.abs( lx ) < 2.9;
+			const inside = Math.abs( lz ) < 4.1 && Math.abs( lx ) < 2.9;
 			let p = null;
 			if ( this.keyIt?.enabled && ! this.flags.hasKey ) p = ! inside ? ( Math.abs( lx + 0.8 ) > 0.15 || lz > 6.5 ? f.toWorld( - 0.8, 0, 5.3 ) : f.toWorld( - 0.8, 0, 2.5 ) ) : this.props.keyPos;
 			else if ( inside ) p = Math.abs( lx + 0.8 ) > 0.15 && lz < 3.4 ? f.toWorld( - 0.8, 0, 2.6 ) : f.toWorld( - 0.8, 0, 5.4 );

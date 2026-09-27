@@ -56,7 +56,17 @@ export const PLACES = {
 	// the Black Wood's places (HORROR_PLAN 16.2): each where it stands, and the way it faces
 	// (its +z: toward the path, or for the hunting stand its window, out over the glade)
 	stand: { x: - 160.5, z: 553.5, yaw: 0.84 },
-	lodge: { x: - 192, z: 524.5, yaw: 0.72 },
+	// (beside the way, its porch to it)
+	lodge: { x: - 195.5, z: 532.5, yaw: 2.3 },
+	shrine: { x: - 192.8, z: 727.2, yaw: 2.3 },
+	clearing: { x: - 159, z: 689, yaw: - 1.48 },
+	gullyBridge: { x: - 145, z: 646, yaw: - 3.008, span: 13.6 },
+	camp: { x: - 214.5, z: 492.5, yaw: 1.91 },
+	kiln: { x: - 201.5, z: 451, yaw: - 0.896 },
+	// the plaque on a boulder beside the plunge pool, facing the path
+	plaque: { x: - 166.6, z: 765.4, yaw: 0.4 },
+	// the MISSING poster, on a trunk at the Black Wood's edge (the nearest trunk to here)
+	poster: { x: - 187.4, z: 733.5 },
 	// the island's point, where F6 stands
 	islandPoint: { x: - 118, z: 214 },
 	// your boat, drifted onto the west strand; J.'s, upturned in the reeds before it
@@ -147,9 +157,12 @@ export const ROUTE = [
 	{ x: - 181, z: 706 },
 	{ x: - 170, z: 690, id: 'wood' },
 	{ x: - 157, z: 669 },
-	{ x: - 150.5, z: 656.5, deck: true },
+	// (square across the gully, on its footbridge)
+	{ x: - 145.6, z: 659 },
+	{ x: - 144.1, z: 652.7, deck: true },
 	{ x: - 145, z: 646, deck: true, id: 'gully' },
-	{ x: - 139.5, z: 635.5, deck: true },
+	{ x: - 145.9, z: 639.3, deck: true },
+	{ x: - 146.2, z: 633.5 },
 	{ x: - 133, z: 624 },
 	{ x: - 120, z: 605 },
 	{ x: - 101, z: 588 },
@@ -211,10 +224,11 @@ export const WOODS = {
 		[ - 190, 724, 5 ], // the wayside shrine
 		[ - 160, 688, 11 ], // the woodcutters' clearing
 		[ - 150, 562, 15 ], // the glade under the hunting stand
-		[ - 190, 526, 12 ], // the forester's lodge
-		[ - 208, 492, 7 ], // the camp
+		[ - 196, 532, 12 ], // the forester's lodge
+		[ - 214, 492, 7 ], // the camp
 		[ - 203, 452, 12 ], // the charcoal burners'
 		[ - 145, 646, 7 ], // the footbridge over the gully
+		[ - 70, 548, 9 ], // the black pond's west shore, open to the water where the path passes
 	],
 	box: [ - 250, 430, - 25, 755 ],
 };
@@ -281,6 +295,15 @@ export function paintGround( g ) {
 
 	};
 
+	inFrame( PLACES.shrine, ( at ) => {
+
+		g.rect( 3, ...at( 0, 0.3 ), 0.9, 1.2, PLACES.shrine.yaw, 1, 0.5 );
+		g.blob( 1, ...at( 0, 1.1 ), 0.9, 0.7, PLACES.shrine.yaw, 0.6, 0.6 );
+
+	} );
+	inFrame( PLACES.clearing, ( at ) => g.rect( 3, ...at( 0, 0 ), 8.8, 6.2, PLACES.clearing.yaw, 1, 0.5 ) );
+	inFrame( PLACES.camp, ( at ) => g.rect( 3, ...at( 0, 0 ), 3.4, 2.9, PLACES.camp.yaw, 1, 0.5 ) );
+	inFrame( PLACES.kiln, ( at ) => g.rect( 3, ...at( 0, 0 ), 5.5, 5.5, PLACES.kiln.yaw, 1, 0.5 ) );
 	inFrame( PLACES.stand, ( at ) => {
 
 		g.rect( 3, ...at( - 0.6, 0 ), 2.6, 2.3, PLACES.stand.yaw, 1, 0.5 );
@@ -405,6 +428,8 @@ export function waterClear( x, z, kind ) {
 	// the tarn's near shore, where the path comes to the water: open, so you see into it; and
 	// round the figure's place on the far shore, and between (no reeds in front of it)
 	if ( Math.hypot( x - TARN_VIEW[ 0 ], z - TARN_VIEW[ 1 ] ) < 13 ) return true;
+	// the black pond: no pads, no reeds - black, still, and in it what stands there (F8)
+	if ( Math.hypot( x + 58, z - 540 ) < 26 ) return true;
 	{
 
 		const [ ex, ez ] = SIGHTS.tarn.eye, [ fx, fz ] = SIGHTS.tarn.fig;
