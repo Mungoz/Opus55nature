@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { propMaterial, streamMaterial, LAMP, INSIDE, ROOM, ROOM_SIZE, ROOM_PITCH, M, col } from './kit.js';
+import { propMaterial, streamMaterial, LAMP, INSIDE, ROOM, ROOM_SIZE, ROOM_PITCH, LAMP2, ROOM2, ROOM2_SIZE, ROOM2_PITCH, M, col } from './kit.js';
 
 const LAMP_INSIDE = 2.2; // the hut's storm lantern
 import { buildHut, HUT } from './hut.js';
@@ -10,8 +10,12 @@ import { buildBoots } from './boots.js';
 import { creatureMaterial } from '../../fauna/creature.js';
 import { Kit } from './kit.js';
 import { Glow } from './glow.js';
-import { PLACES, BOARDWALK } from '../layout.js';
+import { PLACES, BOARDWALK, BANKS } from '../layout.js';
 import { buildBoardwalk } from './boardwalk.js';
+import { buildStand } from './stand.js';
+import { buildLodge } from './lodge.js';
+import { drawValleyMap } from './map.js';
+import { woodsAt } from '../layout.js';
 import { Water } from '../../world/water.js';
 
 const V = ( x, y, z ) => new THREE.Vector3( x, y, z );
@@ -64,6 +68,8 @@ export class StoryProps {
 		this._bridge();
 		this._hut();
 		this._topGate();
+		this._gully();
+		this._woods();
 		this._boats();
 		this._fence();
 		this._junction();
@@ -484,6 +490,197 @@ export class StoryProps {
 
 	}
 
+	// A prop from one of the builders (build( ground ) -> { geometry, parts, info }) put down
+	// at x, z facing yaw: its mesh, its moving parts as meshes of their own, its collision; and
+	// W( [ lx, ly, lz ] ) for its info's points in the world
+	_placeProp( build, x, z, yaw, name ) {
+
+		const td = this.app.terrainData;
+		const f = new Frame( x, td.heightAt( x, z ), z, yaw );
+		const ground = ( lx, lz ) => { const w = f.toWorld( lx, 0, lz ); return td.heightAt( w.x, w.z ) - f.y; };
+		const out = build( ground );
+		const g = new THREE.Group();
+		g.position.set( f.x, f.y, f.z );
+		g.rotation.y = yaw;
+		g.name = name;
+		g.add( this._mesh( out.geometry, this.material, name ) );
+		const parts = {};
+		for ( const [ k, geo ] of Object.entries( out.parts || {} ) ) {
+
+			if ( ! geo?.isBufferGeometry ) continue;
+			parts[ k ] = this._mesh( geo, this.material, name + '-' + k );
+			g.add( parts[ k ] );
+
+		}
+
+		this.group.add( g );
+		g.updateMatrixWorld( true );
+		const info = out.info || {};
+		for ( const [ cx, cz, hx, hz ] of info.collision || [] ) {
+
+			const w = f.toWorld( cx, 0, cz );
+			this.story.collision.box( w.x, w.z, hx, hz, yaw, name );
+
+		}
+
+		const W = ( p ) => f.toWorld( p[ 0 ], p[ 1 ] ?? 0, p[ 2 ] ?? p[ 1 ] );
+		return { frame: f, group: g, parts, info, W, out };
+
+	}
+
+	// the Black Wood's places (HORROR_PLAN 16.2)
+	_woods() {
+
+		// the hunting stand over the glade: the shed key up in it, the hunter's log, binoculars
+		const P = PLACES.stand;
+		this.stand = this._placeProp( buildStand, P.x, P.z, P.yaw, 'stand' );
+		this._lodge();
+
+	}
+
+	// the forester's lodge, its lamp lit and its door ajar, and the padlocked shed with the oars
+	_lodge() {
+
+		const P = PLACES.lodge, C = this.story.collision;
+		const L = this.lodge = this._placeProp( buildLodge, P.x, P.z, P.yaw, 'lodge' );
+		const I = L.info, f = L.frame;
+		// the doors on their hinges: the lodge's standing open, the shed's shut
+		const hang = ( mesh, pivot, rot ) => {
+
+			const h = new THREE.Group();
+			h.position.fromArray( pivot );
+			L.group.remove( mesh );
+			h.add( mesh );
+			h.rotation.y = rot;
+			L.group.add( h );
+			return h;
+
+		};
+
+		L.doorHinge = hang( L.parts.door, I.doorPivot, I.doorOpen * 0.8 );
+		L.shedHinge = hang( L.parts.shedDoor, I.shedPivot, 0 );
+		// walls with their doorways open; the furniture; outside, the bench and the woodpile
+		const seg = ( [ ax, az, bx, bz ], r, tag ) => {
+
+			const a = f.toWorld( ax, 0, az ), b = f.toWorld( bx, 0, bz );
+			C.capsule( a.x, a.z, b.x, b.z, r, tag );
+
+		};
+
+		for ( const w of I.walls ) seg( w, I.wallT / 2 + 0.04, 'lodge' );
+		for ( const w of I.shedWalls ) seg( w, 0.07, 'lodge' );
+		for ( const [ cx, cz, hx, hz ] of [ ...( I.furniture || [] ), ...( I.solids || [] ), ...( I.shedFurniture || [] ) ] ) {
+
+			const w = f.toWorld( cx, 0, cz );
+			C.box( w.x, w.z, hx, hz, f.yaw, 'lodge' );
+
+		}
+
+		// the shed's door shut: its doorway closed
+		const sd = I.shedWalls[ 3 ], se = I.shedWalls[ 4 ];
+		seg( [ sd[ 2 ], sd[ 3 ], se[ 0 ], se[ 1 ] ], 0.06, 'sheddoor' );
+		// floors: the room, the porch and its steps, the shed
+		const deck = ( x0, x1, z0, z1, y, tag ) => {
+
+			const c = f.toWorld( ( x0 + x1 ) / 2, 0, ( z0 + z1 ) / 2 );
+			C.deck( c.x, c.z, ( x1 - x0 ) / 2, ( z1 - z0 ) / 2, f.yaw, y, tag );
+
+		};
+
+		const Rm = I.room;
+		deck( Rm.x0, Rm.x1, Rm.z0, Rm.z1, f.y + Rm.floorY, 'lodgefloor' );
+		if ( I.porch ) deck( I.porch.x0, I.porch.x1, I.porch.z0, I.porch.z1, f.y + I.porch.y, 'lodgefloor' );
+		if ( I.steps && I.steps.n > 1 ) {
+
+			const St = I.steps, half = ( St.n - 1 ) * St.tread / 2;
+			const c = f.toWorld( ( St.x0 + St.x1 ) / 2, 0, St.z0 + half );
+			C.deck( c.x, c.z, ( St.x1 - St.x0 ) / 2, half + 0.03, f.yaw, ( lx, lz ) => f.y + St.top - ( 1 + THREE.MathUtils.clamp( Math.floor( ( lz + half ) / St.tread ), 0, St.n - 2 ) ) * St.rise, 'hut' );
+
+		}
+
+		const sw = I.shedWalls;
+		deck( Math.min( sw[ 0 ][ 0 ], sw[ 0 ][ 2 ] ) + 0.05, Math.max( sw[ 0 ][ 0 ], sw[ 0 ][ 2 ] ) - 0.05, Math.min( sw[ 1 ][ 1 ], sw[ 1 ][ 3 ] ) + 0.05, Math.max( sw[ 1 ][ 1 ], sw[ 1 ][ 3 ] ) - 0.05, f.y + I.shedFloorY, 'lodgefloor' );
+		// the room kept out of the sun and the sky, lit by its lamp
+		ROOM2.value.set( f.x + f.s * ( Rm.z0 + Rm.z1 ) / 2 + f.c * ( Rm.x0 + Rm.x1 ) / 2, f.z + f.c * ( Rm.z0 + Rm.z1 ) / 2 - f.s * ( Rm.x0 + Rm.x1 ) / 2, f.c, f.s );
+		ROOM2_SIZE.value.set( ( Rm.x1 - Rm.x0 ) / 2 + I.wallT / 2, ( Rm.z1 - Rm.z0 ) / 2 + I.wallT / 2, f.y + Rm.floorY - 0.3, f.y + Rm.ridge );
+		ROOM2_PITCH.value = Rm.pitch;
+		const lamp = L.W( I.lamp );
+		LAMP2.value.set( lamp.x, lamp.y + 0.1, lamp.z, 1.6 );
+		L.lampAt = lamp;
+		// the map on the wall: the valley, the path pencilled on it, the lodge crossed
+		{
+
+			const path = this.story.path, ids = path.ids, at = ( id ) => path.at( ids[ id ] );
+			const H = PLACES.hut, T = PLACES.tarn;
+			const marks = [
+				{ x: H.x, z: H.z, label: 'Hut' }, { x: T.x, z: T.z, label: 'Tarn', dy: 26 },
+				{ x: - 162, z: 772, label: 'Falls', dx: - 60 }, { ...at( 'wood' ), label: 'felling', dx: 14 },
+				{ ...at( 'gully' ), label: 'bridge (closed)', dx: 14, dy: 22 }, { x: - 58, z: 540, ring: 20, label: 'J. ?', dx: 26, dy: 4 },
+				{ ...at( 'stand' ), label: 'stand 3', dx: 14 }, { x: P.x, z: P.z, cross: true, label: 'here', dx: - 70, dy: 6 },
+				{ ...at( 'camp' ), label: '', dx: 0 }, { ...at( 'strand' ), label: 'boathouse / boat', dx: 14 },
+			];
+			const m = drawValleyMap( this.app.terrainData, path, marks, woodsAt, [ - 300, 380, 0, 800 ] );
+			L.mapCanvas = m.canvas;
+			L.parts.map.material = paintedMaterial( m.texture, { rough: 0.8 } );
+
+		}
+
+		// where things are, in the world
+		L.at = {};
+		for ( const k of [ 'diary', 'radio', 'lamp', 'oars', 'padlock' ] ) L.at[ k ] = L.W( I[ k ] );
+		L.at.map = L.W( I.map.centre );
+		L.at.door = L.W( [ I.doorway[ 0 ], I.doorway[ 1 ], I.doorway[ 2 ] + 0.6 ] );
+		L.at.shed = L.W( [ I.shedDoorway[ 0 ], I.shedDoorway[ 1 ] + 1, I.shedDoorway[ 2 ] + 0.3 ] );
+
+	}
+
+	// the shed: unlocked (the padlock gone), its door swung open, its doorway clear
+	openShed() {
+
+		const L = this.lodge;
+		L.parts.padlock.visible = false;
+		this.story.collision.remove( 'sheddoor' );
+		const t0 = this.story.time, to = L.info.shedOpen;
+		this.story.every( () => {
+
+			const u = Math.min( 1, ( this.story.time - t0 ) / 1.6 );
+			L.shedHinge.rotation.y = to * ( 1 - Math.pow( 1 - u, 2.2 ) );
+			return u >= 1;
+
+		} );
+
+	}
+
+	// The gully in the Black Wood (layout.BANKS, the one cut down): its rims are walls - its
+	// sides are too steep to climb out of - but for the footbridge's gap where the way crosses
+	_gully() {
+
+		const g = BANKS.find( ( b ) => b.h < 0 );
+		if ( ! g ) return;
+		const path = this.story.path, C = this.story.collision;
+		const [ ax, az ] = g.a, [ bx, bz ] = g.b, l = Math.hypot( bx - ax, bz - az );
+		const ux = ( bx - ax ) / l, uz = ( bz - az ) / l, nx = - uz, nz = ux;
+		const X = path.at( path.ids.gully );
+		const tx = ( X.x - ax ) * ux + ( X.z - az ) * uz;
+		this.gully = { a: g.a, b: g.b, cross: X, u: [ ux, uz ], n: [ nx, nz ] };
+		for ( const side of [ - 1, 1 ] ) {
+
+			const off = side * ( g.w + 1.6 );
+			const run = ( t0, t1 ) => {
+
+				const pts = [];
+				for ( let t = t0; t <= t1 + 0.01; t += 4 ) pts.push( [ ax + ux * t + nx * off, az + uz * t + nz * off ] );
+				C.polyline( pts, 0.25, 'gully' );
+
+			};
+
+			run( l * 0.08, tx - 2.4 );
+			run( tx + 2.4, l * 0.92 );
+
+		}
+
+	}
+
 	// The top gate. J. chained it ("Nothing comes down from the tarn now. Key on the table"): a
 	// pasture fence across the valley floor behind the hut, from a few metres into the tarn to
 	// the stream, the trail through a gate in it. Its key is on the hut's table.
@@ -886,6 +1083,8 @@ export class StoryProps {
 	update( dt, time ) {
 
 		this.glow?.update( dt, time );
+		// the forest lodge's lamp breathes too
+		if ( this.lodge?.lampAt ) LAMP2.value.w = 1.6 * ( 0.9 + 0.07 * Math.sin( time * 2.1 + 1 ) + 0.04 * Math.sin( time * 8.3 ) );
 		// the spout's rings, small and often
 		if ( this.spout && time > this.spout.next && this.troughWaterOn ) {
 

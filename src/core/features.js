@@ -116,7 +116,7 @@ uniform vec4 uBankShape[ 4 ];     // crest height (0: none), half-width, seed
 uniform vec4 uPool;               // a deepened pool on the stream: x, z, radius, extra depth
 uniform vec4 uWoodsSeg[ 3 ];      // an edition's dense woods: bands (segment ends ax, az, bx, bz)
 uniform float uWoodsR[ 3 ];       //   and their radii (0: none)
-uniform vec3 uWoodsClear[ 6 ];    //   clearings in them: x, z, radius
+uniform vec3 uWoodsClear[ 8 ];    //   clearings in them: x, z, radius
 const vec2 FALL_BASE = vec2( ${FALL.base.x.toFixed( 3 )}, ${FALL.base.y.toFixed( 3 )} );
 const vec2 FALL_OUT = vec2( ${FALL.out.x.toFixed( 5 )}, ${FALL.out.y.toFixed( 5 )} );
 const float FALL_H = ${FALL.height.toFixed( 1 )};
@@ -204,7 +204,7 @@ float woods( vec2 p ) {
 		w = max( w, 1.0 - smoothstep( uWoodsR[ i ] - 14.0, uWoodsR[ i ], length( pa - ba * t ) ) );
 	}
 	if ( w <= 0.0 ) return 0.0;
-	for ( int i = 0; i < 6; i ++ ) {
+	for ( int i = 0; i < 8; i ++ ) {
 		vec3 c = uWoodsClear[ i ];
 		if ( c.z <= 0.0 ) continue;
 		w *= smoothstep( c.z, c.z + 6.0, length( p - c.xy ) );

@@ -418,7 +418,7 @@ export class TerrainData {
 			uPool: { value: new THREE.Vector4( 1e6, 1e6, 1, 0 ) },
 			uWoodsSeg: { value: Array.from( { length: 3 }, ( v, i ) => { const b = STORY_FEATURES.woods?.bands[ i ]; return b ? new THREE.Vector4( b.a[ 0 ], b.a[ 1 ], b.b[ 0 ], b.b[ 1 ] ) : new THREE.Vector4(); } ) },
 			uWoodsR: { value: Array.from( { length: 3 }, ( v, i ) => STORY_FEATURES.woods?.bands[ i ]?.r ?? 0 ) },
-			uWoodsClear: { value: Array.from( { length: 6 }, ( v, i ) => { const c = STORY_FEATURES.woods?.clear[ i ]; return c ? new THREE.Vector3( c[ 0 ], c[ 1 ], c[ 2 ] ) : new THREE.Vector3(); } ) },
+			uWoodsClear: { value: Array.from( { length: 8 }, ( v, i ) => { const c = STORY_FEATURES.woods?.clear[ i ]; return c ? new THREE.Vector3( c[ 0 ], c[ 1 ], c[ 2 ] ) : new THREE.Vector3(); } ) },
 		};
 		this._measureWater();
 

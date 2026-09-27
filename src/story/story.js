@@ -521,6 +521,26 @@ export class Story {
 
 	}
 
+	// raise the binoculars (a narrow view, looking about allowed) or lower them (E again)
+	binoculars( on ) {
+
+		const cam = this.app.camera, t0 = this.time, f0 = cam.fov, f1 = on ? 13 : ( this._fov0 ?? 70 );
+		if ( on ) this._fov0 = cam.fov;
+		this.binocs = on;
+		this.ui.binocs( on );
+		this.app.controls.sensitivityScale = on ? 0.25 : 1;
+		this.sound.knock( cam.position, 0.06 );
+		this.every( () => {
+
+			const u = Math.min( 1, ( this.time - t0 ) / 0.45 );
+			cam.fov = f0 + ( f1 - f0 ) * u * u * ( 3 - 2 * u );
+			cam.updateProjectionMatrix();
+			return u >= 1;
+
+		} );
+
+	}
+
 	// things carried (the plank, the shed key, the oars): named low on the left while held
 	hold( name, on = true ) {
 
@@ -999,6 +1019,7 @@ export class Story {
 	use() {
 
 		if ( this.reading ) return this.ui?.closeReading();
+		if ( this.binocs ) return this.binoculars( false );
 		if ( this.focus && this.input ) this.focus.use( this );
 
 	}

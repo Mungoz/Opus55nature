@@ -60,6 +60,25 @@ uniform vec4 uInside;
 uniform vec4 uRoom;
 uniform vec4 uRoomSize;
 uniform float uRoomPitch;
+uniform vec4 uLamp2;
+uniform vec4 uRoom2;
+uniform vec4 uRoom2Size;
+uniform float uRoom2Pitch;
+// inside a room ( centre x, z, cos, sin ), ( half width, half length, floor y, ridge line y ),
+// under its roof's slope?
+float inRoom( vec3 wp, vec4 r, vec4 sz, float pitch ) {
+	if ( sz.x <= 0.0 ) return 0.0;
+	vec2 d = wp.xz - r.xy;
+	vec2 l = vec2( r.z * d.x - r.w * d.y, r.w * d.x + r.z * d.y );
+	float roof = sz.w - abs( l.x ) * pitch - 0.06;
+	return step( abs( l.x ), sz.x ) * step( abs( l.y ), sz.y ) * step( sz.z, wp.y ) * step( wp.y, roof );
+}
+// a lamp's warm light on a surface
+vec3 lampLight( vec4 lamp, vec3 alb, vec3 N, vec3 wp, float ao ) {
+	vec3 Ld = lamp.xyz - wp;
+	float d2 = dot( Ld, Ld );
+	return alb / PI * vec3( 1.0, 0.62, 0.3 ) * lamp.w * saturate( dot( N, Ld * inversesqrt( d2 ) ) * 0.8 + 0.2 ) / ( d2 + 0.3 ) * mix( 0.6, 1.0, ao );
+}
 
 // bump mapping without tangents (Mikkelsen): tilt N by the screen-space slope of a height
 vec3 bump( vec3 N, float h, float k ) {
@@ -325,11 +344,8 @@ void main() {
 
 	float sh = sunShadow( vWorldPos, N );
 	// indoors: no sun, and only a little of the sky, through the door and the chinks
-	if ( uRoomSize.x > 0.0 ) {
-		vec2 d = vWorldPos.xz - uRoom.xy;
-		vec2 l = vec2( uRoom.z * d.x - uRoom.w * d.y, uRoom.w * d.x + uRoom.z * d.y );
-		float roof = uRoomSize.w - abs( l.x ) * uRoomPitch - 0.06;
-		float indoor = step( abs( l.x ), uRoomSize.x ) * step( abs( l.y ), uRoomSize.y ) * step( uRoomSize.z, vWorldPos.y ) * step( vWorldPos.y, roof );
+	{
+		float indoor = max( inRoom( vWorldPos, uRoom, uRoomSize, uRoomPitch ), inRoom( vWorldPos, uRoom2, uRoom2Size, uRoom2Pitch ) );
 		sh *= 1.0 - indoor;
 		ao *= mix( 1.0, 0.1, indoor );
 	}
@@ -340,11 +356,8 @@ void main() {
 	rough = mix( rough, 0.35, wet * smoothstep( -0.05, 0.1, wl ) );
 	vec3 col = shadeSurface( alb, N, V, vWorldPos, ao, sh * mix( 0.5, 1.0, ao ), rough, f0 );
 	// a lantern: warm light falling off with distance (uLamp: position, intensity)
-	if ( uLamp.w > 0.0 ) {
-		vec3 Ld = uLamp.xyz - vWorldPos;
-		float d2 = dot( Ld, Ld );
-		col += alb / PI * vec3( 1.0, 0.62, 0.3 ) * uLamp.w * saturate( dot( N, Ld * inversesqrt( d2 ) ) * 0.8 + 0.2 ) / ( d2 + 0.3 ) * mix( 0.6, 1.0, ao );
-	}
+	if ( uLamp.w > 0.0 ) col += lampLight( uLamp, alb, N, vWorldPos, ao );
+	if ( uLamp2.w > 0.0 ) col += lampLight( uLamp2, alb, N, vWorldPos, ao );
 	// the hut's dark inside, with a lamp lit in it: warm, brightest low down where the lamp is
 	if ( m == 5 && uInside.w > 0.0 && distance( vWorldPos, uInside.xyz ) < 4.5 ) col += vec3( 1.0, 0.52, 0.2 ) * uInside.w * ( 0.45 + 0.55 * smoothstep( 1.8, 0.2, vWorldPos.y - uInside.y + 1.0 ) );
 	if ( mirror > 0.0 ) {
@@ -369,6 +382,11 @@ export const INSIDE = { value: new THREE.Vector4( 0, 0, 0, 0 ) };
 export const ROOM = { value: new THREE.Vector4( 0, 0, 1, 0 ) };
 export const ROOM_SIZE = { value: new THREE.Vector4( 0, 0, 0, 0 ) };
 export const ROOM_PITCH = { value: 0 };
+// a second lamp and a second room (the forest lodge), the same way
+export const LAMP2 = { value: new THREE.Vector4( 0, 0, 0, 0 ) };
+export const ROOM2 = { value: new THREE.Vector4( 0, 0, 1, 0 ) };
+export const ROOM2_SIZE = { value: new THREE.Vector4( 0, 0, 0, 0 ) };
+export const ROOM2_PITCH = { value: 0 };
 
 // water running from a pipe: the sky and the light caught in it, streaks running down it, more
 // see-through face on than at its edges (a thin stream, on a cylinder whose uv.y runs 1 at the
@@ -419,7 +437,7 @@ export function propMaterial( { side = THREE.FrontSide } = {} ) {
 	return new THREE.ShaderMaterial( {
 		vertexShader: vert,
 		fragmentShader: frag,
-		uniforms: { ...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ), ...sharedUniforms(), uLamp: LAMP, uInside: INSIDE, uRoom: ROOM, uRoomSize: ROOM_SIZE, uRoomPitch: ROOM_PITCH },
+		uniforms: { ...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ), ...sharedUniforms(), uLamp: LAMP, uInside: INSIDE, uRoom: ROOM, uRoomSize: ROOM_SIZE, uRoomPitch: ROOM_PITCH, uLamp2: LAMP2, uRoom2: ROOM2, uRoom2Size: ROOM2_SIZE, uRoom2Pitch: ROOM2_PITCH },
 		lights: true,
 		side,
 	} );

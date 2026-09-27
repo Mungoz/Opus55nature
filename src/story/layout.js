@@ -53,6 +53,10 @@ export const PLACES = {
 	marmotBank: { x: 96, z: 742 },
 	// J.'s boots on the plunge pool's shingle, toes to the water
 	boots: { x: - 166, z: 770.5, yaw: 200 * D2R },
+	// the Black Wood's places (HORROR_PLAN 16.2): each where it stands, and the way it faces
+	// (its +z: toward the path, or for the hunting stand its window, out over the glade)
+	stand: { x: - 160.5, z: 553.5, yaw: 0.84 },
+	lodge: { x: - 192, z: 524.5, yaw: 0.72 },
 	// the island's point, where F6 stands
 	islandPoint: { x: - 118, z: 214 },
 	// your boat, drifted onto the west strand; J.'s, upturned in the reeds before it
@@ -191,7 +195,7 @@ export const BANKS = [
 	{ a: [ 140, 520 ], b: [ 158, 700 ], h: 6, w: 26 },
 	// the gully in the Black Wood: a ravine four metres deep, too steep to climb, across the way
 	// (its footbridge is missing its middle planks: HORROR_PLAN 16.3)
-	{ a: [ - 196, 652.6 ], b: [ - 94, 639.4 ], h: - 4.3, w: 5.2 },
+	{ a: [ - 196, 652.6 ], b: [ - 94, 639.4 ], h: - 6.5, w: 5.6 },
 ];
 
 // The Black Wood (HORROR_PLAN 16): dense spruce across the valley floor between the plunge
@@ -210,6 +214,7 @@ export const WOODS = {
 		[ - 190, 526, 12 ], // the forester's lodge
 		[ - 208, 492, 7 ], // the camp
 		[ - 203, 452, 12 ], // the charcoal burners'
+		[ - 145, 646, 7 ], // the footbridge over the gully
 	],
 	box: [ - 250, 430, - 25, 755 ],
 };
@@ -267,6 +272,30 @@ export function paintGround( g ) {
 	g.blob( 3, PLACES.cross.x, PLACES.cross.z, 0.8, 0.8, 0, 0.8, 0.5 );
 	// the boats on the west strand
 	for ( const b of [ PLACES.boatEnd, PLACES.boatJ ] ) g.rect( 3, b.x, b.z, 0.9, 2.8, b.yaw, 1, 0.5 );
+	// the Black Wood's places: their footprints cleared (no tree through a floor), the ground
+	// trodden where people went - rect/blob in each place's own frame ( lx, lz, half x, half z )
+	const inFrame = ( P, fn ) => {
+
+		const c = Math.cos( P.yaw ), sn = Math.sin( P.yaw );
+		fn( ( lx, lz ) => [ P.x + c * lx + sn * lz, P.z - sn * lx + c * lz ] );
+
+	};
+
+	inFrame( PLACES.stand, ( at ) => {
+
+		g.rect( 3, ...at( - 0.6, 0 ), 2.6, 2.3, PLACES.stand.yaw, 1, 0.5 );
+		g.blob( 1, ...at( - 2.4, 0 ), 1.6, 1.4, PLACES.stand.yaw, 0.7, 0.6 );
+
+	} );
+	inFrame( PLACES.lodge, ( at ) => {
+
+		// the lodge and its porch, the shed on its west side, the trodden way to the door
+		g.rect( 3, ...at( 0, 0.6 ), 2.8, 3.6, PLACES.lodge.yaw, 1, 0.5 );
+		g.rect( 3, ...at( - 5.55, 0.45 ), 1.5, 1.3, PLACES.lodge.yaw, 1, 0.5 );
+		g.blob( 1, ...at( 0, 5.6 ), 2.0, 2.2, PLACES.lodge.yaw, 0.8, 0.6 );
+		g.blob( 1, ...at( - 5.4, 2.6 ), 1.4, 1.3, PLACES.lodge.yaw, 0.6, 0.6 );
+
+	} );
 
 }
 

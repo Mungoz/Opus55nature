@@ -366,6 +366,48 @@ export class StorySound {
 
 	}
 
+	// a field telephone cranked: the crank's rattle, then static, and under the static a voice,
+	// slow, a word at a time (a murmur of formants; what it says is only in the caption)
+	radio( p, seconds = 9 ) {
+
+		if ( ! this.on ) return;
+		const ctx = this.ctx, dest = this._at( p, 3 ), t0 = this.a.now() + 0.02;
+		for ( let i = 0; i < 7; i ++ ) this._noise( dest, t0 + i * 0.09, 0.05, 'bandpass', 1800 + Math.random() * 600, 3, 0.12, 0.003 );
+		const t1 = t0 + 0.9;
+		// the static
+		const hiss = this._noise( dest, t1, seconds, 'bandpass', 2600, 0.5, 0.05, 0.4 );
+		hiss.frequency.setValueAtTime( 2600, t1 );
+		// the voice: bursts of a buzz through two moving formant filters, a syllable at a time
+		for ( let k = 0; k < seconds * 1.6; k ++ ) {
+
+			const t = t1 + 0.8 + k * 0.62 + Math.random() * 0.15;
+			if ( t > t1 + seconds - 0.4 || Math.random() < 0.18 ) continue;
+			const o = ctx.createOscillator();
+			o.type = 'sawtooth';
+			o.frequency.setValueAtTime( 88 + Math.random() * 10, t );
+			o.frequency.linearRampToValueAtTime( 80, t + 0.3 );
+			const f1 = ctx.createBiquadFilter(), f2 = ctx.createBiquadFilter();
+			f1.type = f2.type = 'bandpass';
+			f1.Q.value = 7; f2.Q.value = 9;
+			const v = [ [ 700, 1200 ], [ 400, 2000 ], [ 300, 800 ], [ 550, 1700 ] ][ k % 4 ];
+			f1.frequency.setValueAtTime( v[ 0 ], t );
+			f2.frequency.setValueAtTime( v[ 1 ], t );
+			f1.frequency.linearRampToValueAtTime( v[ 0 ] * 0.8, t + 0.3 );
+			const g = ctx.createGain();
+			g.gain.setValueAtTime( 0.0001, t );
+			g.gain.exponentialRampToValueAtTime( 0.05, t + 0.05 );
+			g.gain.exponentialRampToValueAtTime( 0.0001, t + 0.34 );
+			const mix = ctx.createGain();
+			o.connect( f1 ).connect( mix );
+			o.connect( f2 ).connect( mix );
+			mix.connect( g ).connect( dest );
+			o.start( t );
+			o.stop( t + 0.4 );
+
+		}
+
+	}
+
 	// ------------------------------------------------------------------ water
 	// a drip off the eaves or the branches onto stone, leaf or puddle
 	drip( p, gain = 0.3 ) {

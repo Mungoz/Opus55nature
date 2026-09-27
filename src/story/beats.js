@@ -834,96 +834,219 @@ export const BEATS = [
 	// E11: in the larch wood, three hinds standing among the trees, frozen, all staring back
 	// down the path behind you. They don't run until you are very close.
 	{
-		id: 'E11-hinds', at: 'pool', lead: 10,
+		// B6 (HORROR_PLAN 16.2): the hunting stand over the glade. Climb it: the hunter's log, the
+		// shed key on its nail (the forester's shed: the oars), binoculars on the shelf. Across the
+		// glade three hinds stand stock still, staring into the trees at its far edge - and
+		// through the binoculars, it is there among the trunks, facing you. Hold it in them: it
+		// backs away into the trees, and is gone. (E11, the hinds, moved here from the wood.)
+		id: 'B6-stand', at: 'stand', lead: - 40, keep: true,
 		run: async ( S ) => {
 
-			const hinds = S.app.mammals.deer.filter( ( d ) => ! d.stag ).slice( 0, 3 );
-			const at = [ [ - 8, - 9 ], [ - 2, 8 ], [ 5, - 6 ] ];
-			const base = S.path.ids.wood;
-			// staged ahead in the wood while you are still at the pool, each as soon as its place
-			// is hidden from you
+			const app = S.app, P = S.props, st = P.stand, I = st.info, W = st.W, F = S.figure;
+			const foot = W( I.ladderFoot );
+			const bottom = W( [ I.ladderFoot[ 0 ] + 0.55, 0, I.ladderFoot[ 2 ] ] );
+			const top = W( I.ladderTop );
+			const eyeTop = V( top.x, top.y + 1.62, top.z );
+			const onTop = [ bottom.x, top.y + 0.9, bottom.z ];
+			// the far edge of the glade, across from the window: where it stands, and the hinds look
+			const fwd = W( [ 0, 0, 1 ] ).sub( W( [ 0, 0, 0 ] ) );
+			const edge = V( st.frame.x + fwd.x * 33, 0, st.frame.z + fwd.z * 33 );
+			const hinds = app.mammals.deer.filter( ( d ) => ! d.stag ).slice( 0, 3 );
 			const staged = new Set();
-			await S.until( () => {
+			S.every( () => {
 
+				// (each put in the glade while its place, and it, are out of your sight)
 				for ( const [ k, d ] of hinds.entries() ) {
 
 					if ( staged.has( k ) ) continue;
-					const s = S.path.at( base + at[ k ][ 0 ] );
-					const x = s.x + s.tz * at[ k ][ 1 ], z = s.z - s.tx * at[ k ][ 1 ];
-					if ( ! S.hidden( V( x, S.app.terrainData.heightAt( x, z ), z ), 3 ) ) continue;
-					if ( ! S.hidden( d.mesh.position, 3 ) ) continue;
-					teleport( d, x, z, Math.atan2( - s.tx, - s.tz ) );
-					d.cmd = { do: 'stare', watch: V( 0, 0, 0 ), face: true };
+					const x = edge.x - fwd.x * ( 10 + k * 3 ) + fwd.z * ( k - 1 ) * 5, z = edge.z - fwd.z * ( 10 + k * 3 ) - fwd.x * ( k - 1 ) * 5;
+					if ( ! S.hidden( V( x, app.terrainData.heightAt( x, z ), z ), 2 ) || ! S.hidden( d.mesh.position, 2 ) ) continue;
+					teleport( d, x, z, Math.atan2( edge.x - x, edge.z - z ) );
+					d.cmd = { do: 'stare', watch: edge.clone(), face: true };
 					staged.add( k );
 
 				}
 
-				return staged.size === hinds.length || S.progress > base - 15;
+				return staged.size === hinds.length || S.progress > S.path.ids.stand + 60;
 
 			} );
+			// it stands there from when you come up the way (far off, still, among the trunks)
+			await S.until( () => S.progress > S.path.ids.stand - 25 );
+			const ground = app.terrainData.heightAt( edge.x, edge.z );
+			F.place( edge.x, edge.z, Math.atan2( st.frame.x - edge.x, st.frame.z - edge.z ), ground - 0.03 );
+			F.tilt = 0.5;
+			F.pose = 'stand';
+			F.setMode( 'direct' );
+			let gone = false;
+			// the stand: up and down the ladder; what is in it
+			const climbIt = S.addInteractable( { id: 'climb', x: foot.x, y: foot.y + 1.2, z: foot.z, r: 1.9, prompt: 'climb the ladder', use: async () => {
 
-			// what they stare at: the path behind you - where, once the wood has closed round, it
-			// stands. Look round and it backs away into the trees, facing you, and is gone.
-			const F = S.figure;
-			let shown = false, going = false;
-			const watch = S.every( () => {
+				climbIt.enabled = false;
+				S.sound.creak( V( bottom.x, foot.y + 1.2, bottom.z ), 1.4, 0.35, 150, 210 );
+				await S.climb( [ S.cam.clone(), V( foot.x, foot.y + 1.66, foot.z ), V( bottom.x, foot.y + 1.6, bottom.z ), V( onTop[ 0 ], onTop[ 1 ], onTop[ 2 ] ), V( onTop[ 0 ], top.y + 1.62, onTop[ 2 ] ), eyeTop ], 4.2 );
+				S.flags.onStand = true;
+				downIt.enabled = logIt.enabled = binIt.enabled = true;
+				keyIt.enabled = ! S.flags.shedKey;
 
-				const b = shown ? F.pos : S.behind( 30 );
-				for ( const d of hinds ) if ( d.cmd?.do === 'stare' ) d.cmd.watch.set( b.x, 0, b.z );
-				return ! hinds.some( ( d ) => d.cmd?.do === 'stare' );
+			} } );
+			const downIt = S.addInteractable( { id: 'climbdown', x: top.x, y: top.y + 0.6, z: top.z, r: 1.6, enabled: false, prompt: 'climb down', use: async () => {
+
+				downIt.enabled = keyIt.enabled = logIt.enabled = binIt.enabled = false;
+				if ( S.binocs ) S.binoculars( false );
+				S.sound.creak( V( bottom.x, top.y, bottom.z ), 1.2, 0.3, 170, 130 );
+				await S.climb( [ S.cam.clone(), V( onTop[ 0 ], top.y + 1.62, onTop[ 2 ] ), V( onTop[ 0 ], onTop[ 1 ], onTop[ 2 ] ), V( bottom.x, foot.y + 1.6, bottom.z ), V( foot.x, foot.y + 1.66, foot.z ) ], 3.6, { free: true } );
+				S.pinned = false;
+				S.flags.onStand = false;
+				climbIt.enabled = true;
+
+			} } );
+			const kp = W( I.key ), lp = W( I.log ), bp = W( I.binoculars );
+			const keyIt = S.addInteractable( { id: 'shedkey', x: kp.x, y: kp.y, z: kp.z, r: 1.7, enabled: false, prompt: 'take the key', use: () => {
+
+				keyIt.enabled = false;
+				S.flags.shedKey = true;
+				S.hold( 'the shed key' );
+				st.parts.key.visible = false;
+				S.sound.knock( kp, 0.12 );
+				S.ui.caption( '[ a small key, a wooden tag on a string: SHED ]', 3.5 );
+
+			} } );
+			const logIt = S.addInteractable( { id: 'hunterlog', x: lp.x, y: lp.y, z: lp.z, r: 2.2, enabled: false, prompt: 'read the log', use: ( S2 ) => S2.ui.read( READS.hunterlog ) } );
+			// (sat down at the window with them; E again lowers them, and you get up)
+			const seat = W( I.seat );
+			const binIt = S.addInteractable( { id: 'binocs', x: bp.x, y: bp.y, z: bp.z, r: 2.2, enabled: false, prompt: 'look through the binoculars', use: async () => {
+
+				binIt.enabled = downIt.enabled = false;
+				await S.climb( [ S.cam.clone(), seat ], 0.9 );
+				S.binoculars( true );
+				await S.until( () => ! S.binocs );
+				await S.climb( [ S.cam.clone(), eyeTop ], 0.8 );
+				binIt.enabled = downIt.enabled = true;
+
+			} } );
+			// held in the binoculars for a moment, it backs off into the trees, facing you, and
+			// is gone; the hinds break and run
+			let held = 0;
+			S.every( ( dt ) => {
+
+				if ( gone ) return true;
+				held = S.binocs && S.sight.direct > 0 && S.sight.centre < 0.35 ? held + dt : Math.max( 0, held - dt * 0.5 );
+				if ( held > 1.6 ) {
+
+					gone = true;
+					S.drone( 0.9, 6 );
+					const away = [ 3, 6, 9.5, 13, 17 ].map( ( k, i ) => V( edge.x + fwd.x * k + fwd.z * Math.sin( i ) * 0.8, 0, edge.z + fwd.z * k - fwd.x * Math.sin( i ) * 0.8 ) );
+					let done = false;
+					F.walk( away, 0.55, S, true ).then( () => ( done = true ) );
+					const tb = S.time;
+					S.until( () => done || ( S.time - tb > 2.5 && S.hidden( V( F.pos.x, F.pos.y + 1, F.pos.z ), 0.5 ) ) ).then( async () => {
+
+						F.setMode( 'hidden' );
+						F.pose = 'stand';
+						await S.wait( 1.5 );
+						for ( const d of hinds ) {
+
+							if ( ! staged.has( hinds.indexOf( d ) ) ) continue;
+							d.cmd = { do: 'run', to: V( d.pos.x - fwd.x * 40 + fwd.z * 30, 0, d.pos.z - fwd.z * 40 - fwd.x * 30 ), speed: 7, near: 4, then: 'graze' };
+							if ( Math.random() < 0.6 ) app.audio.bark( d.pos.clone().setY( 1 ) );
+							await S.wait( 0.3 );
+
+						}
+
+					} );
+
+				}
+
+				return false;
 
 			} );
-			void watch;
-			( async () => {
+			// walked on without it: it goes when you are not looking
+			await S.until( () => gone || S.progress > S.path.ids.stand + 45 );
+			if ( ! gone ) {
 
-				await S.until( () => S.progress > base - 8 );
-				// placed while that stretch of path is out of your view
-				let spot = null;
-				await S.until( () => {
-
-					const b = S.behind( 30 );
-					const p = V( b.x, S.app.terrainData.heightAt( b.x, b.z ), b.z );
-					if ( S.hidden( p, 1 ) ) spot = { p, tx: b.tx, tz: b.tz };
-					return spot || S.progress > S.path.ids.wood + 60;
-
-				} );
-				if ( ! spot ) return;
-				F.place( spot.p.x, spot.p.z, Math.atan2( S.cam.x - spot.p.x, S.cam.z - spot.p.z ) );
-				F.tilt = 0.45;
-				F.setMode( 'direct' );
-				shown = true;
-				const t0 = S.time;
-				await S.until( () => S.seenFor > 1.1 || S.time - t0 > 25 );
-				if ( S.seenFor <= 1.1 ) { F.setMode( 'hidden' ); shown = false; return; }
-				// it backs away off the path into the trees, facing you
-				going = true;
-				const side = Math.random() < 0.5 ? 1 : - 1, nx = spot.tz * side, nz = - spot.tx * side;
-				const pts = [ 2.5, 5.5, 8.5, 12, 16 ].map( ( k, i ) => V( spot.p.x + nx * k - spot.tx * i * 0.8, 0, spot.p.z + nz * k - spot.tz * i * 0.8 ) );
-				let gone = false;
-				F.walk( pts, 0.6, S, true ).then( () => ( gone = true ) );
-				const tb = S.time;
-				await S.until( () => gone || ( S.time - tb > 3 && S.hidden( V( F.pos.x, F.pos.y + 1, F.pos.z ), 0.5 ) ) );
+				await S.untilUnseen( 1 );
+				gone = true;
 				F.setMode( 'hidden' );
-				F.pose = 'stand';
-				shown = false;
-
-			} )();
-			void going;
-			await S.until( () => hinds.some( ( d ) => d.cmd && dist2( d.pos, S.cam.x, S.cam.z ) < 9 ) || S.progress > S.path.ids.wood + 70 );
-			for ( const d of hinds ) {
-
-				if ( ! d.cmd ) continue;
-				const ax = d.pos.x - S.cam.x, az = d.pos.z - S.cam.z, al = Math.hypot( ax, az ) || 1;
-				d.cmd = { do: 'run', to: V( d.pos.x + ax / al * 60 + 20, 0, d.pos.z + az / al * 60 ), speed: 7, near: 4, then: 'graze' };
-				if ( Math.random() < 0.5 ) S.app.audio.bark( d.pos.clone().setY( 1 ) );
-				await S.wait( 0.25 );
 
 			}
 
-			await S.wait( 10 );
-			for ( const d of hinds ) { d.cmd = null; d.home.set( d.pos.x, d.pos.z ); }
+		},
+		skip: ( S ) => { S.flags.shedKey = true; },
+	},
+
+	// B7: the forester's lodge. Its lamp still lit, its door open. The diary (the oars are in the
+	// shed, the key "up at the stand with H."), the map on the wall, the field telephone - wind
+	// it: under the static a voice, very slow, reading out the places you have been. The shed:
+	// padlocked; the key from the stand opens it; the oars inside.
+	{
+		id: 'B7-lodge', at: 'lodge', lead: - 35, keep: true,
+		run: async ( S ) => {
+
+			const P = S.props, L = P.lodge, A = L.at;
+			READS.map.pages[ 0 ].image = L.mapCanvas.toDataURL( 'image/jpeg', 0.86 );
+			S.addInteractable( { id: 'diary', x: A.diary.x, y: A.diary.y, z: A.diary.z, r: 1.7, prompt: 'read the diary', use: ( S2 ) => S2.ui.read( READS.forester, () => ( S.flags.readForester = true ) ) } );
+			S.addInteractable( { id: 'map', x: A.map.x, y: A.map.y, z: A.map.z, r: 2.4, prompt: 'look at the map', use: ( S2 ) => S2.ui.read( READS.map ) } );
+			let cranked = false;
+			const radio = S.addInteractable( { id: 'radio', x: A.radio.x, y: A.radio.y, z: A.radio.z, r: 1.7, prompt: 'wind the telephone', use: () => {
+
+				radio.used = false;
+				S.sound.radio( A.radio, cranked ? 5 : 11 );
+				if ( ! cranked ) {
+
+					cranked = true;
+					setTimeout( () => S.ui.caption( '[ static; under it a voice, very slow: “the hut … the tarn … the pond … the glade … this lodge … the boat” ]', 7 ), 2600 );
+
+				} else setTimeout( () => S.ui.caption( '[ static ]', 2.5 ), 1200 );
+
+			} } );
+			let nudged = - 1e3;
+			const shed = S.addInteractable( { id: 'shed', x: A.shed.x, y: A.shed.y, z: A.shed.z, r: 2.2, prompt: S.flags.shedKey ? 'unlock the shed' : 'try the shed door', use: () => {
+
+				if ( ! S.holds( 'the shed key' ) ) {
+
+					shed.used = false;
+					S.sound.latch( A.padlock );
+					S.ui.caption( '[ padlocked ]', 2.5 );
+					if ( S.time - nudged > 20 ) {
+
+						nudged = S.time;
+						S.ui.hint( S.flags.readForester ? 'The key is up at the hunting stand, by the glade.' : 'The forester’s diary, on the desk inside, may say where the key is.', 6 );
+
+					}
+
+					return;
+
+				}
+
+				shed.enabled = false;
+				S.hold( 'the shed key', false );
+				S.sound.latch( A.padlock );
+				S.ui.caption( '[ the padlock opens ]', 2.5 );
+				P.openShed();
+				S.sound.creak( A.shed, 1.4, 0.35, 150, 110 );
+				oars.enabled = true;
+
+			} } );
+			const oars = S.addInteractable( { id: 'oars', x: A.oars.x, y: A.oars.y, z: A.oars.z, r: 2.0, enabled: false, prompt: 'take the oars', use: () => {
+
+				oars.enabled = false;
+				S.hold( 'the oars' );
+				L.parts.oars.visible = false;
+				S.sound.knock( A.oars, 0.3 );
+				S.ui.caption( '[ the oars, over your shoulder ]', 3 );
+
+			} } );
+			// (the key, taken already at the stand, turns the prompt as you come)
+			S.every( () => {
+
+				if ( ! shed.enabled ) return true;
+				shed.prompt = S.holds( 'the shed key' ) ? 'unlock the shed' : 'try the shed door';
+				return false;
+
+			} );
 
 		},
+		skip: ( S ) => { S.flags.shedOpen = true; },
 	},
 
 	// E12: a red squirrel scolding from a trunk, tail flicking, facing past you

@@ -67,7 +67,7 @@ export class Controls {
 		const d = this.dom;
 		const look = ( dx, dy ) => {
 
-			const s = 0.0022 * this.sensitivity;
+			const s = 0.0022 * this.sensitivity * ( this.sensitivityScale ?? 1 );
 			this.targetYaw -= dx * s;
 			this.targetPitch -= dy * s * ( this.invertY ? - 1 : 1 );
 			this.targetPitch = THREE.MathUtils.clamp( this.targetPitch, - 1.5, 1.5 );

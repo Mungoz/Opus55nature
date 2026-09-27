@@ -67,6 +67,9 @@ export function initStoryUI( app ) {
 	const caption = el( 'div', { id: 'story-caption' }, root );
 	const hintEl = el( 'div', { id: 'story-hint' }, root );
 	const carryEl = el( 'div', { id: 'story-carry' }, root );
+	// looking through binoculars: two round fields of view, the rest black
+	const binEl = el( 'div', { id: 'story-binocs' }, root );
+	binEl.innerHTML = '<svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><defs><filter id="bb"><feGaussianBlur stdDeviation="1.2"/></filter><mask id="bm"><rect width="160" height="90" fill="white"/><g filter="url(#bb)"><circle cx="63" cy="45" r="31" fill="black"/><circle cx="97" cy="45" r="31" fill="black"/></g></mask></defs><rect width="160" height="90" fill="black" mask="url(#bm)"/></svg>';
 	const prompt = el( 'div', { id: 'story-prompt' }, root );
 	el( 'i', {}, prompt );
 	const promptLabel = el( 'span', {}, prompt );
@@ -217,6 +220,8 @@ export function initStoryUI( app ) {
 			capTimer = seconds;
 
 		},
+		// the binoculars' view over the screen, or not
+		binocs( on ) { binEl.classList.toggle( 'show', on ); },
 		// what you are carrying (the plank, a key, the oars): list of names, or empty
 		carry( items ) {
 
@@ -247,7 +252,7 @@ export function initStoryUI( app ) {
 			const { doc, index } = S.reading;
 			const p = doc.pages[ index ];
 			const more = index < doc.pages.length - 1;
-			page.innerHTML = `<div class="paper"><div class="head">${p.head || doc.title || ''}</div>${p.entries.map( ( e ) => `<p class="entry ${e.hand || 'hand1'} ${e.faint ? 'faint' : ''} ${e.scrawl ? 'scrawl' : ''}">${e.text}</p>` ).join( '' )}<div class="foot">${more ? ( touch ? 'tap to turn the page' : 'E · turn the page' ) : ( touch ? 'tap to put it back' : 'E · put it back' )}</div></div>`;
+			page.innerHTML = `<div class="paper${p.image ? ' picture' : ''}"><div class="head">${p.head || doc.title || ''}</div>${p.image ? `<img class="sheet" src="${p.image}">` : ''}${p.entries.map( ( e ) => `<p class="entry ${e.hand || 'hand1'} ${e.faint ? 'faint' : ''} ${e.scrawl ? 'scrawl' : ''}">${e.text}</p>` ).join( '' )}<div class="foot">${more ? ( touch ? 'tap to turn the page' : 'E · turn the page' ) : ( touch ? 'tap to put it back' : 'E · put it back' )}</div></div>`;
 
 		},
 		closeReading() {

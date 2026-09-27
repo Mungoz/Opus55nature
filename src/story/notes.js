@@ -143,6 +143,11 @@ export const READS = {
 		} ],
 	},
 
+	map: {
+		title: 'The map on the wall',
+		pages: [ { head: 'Forest district Larchmere · felling 1994', image: null, entries: [] } ],
+	},
+
 	notebook: {
 		title: 'A damp notebook',
 		pages: [ {
