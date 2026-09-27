@@ -317,6 +317,27 @@ export const BEATS = [
 		},
 	},
 
+	// E8: a trout holding in the tail of the pool, just above the bridge, nose to the current,
+	// golden in the clear shallow water there - until your shadow comes over it on the bridge
+	// and it bolts up into the dark of the pool (riverFish darts from anyone looming close)
+	{
+		id: 'E8-trout', at: 'bridge', lead: - 40,
+		run: async ( S ) => {
+
+			const td = S.app.terrainData, R = td.river, B = S.app.layout.PLACES.bridge;
+			const mx = ( B.a[ 0 ] + B.b[ 0 ] ) / 2, mz = ( B.a[ 1 ] + B.b[ 1 ] ) / 2;
+			let i = 0, bd = Infinity;
+			R.forEach( ( q, k ) => { const d = Math.hypot( q.p.x - mx, q.p.y - mz ); if ( d < bd ) { bd = d; i = k; } } );
+			const a = R[ Math.max( 0, i - 1 ) ], b = R[ Math.min( R.length - 1, i + 1 ) ];
+			const dx = b.p.x - a.p.x, dz = b.p.y - a.p.y, l = Math.hypot( dx, dz );
+			// a few metres up from the bridge, a little off the thread of the current
+			const x = mx - dx / l * 3.2 + dz / l * 0.4, z = mz - dz / l * 3.2 - dx / l * 0.4;
+			S.app.riverFish.addFish( x, z, Math.atan2( - dx / l, - dz / l ), R[ i ].surf, 1.35 );
+
+		},
+		skip: ( S ) => {},
+	},
+
 	// F2 and E8: on the footbridge a dipper whirrs off from the stone under it, low up the
 	// pool; following it, you look up the pool's still water - and in it, at the pool's head,
 	// someone is standing in the stream. At the head of the pool the water is empty.

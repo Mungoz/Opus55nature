@@ -119,12 +119,25 @@ export class RiverFish {
 		}
 
 		this.material = creatureMaterial( { wag: 0.02, wagSpeed: 11 } );
-		this.mesh = new THREE.InstancedMesh( brownTroutGeometry(), this.material, Math.max( 1, this.fish.length ) );
+		// (room for a few more lies a director may add)
+		this.mesh = new THREE.InstancedMesh( brownTroutGeometry(), this.material, this.fish.length + 4 );
 		this.mesh.frustumCulled = false;
 		this.mesh.castShadow = false;
 		this.mesh.name = 'river-trout';
 		this.mesh.count = this.fish.length;
 		this.group = this.mesh;
+
+	}
+
+	// another lie: a trout holding at (x, z), nose upstream (up: its heading), in water whose
+	// surface is at surf
+	addFish( x, z, up, surf, s = 1.2 ) {
+
+		if ( this.mesh.count >= this.mesh.instanceMatrix.count ) return null;
+		const f = { lie: new THREE.Vector3( x, 0, z ), up, surf, s, phase: this.rng.next() * 10, state: 'hold', timer: 30, off: new THREE.Vector3(), pos: new THREE.Vector3( x, 0, z ), heading: up, rise: 0 };
+		this.fish.push( f );
+		this.mesh.count = this.fish.length;
+		return f;
 
 	}
 
