@@ -10,6 +10,7 @@ import { StorySound } from './sound.js';
 import { PlayerBody } from './player.js';
 import { BoatScene } from './boatscene.js';
 import { PuddleMirror } from './puddles.js';
+import { U } from '../core/uniforms.js';
 
 const _v = new THREE.Vector3();
 const _n = { dist: 0, d: 0, side: 0 };
@@ -136,7 +137,10 @@ export class Story {
 		app.starlings.auto = false;
 		// after the storm the ground stays wet, and the puddles lie on the trail, for the rest of
 		// the walk; the nearest one a true mirror
-		app.weather.dryRate = 0.003;
+		// (the sheen of the soaked ground dries off in a couple of minutes - left on, the wood's floor
+		// mirrored the night sky and read pitch black; the puddles keep their water much longer)
+		app.weather.dryRate = 0.008;
+		U.uFoliageLift.value = 1;
 		app.weather.puddleDrain = 0.0006;
 		this.puddles = new PuddleMirror( app, app.puddles );
 		// the far grass and ground cover, drawn less far once it is too dark to see them (base values)
@@ -847,6 +851,7 @@ export class Story {
 
 		const app = this.app;
 		this.time += dt;
+		this.dt = dt;
 		if ( this.autopilot ) this._autopilot( dt );
 		if ( this.input && this.begun ) this._track( dt );
 		// the clock eases toward the route's time for where you are, never racing

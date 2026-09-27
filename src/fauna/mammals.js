@@ -129,14 +129,21 @@ export class Mammals {
 		this.burrows = [];
 		const burrowGeos = [ burrowGeometry( 1, true ), burrowGeometry( 2, false ), burrowGeometry( 3, true ), burrowGeometry( 4, false ) ];
 		const face = at.face ?? [ - 5, 508 ];
-		( at.burrows ?? [ [ 1, 494.5 ], [ 10, 497 ], [ 6, 488.5 ], [ - 4, 490 ] ] ).forEach( ( [ x, z ], i ) => {
+		const burrowList = at.burrows ?? [ [ 1, 494.5 ], [ 10, 497 ], [ 6, 488.5 ], [ - 4, 490 ] ];
+		const _n = new THREE.Vector3(), _up = new THREE.Vector3( 0, 1, 0 );
+		burrowList.forEach( ( [ x, z, fx, fz ], i ) => {
 
 			// the holes face roughly toward the start (or the path), so people see into them
-			const h = Math.atan2( face[ 0 ] - x, face[ 1 ] - z ) + ( i % 2 ? 0.55 : - 0.45 );
-			const y = this.terrain.heightAt( x, z );
-			const mesh = new THREE.Mesh( burrowGeos[ i ], this.material );
+			const fp = fx !== undefined ? [ fx, fz ] : face;
+			const h = Math.atan2( fp[ 0 ] - x, fp[ 1 ] - z ) + ( i % 2 ? 0.55 : - 0.45 );
+			// (on a slope the mound leans with the ground and is set into it, so no edge floats
+			// and none is buried: one on the bank "is on a hill and clips")
+			this.terrain.normalAt( x, z, _n, 1.2 );
+			const tilt = new THREE.Quaternion().setFromUnitVectors( _up, _n );
+			const y = Math.min( this.terrain.heightAt( x, z ), ...[ [ 0.9, 0 ], [ - 0.9, 0 ], [ 0, 0.9 ], [ 0, - 0.9 ] ].map( ( [ dx, dz ] ) => this.terrain.heightAt( x + dx, z + dz ) + ( _n.x * dx + _n.z * dz ) / Math.max( 0.3, _n.y ) ) ) - 0.06;
+			const mesh = new THREE.Mesh( burrowGeos[ i % burrowGeos.length ], this.material );
 			mesh.position.set( x, y, z );
-			mesh.rotation.y = h;
+			mesh.quaternion.copy( tilt ).multiply( new THREE.Quaternion().setFromAxisAngle( _up, h ) );
 			mesh.castShadow = mesh.receiveShadow = true;
 			mesh.name = 'burrow';
 			this.group.add( mesh );
@@ -147,7 +154,8 @@ export class Mammals {
 		} );
 
 		this.marmots = [];
-		for ( let i = 0; i < 7; i ++ ) {
+		const nMarmots = Math.max( 7, Math.round( this.burrows.length * 1.6 ) );
+		for ( let i = 0; i < nMarmots; i ++ ) {
 
 			const m = instance( marmotProto );
 			m.home = this.burrows[ i % this.burrows.length ];
@@ -163,7 +171,7 @@ export class Mammals {
 			m.target = m.pos.clone();
 			m.mesh.name = 'marmot';
 			// a big old Alpine marmot is the size of a small dog
-			m.mesh.scale.setScalar( i >= 5 ? rng.range( 0.75, 0.85 ) : rng.range( 1.08, 1.22 ) );
+			m.mesh.scale.setScalar( i % 7 >= 5 ? rng.range( 0.75, 0.85 ) : rng.range( 1.08, 1.22 ) );
 			this.group.add( m.mesh );
 			this.marmots.push( m );
 

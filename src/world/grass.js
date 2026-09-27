@@ -28,7 +28,7 @@ uniform vec2 uHeightRange;
 uniform float uWidth;
 uniform float uType;
 uniform vec4 uFocus;
-uniform vec4 uCrop[ 12 ]; // (x, z, radius, strength): turf grazed short, e.g. around marmot burrows
+uniform vec4 uCrop[ 16 ]; // (x, z, radius, strength): turf grazed short, e.g. around marmot burrows
 attribute vec4 aOff;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
@@ -99,7 +99,7 @@ ${ __HORROR__ ? `#if STORY
 	height *= mix( 0.35, 1.0, smoothstep( 0.35, 1.8, abs( sm.x ) ) ) * ( 1.0 - sm.y * 0.5 );
 #endif` : '' }
 	float cropK = 0.0;
-	for ( int i = 0; i < 12; i ++ ) {
+	for ( int i = 0; i < 16; i ++ ) {
 		vec4 cr = uCrop[ i ];
 		if ( cr.z <= 0.0 ) continue;
 		float k = 1.0 - smoothstep( cr.z * 0.45, cr.z, length( p - cr.xy ) + ( r3 - 0.5 ) * cr.z * 0.3 + ( patchN - 0.5 ) * cr.z * 0.8 );
@@ -204,7 +204,7 @@ void main() {
 	vec3 amb = alb / PI * skyIrradiance( N ) * vAO;
 	vec3 H = normalize( L + V );
 	float spec = pow( saturate( dot( N, H ) ), mix( 30.0, 80.0, uWeather.y ) ) * mix( 0.08, 0.4, uWeather.y ) * vY;
-	vec3 col = ( direct + amb ) * underwaterLight( vWorldPos ) + uSunColor * sh * spec;
+	vec3 col = ( direct + amb ) * underwaterLight( vWorldPos ) + uSunColor * sh * spec + pointLights( alb, N, vWorldPos ) * vAO;
 	col = waterColumn( col, vWorldPos, uSunColor * sh );
 	col = applyAtmosphere( col, vWorldPos );
 	gl_FragColor = vec4( col, 1.0 );
@@ -240,7 +240,7 @@ function bladeGeometry( segs ) {
 }
 
 // shared by every grass layer
-export const CROP = { value: Array.from( { length: 12 }, () => new THREE.Vector4( 0, 0, 0, 0 ) ) };
+export const CROP = { value: Array.from( { length: 16 }, () => new THREE.Vector4( 0, 0, 0, 0 ) ) };
 
 export class GrassLayer {
 

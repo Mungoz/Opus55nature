@@ -46,9 +46,11 @@ vec3 shadeFoliage( vec3 albedo, vec3 N, vec3 V, vec3 wp, float ao, float sh ) {
 	vec3 trans = albedo * saturate( albedo * 2.2 ) * back * ( 0.5 + 0.5 * ao ) * 2.2;
 	vec3 direct = uSunColor * sh * ( albedo / PI * wrap + trans * 0.3 );
 	vec3 amb = albedo / PI * skyIrradiance( N ) * ao;
+	// (the crowns lifted: the sky's light scattered on down through the needles)
+	amb = mix( amb, albedo / PI * skyIrradiance( normalize( N + vec3( 0.0, 1.0, 0.0 ) ) ) * mix( 0.45, 1.0, ao ) * 1.4, uFoliageLift );
 	vec3 H = normalize( L + V );
 	float spec = pow( saturate( dot( N, H ) ), 20.0 ) * 0.035 * sh * ao;
-	return ( direct + amb ) * underwaterLight( wp ) + uSunColor * spec;
+	return ( direct + amb ) * underwaterLight( wp ) + uSunColor * spec + pointLights( albedo, N, wp ) * ( 0.5 + 0.5 * ao );
 }
 
 

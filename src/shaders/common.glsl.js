@@ -68,6 +68,8 @@ uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform vec3 uTrueSunDir;
 uniform float uNight;
+uniform vec4 uPointLights[ 4 ];
+uniform float uFoliageLift;
 uniform sampler2D uSkyLUT;
 uniform sampler2D uIrrLUT;
 uniform sampler2D uTShadow;
@@ -321,6 +323,22 @@ vec3 specGGX( vec3 N, vec3 V, vec3 L, float rough, float f0 ) {
 // how much of the wet sky-sheen a surface shows (a grassy meadow, little: the blades cover the
 // wet ground); a surface's shader may lower it before shading
 float wetSheen = 1.0;
+// warm lamplight from the few small lights about (a lantern's flame, a lit doorway, embers):
+// falling off with distance, wrapped a little round what it lights
+vec3 pointLights( vec3 albedo, vec3 N, vec3 wp ) {
+	vec3 c = vec3( 0.0 );
+	for ( int i = 0; i < 4; i ++ ) {
+		vec4 L = uPointLights[ i ];
+		if ( L.w <= 0.0 ) continue;
+		vec3 d = L.xyz - wp;
+		float d2 = dot( d, d );
+		if ( d2 > 900.0 ) continue;
+		float wrap = saturate( dot( N, d * inversesqrt( d2 ) ) * 0.75 + 0.25 );
+		c += vec3( 1.0, 0.6, 0.28 ) * L.w * wrap / ( d2 + 0.5 ) * ( 1.0 - smoothstep( 400.0, 900.0, d2 ) );
+	}
+	return albedo / PI * c;
+}
+
 vec3 shadeSurface( vec3 albedo, vec3 N, vec3 V, vec3 wp, float ao, float shadow, float rough, float f0 ) {
 	// rain soaks surfaces: darker, glossier, the more so the more they face the sky
 	float wetS = uWeather.y * saturate( N.y * 0.7 + 0.3 );
@@ -337,6 +355,6 @@ vec3 shadeSurface( vec3 albedo, vec3 N, vec3 V, vec3 wp, float ao, float shadow,
 	vec3 R = reflect( -V, N );
 	float fres = F_Schlick( f0, saturate( dot( N, V ) ) );
 	spec += skyRadiance( normalize( vec3( R.x, max( R.y, 0.02 ), R.z ) ) ) * fres * wetS * ao * 0.8 * wetSheen;
-	return direct + amb + spec;
+	return direct + amb + spec + pointLights( albedo, N, wp ) * mix( 0.6, 1.0, ao );
 }
 `;

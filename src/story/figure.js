@@ -305,10 +305,13 @@ export class Figure {
 		this.pose = 'walk';
 		const pts = points.map( ( p ) => new THREE.Vector3( p.x, 0, p.z ) );
 		let i = 0;
+		// (a new walk takes over from the one before)
+		const id = this._walkId = ( this._walkId ?? 0 ) + 1;
 		return new Promise( ( res ) => {
 
 			const step = ( dt ) => {
 
+				if ( this._walkId !== id ) { res(); return true; }
 				if ( i >= pts.length ) {
 
 					this.pose = 'stand';

@@ -10,6 +10,12 @@ export const U = {
 	uTrueSunDir: { value: new THREE.Vector3( 0, 1, 0 ) },
 	uMoonDir: { value: new THREE.Vector3( 0, - 1, 0 ) },
 	uNight: { value: 0 },
+	// small warm lights in the world (lanterns, a lit doorway, a kiln's glow): x, y, z, intensity
+	// (an edition sets them; 0 intensity: none)
+	// an edition may lift the light inside the trees' crowns (0: none): at dusk and at night the
+	// sky's light reaching into a spruce's depths is next to nothing, and they read as black cut-outs
+	uFoliageLift: { value: 0 },
+	uPointLights: { value: Array.from( { length: 4 }, () => new THREE.Vector4( 0, - 1e4, 0, 0 ) ) },
 	uSkyLUT: { value: null },
 	uIrrLUT: { value: null },
 	uHNear: { value: null },

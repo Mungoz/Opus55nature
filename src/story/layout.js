@@ -455,7 +455,10 @@ export function faunaAt( td ) {
 			herd: fordWest( td ),
 			// the marmots' bank, their burrows turned toward the path: on the outside of its bend,
 			// 6 to 13 m off it (they were 17 to 30, too far to see much of)
-			burrows: [ [ 99, 741 ], [ 98, 733 ], [ 95.5, 746.5 ], [ 105, 741 ] ],
+			burrows: [ [ 99, 741 ], [ 98, 733 ], [ 95.5, 746.5 ], [ 105, 741 ],
+				// and a second colony on the alpine turf between the tarn and the falls, beside the way
+				// (each with the point its holes face)
+				[ - 125.7, 740.7, - 131.2, 734.9 ], [ - 128, 747, - 135.6, 739 ], [ - 133.7, 746.9, - 138.5, 741.8 ], [ - 124.4, 746.4, - 133.4, 737 ] ],
 			face: [ 92, 738 ],
 			// a hare that sits tight in the path (E5), and others along the way
 			hares: [ [ 95, 604 ], [ 58, 600 ], [ 118, 676 ], [ - 150, 732 ], [ - 222, 474 ], [ - 30, 660 ] ],

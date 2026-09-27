@@ -35,8 +35,10 @@ export const SKY = {
 	// (as the light goes the eye adapts: the key rises again at dusk, so the wood and the shore
 	// stay readable, if colourless)
 	key: [ [ 'jettyHead', 1.05 ], [ 'gate', 1.0 ], [ 'bridge', 0.88 ], [ 'hut', 0.82 ], [ 'trough', 0.95 ], [ 'tarn', 1.0 ], [ 'strand', 1.0 ] ],
-	lift: [ [ 'jettyHead', 0 ], [ 'hut', 0.08 ], [ 'trough', 0.18 ], [ 'tarn', 0.28 ], [ 'pool', 0.36 ], [ 'wood', 0.5 ], [ 'strand', 0.46 ], [ 'boat', 0.42 ] ],
-	keyLow: [ [ 'jettyHead', 0.03 ], [ 'hut', 0.04 ], [ 'trough', 0.06 ], [ 'tarn', 0.08 ], [ 'pool', 0.1 ], [ 'wood', 0.12 ], [ 'strand', 0.12 ], [ 'boat', 0.11 ] ],
+	// (raised after playtesting - "everything is way too dark at night": the dark of a night wood as
+	// eyes adapted to it see it, not black)
+	lift: [ [ 'jettyHead', 0 ], [ 'hut', 0.1 ], [ 'trough', 0.26 ], [ 'tarn', 0.42 ], [ 'pool', 0.55 ], [ 'wood', 0.72 ], [ 'stand', 0.8 ], [ 'strand', 0.78 ], [ 'boat', 0.72 ] ],
+	keyLow: [ [ 'jettyHead', 0.03 ], [ 'hut', 0.05 ], [ 'trough', 0.09 ], [ 'tarn', 0.13 ], [ 'pool', 0.17 ], [ 'wood', 0.21 ], [ 'stand', 0.24 ], [ 'strand', 0.24 ], [ 'boat', 0.22 ] ],
 	contrast: [ [ 'jettyHead', 1.06 ], [ 'hut', 1.12 ], [ 'strand', 1.16 ] ],
 	cool: [ [ 'jettyHead', 0.0 ], [ 'gate', 0.05 ], [ 'hut', 0.25 ], [ 'tarn', 0.45 ], [ 'strand', 0.5 ] ],
 	desat: [ [ 'jettyHead', 0.0 ], [ 'gate', 0.02 ], [ 'hut', 0.14 ], [ 'tarn', 0.22 ], [ 'boat', 0.3 ] ],
@@ -686,7 +688,9 @@ export const BEATS = [
 					if ( S.time - nudged > 20 ) {
 
 						nudged = S.time;
-						S.ui.hint( S.flags.hutbookRead ? 'The key is on the table in the hut.' : 'The hut book, in the tin by the door, might say where the key is.', 6 );
+						// (what you can know, and do, yet: the hut is shut fast until the storm has gone)
+						const open = S.flags.doorDone || S.props.hut.hinge.rotation.y > 0.5;
+						S.ui.hint( ! S.flags.hutbookRead ? 'The hut book, in the tin by the hut door, might say who chained the gate.' : open ? 'The key is on the table in the hut.' : 'The key is inside the hut - but its door is shut fast. Wait out the storm under the porch.', 7 );
 
 					}
 
@@ -908,23 +912,59 @@ export const BEATS = [
 	// E11: in the larch wood, three hinds standing among the trees, frozen, all staring back
 	// down the path behind you. They don't run until you are very close.
 	{
-		// B6 (HORROR_PLAN 16.2): the hunting stand over the glade. Climb it: the hunter's log, the
-		// shed key on its nail (the forester's shed: the oars), binoculars on the shelf. Across the
-		// glade three hinds stand stock still, staring into the trees at its far edge - and
-		// through the binoculars, it is there among the trunks, facing you. Hold it in them: it
-		// backs away into the trees, and is gone. (E11, the hinds, moved here from the wood.)
+		// B6 (HORROR_PLAN 16.2): the hunting stand over the glade. Climb it: you arrive sat at its
+		// window, the binoculars in front of you, the hunter's log beside them, the shed key on its
+		// nail by the door behind you. Across the glade three hinds stand stock still, staring into
+		// the trees at its far edge - and back among the trunks, forty metres off, it stands, and
+		// moves from tree to tree, slowly. Walk toward it, or hold it in the binoculars, or stare at
+		// it long, and it backs away into the wood and is gone. (Playtest: "you can walk straight up
+		// to him and he doesnt move", "he needs to move", "hunting tower is janky and hard to use".)
 		id: 'B6-stand', at: 'stand', lead: - 40, keep: true,
 		run: async ( S ) => {
 
-			const app = S.app, P = S.props, st = P.stand, I = st.info, W = st.W, F = S.figure;
+			const app = S.app, td = app.terrainData, P = S.props, st = P.stand, I = st.info, W = st.W, F = S.figure;
 			const foot = W( I.ladderFoot );
 			const bottom = W( [ I.ladderFoot[ 0 ] + 0.55, 0, I.ladderFoot[ 2 ] ] );
 			const top = W( I.ladderTop );
-			const eyeTop = V( top.x, top.y + 1.62, top.z );
+			const seat = W( I.seat );
 			const onTop = [ bottom.x, top.y + 0.9, bottom.z ];
-			// the far edge of the glade, across from the window: where it stands, and the hinds look
-			const fwd = W( [ 0, 0, 1 ] ).sub( W( [ 0, 0, 0 ] ) );
+			const fwd = W( [ 0, 0, 1 ] ).sub( W( [ 0, 0, 0 ] ) ), side = V( fwd.z, 0, - fwd.x );
 			const edge = V( st.frame.x + fwd.x * 33, 0, st.frame.z + fwd.z * 33 );
+			// where it stands: back in the trees beyond the glade's far edge, where the stand's window
+			// still has a clear line to it between the trunks - two such places, a few metres apart,
+			// between which it moves
+			// (clear of the crowns too: no tree's branches across the line from the window, but for
+			// the trunks it stands among, near it)
+			const crownsClear = ( a, b ) => {
+
+				const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot( dx, dz );
+				for ( const t of app.forest.trees ) {
+
+					if ( Math.min( a.x, b.x ) - 6 > t.x || Math.max( a.x, b.x ) + 6 < t.x || Math.min( a.z, b.z ) - 6 > t.z || Math.max( a.z, b.z ) + 6 < t.z ) continue;
+					const u = THREE.MathUtils.clamp( ( ( t.x - a.x ) * dx + ( t.z - a.z ) * dz ) / ( len * len ), 0, 1 );
+					if ( ( 1 - u ) * len < 2.2 || u * len < 3 ) continue;
+					if ( Math.hypot( a.x + dx * u - t.x, a.z + dz * u - t.z ) < 2.4 * t.s ) return false;
+
+				}
+
+				return true;
+
+			};
+
+			const spots = [];
+			for ( let k = 0; k < 120 && spots.length < 2; k ++ ) {
+
+				const along = 40 + ( k % 6 ) * 1.6, across = ( ( k * 7 ) % 23 - 11 ) * 1.1;
+				const x = st.frame.x + fwd.x * along + side.x * across, z = st.frame.z + fwd.z * along + side.z * across;
+				const p = V( x, td.heightAt( x, z ), z );
+				if ( S.sight.blocked( seat, V( x, p.y + 1.3, z ), 0.5 ) || ! crownsClear( seat, p ) ) continue;
+				if ( spots.some( ( q ) => q.distanceTo( p ) < 3.5 || q.distanceTo( p ) > 9 ) ) continue;
+				spots.push( p );
+
+			}
+
+			while ( spots.length < 2 ) spots.push( V( edge.x + fwd.x * 8 + side.x * spots.length * 4, 0, edge.z + fwd.z * 8 + side.z * spots.length * 4 ).setY( 0 ) );
+			for ( const p of spots ) p.y = td.heightAt( p.x, p.z );
 			const hinds = app.mammals.deer.filter( ( d ) => ! d.stag ).slice( 0, 3 );
 			const staged = new Set();
 			S.every( () => {
@@ -934,9 +974,9 @@ export const BEATS = [
 
 					if ( staged.has( k ) ) continue;
 					const x = edge.x - fwd.x * ( 10 + k * 3 ) + fwd.z * ( k - 1 ) * 5, z = edge.z - fwd.z * ( 10 + k * 3 ) - fwd.x * ( k - 1 ) * 5;
-					if ( ! S.hidden( V( x, app.terrainData.heightAt( x, z ), z ), 2 ) || ! S.hidden( d.mesh.position, 2 ) ) continue;
-					teleport( d, x, z, Math.atan2( edge.x - x, edge.z - z ) );
-					d.cmd = { do: 'stare', watch: edge.clone(), face: true };
+					if ( ! S.hidden( V( x, td.heightAt( x, z ), z ), 2 ) || ! S.hidden( d.mesh.position, 2 ) ) continue;
+					teleport( d, x, z, Math.atan2( spots[ 0 ].x - x, spots[ 0 ].z - z ) );
+					d.cmd = { do: 'stare', watch: F.pos, face: true };
 					staged.add( k );
 
 				}
@@ -944,38 +984,98 @@ export const BEATS = [
 				return staged.size === hinds.length || S.progress > S.path.ids.stand + 60;
 
 			} );
-			// it stands there from when you come up the way (far off, still, among the trunks)
-			await S.until( () => S.progress > S.path.ids.stand - 25 );
-			const ground = app.terrainData.heightAt( edge.x, edge.z );
-			F.place( edge.x, edge.z, Math.atan2( st.frame.x - edge.x, st.frame.z - edge.z ), ground - 0.03 );
+			// it is there from when you come up the way
+			await S.until( () => S.progress > S.path.ids.stand - 30 );
+			await S.untilHidden( spots[ 0 ], 1 );
+			F.place( spots[ 0 ].x, spots[ 0 ].z, Math.atan2( st.frame.x - spots[ 0 ].x, st.frame.z - spots[ 0 ].z ), spots[ 0 ].y - 0.03 );
 			F.tilt = 0.5;
 			F.pose = 'stand';
 			F.setMode( 'direct' );
-			let gone = false;
-			// the stand: up and down the ladder; what is in it
-			const climbIt = S.addInteractable( { id: 'climb', x: foot.x, y: foot.y + 1.2, z: foot.z, r: 1.9, prompt: 'climb the ladder', use: async () => {
+			let gone = false, leaving = false;
+			// it moves: from one place among the trunks to the other, slowly, and stands
+			( async () => {
+
+				let i = 0;
+				while ( ! leaving ) {
+
+					await S.wait( 3 + Math.random() * 4 );
+					if ( leaving ) break;
+					i = 1 - i;
+					await F.walk( [ spots[ i ] ], 0.45, S );
+					if ( leaving ) break;
+					F.yaw = Math.atan2( S.cam.x - F.pos.x, S.cam.z - F.pos.z );
+
+				}
+
+			} )();
+			const leave = async () => {
+
+				if ( leaving ) return;
+				leaving = true;
+				S.drone( 0.9, 6 );
+				const back = F.pos.clone();
+				const away = [ 3, 6, 9.5, 13, 17 ].map( ( k, i ) => V( back.x + fwd.x * k + side.x * Math.sin( i ) * 0.8, 0, back.z + fwd.z * k + side.z * Math.sin( i ) * 0.8 ) );
+				let done = false;
+				F.walk( away, 1.0, S, true ).then( () => ( done = true ) );
+				const tb = S.time;
+				// (gone among the trunks, or the moment you look away, or soon regardless)
+				await S.until( () => done || S.time - tb > 8 || ( S.time - tb > 1.5 && ( S.unseenFor > 0.3 || S.hidden( V( F.pos.x, F.pos.y + 1, F.pos.z ), 0.5 ) ) ) );
+				F.setMode( 'hidden' );
+				F.pose = 'stand';
+				gone = true;
+				await S.wait( 1.5 );
+				for ( const d of hinds ) {
+
+					if ( ! staged.has( hinds.indexOf( d ) ) ) continue;
+					d.cmd = { do: 'run', to: V( d.pos.x - fwd.x * 40 + side.x * 30, 0, d.pos.z - fwd.z * 40 + side.z * 30 ), speed: 7, near: 4, then: 'graze' };
+					if ( Math.random() < 0.6 ) app.audio.bark( d.pos.clone().setY( 1 ) );
+					await S.wait( 0.3 );
+
+				}
+
+			};
+
+			// held in the binoculars a moment; stared at long; or come toward - it goes
+			let held = 0;
+			S.every( ( dt ) => {
+
+				if ( leaving ) return true;
+				const direct = S.sight.direct > 0 && S.sight.centre < 0.45;
+				held = direct ? held + dt * ( S.binocs ? 1 : 0.3 ) : Math.max( 0, held - dt * 0.5 );
+				if ( held > 1.6 || Math.hypot( S.cam.x - F.pos.x, S.cam.z - F.pos.z ) < 20 ) leave();
+				return false;
+
+			} );
+			// the stand: up the ladder to the seat at the window; down again
+			const mid = V( ( foot.x + bottom.x ) / 2, foot.y + 1.6, ( foot.z + bottom.z ) / 2 );
+			const climbIt = S.addInteractable( { id: 'climb', x: mid.x, y: mid.y, z: mid.z, r: 2.8, prompt: 'climb up to the hide', use: async () => {
 
 				climbIt.enabled = false;
-				S.sound.creak( V( bottom.x, foot.y + 1.2, bottom.z ), 1.4, 0.35, 150, 210 );
-				await S.climb( [ S.cam.clone(), V( foot.x, foot.y + 1.66, foot.z ), V( bottom.x, foot.y + 1.6, bottom.z ), V( onTop[ 0 ], onTop[ 1 ], onTop[ 2 ] ), V( onTop[ 0 ], top.y + 1.62, onTop[ 2 ] ), eyeTop ], 4.2 );
+				S.sound.creak( V( bottom.x, foot.y + 1.2, bottom.z ), 1.2, 0.35, 150, 210 );
+				await S.climb( [ S.cam.clone(), V( foot.x, foot.y + 1.66, foot.z ), V( bottom.x, foot.y + 1.6, bottom.z ), V( onTop[ 0 ], onTop[ 1 ], onTop[ 2 ] ), V( onTop[ 0 ], top.y + 1.62, onTop[ 2 ] ), seat ], 3.2 );
+				// (sat at the window, looking out over the glade)
+				const c = app.controls;
+				c.yaw = c.targetYaw = Math.atan2( - fwd.x, - fwd.z );
+				c.pitch = c.targetPitch = - 0.06;
 				S.flags.onStand = true;
 				downIt.enabled = logIt.enabled = binIt.enabled = true;
 				keyIt.enabled = ! S.flags.shedKey;
+				if ( ! S.flags.standTold ) { S.flags.standTold = true; S.ui.hint( 'Binoculars on the shelf in front of you. The way down is behind you.', 6 ); }
 
 			} } );
-			const downIt = S.addInteractable( { id: 'climbdown', x: top.x, y: top.y + 0.6, z: top.z, r: 1.6, enabled: false, prompt: 'climb down', use: async () => {
+			const downIt = S.addInteractable( { id: 'climbdown', x: top.x, y: top.y + 1.0, z: top.z, r: 2.6, enabled: false, prompt: 'climb down', use: async () => {
 
 				downIt.enabled = keyIt.enabled = logIt.enabled = binIt.enabled = false;
 				if ( S.binocs ) S.binoculars( false );
-				S.sound.creak( V( bottom.x, top.y, bottom.z ), 1.2, 0.3, 170, 130 );
-				await S.climb( [ S.cam.clone(), V( onTop[ 0 ], top.y + 1.62, onTop[ 2 ] ), V( onTop[ 0 ], onTop[ 1 ], onTop[ 2 ] ), V( bottom.x, foot.y + 1.6, bottom.z ), V( foot.x, foot.y + 1.66, foot.z ) ], 3.6, { free: true } );
+				S.sound.creak( V( bottom.x, top.y, bottom.z ), 1.0, 0.3, 170, 130 );
+				await S.climb( [ S.cam.clone(), V( onTop[ 0 ], top.y + 1.62, onTop[ 2 ] ), V( onTop[ 0 ], onTop[ 1 ], onTop[ 2 ] ), V( bottom.x, foot.y + 1.6, bottom.z ), V( foot.x, foot.y + 1.66, foot.z ) ], 2.8, { free: true } );
 				S.pinned = false;
 				S.flags.onStand = false;
 				climbIt.enabled = true;
 
 			} } );
 			const kp = W( I.key ), lp = W( I.log ), bp = W( I.binoculars );
-			const keyIt = S.addInteractable( { id: 'shedkey', x: kp.x, y: kp.y, z: kp.z, r: 1.7, enabled: false, prompt: 'take the key', use: () => {
+			const keyIt = S.addInteractable( { id: 'shedkey', x: kp.x, y: kp.y, z: kp.z, r: 2.4, enabled: false, prompt: 'take the key', use: () => {
 
 				keyIt.enabled = false;
 				S.flags.shedKey = true;
@@ -985,67 +1085,21 @@ export const BEATS = [
 				S.ui.caption( '[ a small key, a wooden tag on a string: SHED ]', 3.5 );
 
 			} } );
-			const logIt = S.addInteractable( { id: 'hunterlog', x: lp.x, y: lp.y, z: lp.z, r: 2.2, enabled: false, prompt: 'read the log', use: ( S2 ) => S2.ui.read( READS.hunterlog ) } );
-			// (sat down at the window with them; E again lowers them, and you get up)
-			const seat = W( I.seat );
-			const binIt = S.addInteractable( { id: 'binocs', x: bp.x, y: bp.y, z: bp.z, r: 2.2, enabled: false, prompt: 'look through the binoculars', use: async () => {
-
-				binIt.enabled = downIt.enabled = false;
-				await S.climb( [ S.cam.clone(), seat ], 0.9 );
-				S.binoculars( true );
-				await S.until( () => ! S.binocs );
-				await S.climb( [ S.cam.clone(), eyeTop ], 0.8 );
-				binIt.enabled = downIt.enabled = true;
-
-			} } );
-			// held in the binoculars for a moment, it backs off into the trees, facing you, and
-			// is gone; the hinds break and run
-			let held = 0;
-			S.every( ( dt ) => {
-
-				if ( gone ) return true;
-				held = S.binocs && S.sight.direct > 0 && S.sight.centre < 0.35 ? held + dt : Math.max( 0, held - dt * 0.5 );
-				if ( held > 1.6 ) {
-
-					gone = true;
-					S.drone( 0.9, 6 );
-					const away = [ 3, 6, 9.5, 13, 17 ].map( ( k, i ) => V( edge.x + fwd.x * k + fwd.z * Math.sin( i ) * 0.8, 0, edge.z + fwd.z * k - fwd.x * Math.sin( i ) * 0.8 ) );
-					let done = false;
-					F.walk( away, 0.55, S, true ).then( () => ( done = true ) );
-					const tb = S.time;
-					S.until( () => done || ( S.time - tb > 2.5 && S.hidden( V( F.pos.x, F.pos.y + 1, F.pos.z ), 0.5 ) ) ).then( async () => {
-
-						F.setMode( 'hidden' );
-						F.pose = 'stand';
-						await S.wait( 1.5 );
-						for ( const d of hinds ) {
-
-							if ( ! staged.has( hinds.indexOf( d ) ) ) continue;
-							d.cmd = { do: 'run', to: V( d.pos.x - fwd.x * 40 + fwd.z * 30, 0, d.pos.z - fwd.z * 40 - fwd.x * 30 ), speed: 7, near: 4, then: 'graze' };
-							if ( Math.random() < 0.6 ) app.audio.bark( d.pos.clone().setY( 1 ) );
-							await S.wait( 0.3 );
-
-						}
-
-					} );
-
-				}
-
-				return false;
-
-			} );
+			const logIt = S.addInteractable( { id: 'hunterlog', x: lp.x, y: lp.y, z: lp.z, r: 2.4, enabled: false, prompt: 'read the log', use: ( S2 ) => S2.ui.read( READS.hunterlog ) } );
+			const binIt = S.addInteractable( { id: 'binocs', x: bp.x, y: bp.y, z: bp.z, r: 2.4, enabled: false, prompt: 'look through the binoculars', use: () => { binIt.used = false; S.binoculars( true ); } } );
 			// walked on without it: it goes when you are not looking
 			await S.until( () => gone || S.progress > S.path.ids.stand + 45 );
 			if ( ! gone ) {
 
+				leaving = true;
 				await S.untilUnseen( 1 );
-				gone = true;
 				F.setMode( 'hidden' );
+				F.pose = 'stand';
 
 			}
 
 		},
-		skip: ( S ) => { S.flags.shedKey = true; },
+		skip: ( S ) => { S.flags.shedKey = true; S.hold( 'the shed key' ); },
 	},
 
 	// A2 and B2: the plaque at the plunge pool; the MISSING poster at the Black Wood's edge

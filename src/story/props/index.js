@@ -19,6 +19,8 @@ import { buildClearing, buildGullyBridge } from './clearing.js';
 import { buildCamp, buildKiln } from './camp.js';
 import { drawValleyMap } from './map.js';
 import { Smoke } from './smoke.js';
+import { deerFence, wireMeshTexture } from './fences.js';
+import { U } from '../../core/uniforms.js';
 import { woodsAt } from '../layout.js';
 import { Water } from '../../world/water.js';
 
@@ -532,6 +534,62 @@ export class StoryProps {
 
 	}
 
+	// A storm lantern hung at ( lx, ly, lz ) in frame f (its bail on a nail): an iron base and
+	// cap, the glass glowing round the flame when lit. Returns { group, glow, at } (at: the flame)
+	_lantern( f, lx, ly, lz, name ) {
+
+		const k = new Kit( () => - 10 ), g = new Kit( () => - 10 );
+		const cyl = ( kit, y, r, h, mat, c, seg = 12 ) => {
+
+			const geo = new THREE.CylinderGeometry( r, r, h, seg );
+			geo.translate( 0, y + h / 2, 0 );
+			kit.add( geo, mat, c, [ 0, 1, 0 ], [ 0, y, 0 ] );
+
+		};
+
+		cyl( k, - 0.26, 0.07, 0.05, M.IRON, '#3e3a35', 14 );
+		cyl( k, - 0.06, 0.066, 0.03, M.IRON, '#3e3a35', 14 );
+		cyl( k, - 0.03, 0.022, 0.04, M.IRON, '#3e3a35', 8 );
+		for ( const a of [ 0, 2.1, 4.2 ] ) k.box( Math.cos( a ) * 0.062, - 0.14, Math.sin( a ) * 0.062, 0.008, 0.16, 0.008, M.IRON, '#3e3a35' );
+		ring( k, new THREE.Vector3( 0, 0.03, 0 ), new THREE.Vector3( 0, 0, 1 ), 0.05, 0.005 );
+		cyl( g, - 0.21, 0.052, 0.15, M.GLOW, '#3a1e08', 14 );
+		cyl( g, - 0.18, 0.01, 0.04, M.GLOW, '#c08030', 6 );
+		const group = new THREE.Group();
+		group.add( this._mesh( k.build(), this.material, name ) );
+		const glow = this._mesh( g.build(), this.material, name + '-glow' );
+		glow.castShadow = false;
+		group.add( glow );
+		const w = f.toWorld( lx, ly, lz );
+		group.position.copy( w );
+		this.group.add( group );
+		return { group, glow, at: w.clone().add( new THREE.Vector3( 0, - 0.13, 0 ) ) };
+
+	}
+
+	// a light in the world (see U.uPointLights): p, intensity w, lit() whether it is, flicker
+	light( p, w, lit = () => true, flicker = 1 ) {
+
+		( this.lights ??= [] ).push( { p, w, lit, flicker, seed: Math.random() * 10 } );
+
+	}
+
+	// the four lights nearest the viewer that are lit, each frame
+	_updateLights( time ) {
+
+		const cam = this.app.camera.position, L = U.uPointLights.value;
+		const on = ( this.lights || [] ).filter( ( l ) => l.lit() && l.p.distanceToSquared( cam ) < 90 * 90 );
+		on.sort( ( a, b ) => a.p.distanceToSquared( cam ) - b.p.distanceToSquared( cam ) );
+		for ( let i = 0; i < 4; i ++ ) {
+
+			const l = on[ i ];
+			if ( ! l ) { L[ i ].set( 0, - 1e4, 0, 0 ); continue; }
+			const fl = 1 + l.flicker * ( 0.06 * Math.sin( time * 2.3 + l.seed ) + 0.04 * Math.sin( time * 8.1 + l.seed * 3 + Math.sin( time * 1.7 ) ) );
+			L[ i ].set( l.p.x, l.p.y, l.p.z, l.w * fl );
+
+		}
+
+	}
+
 	// the Black Wood's places (HORROR_PLAN 16.2)
 	_woods() {
 
@@ -539,6 +597,7 @@ export class StoryProps {
 		const P = PLACES.stand;
 		this.stand = this._placeProp( buildStand, P.x, P.z, P.yaw, 'stand' );
 		this._lodge();
+
 		this._plaque();
 		this._poster();
 		// the wayside shrine at the wood's edge: candles lit, J.'s photograph on the post, a card
@@ -566,6 +625,50 @@ export class StoryProps {
 				this.group.add( this.lodgeSmoke.mesh );
 
 			}
+
+		}
+		// lights: the hut's porch lantern (lit when the storm has gone) and its doorway (while the
+		// lamp inside burns); the lodge's porch lantern and doorway; the kiln's embers; the shrine's
+		// candles; the jetty's lamp at the end
+		{
+
+			const f = this.hutFrame, S = this.story;
+			const hl = this.hutLantern = this._lantern( f, - HUT.W / 2 + 0.34, 1.95, HUT.L / 2 + HUT.PORCH - 0.12, 'hut-lantern' );
+			hl.glow.visible = false;
+			this.light( hl.at, 1.4, () => ( hl.glow.visible = !! S.flags.stormOver ) );
+			this.light( f.toWorld( - 0.8, 1.1, HUT.L / 2 + 0.35 ), 0.7, () => !! this._inside, 0.6 );
+			const L = this.lodge, I = L.info, lf = L.frame;
+			const ll = this._lantern( lf, I.doorway[ 0 ] + 0.95, I.floorY + 1.95, I.doorway[ 2 ] + 0.2, 'lodge-lantern' );
+			this.light( ll.at, 1.3 );
+			this.light( lf.toWorld( I.doorway[ 0 ], I.floorY + 1.1, I.doorway[ 2 ] + 0.4 ), 0.55, () => true, 0.6 );
+			// the kiln: embers glowing deep in the vents round its foot, and their light on the ground
+			// in front of it
+			const K = this.kiln, kv = K.info.vents || [];
+			if ( kv.length ) {
+
+				const g = new Kit( () => - 10 );
+				kv.slice( 0, - 5 ).forEach( ( v, i ) => {
+
+					if ( i % 2 ) return;
+					const p = K.W( v ), c = K.frame;
+					const inward = new THREE.Vector3( c.x - p.x, 0, c.z - p.z ).normalize().multiplyScalar( 0.07 );
+					g.stone( p.x + inward.x, p.y - 0.01, p.z + inward.z, 0.035, 0.03, 0.035, '#3c1403', i );
+
+				} );
+				const em = this._mesh( g.build(), this.material, 'kiln-embers' );
+				em.castShadow = false;
+				// (kit.stone draws in M.STONE: the embers must glow)
+				const mat = em.geometry.getAttribute( 'aMat' );
+				if ( mat ) { mat.array.fill( M.GLOW ); mat.needsUpdate = true; }
+				this.group.add( em );
+				this.light( K.W( [ 0, 0.7, 3.4 ] ), 0.55, () => true, 2.5 );
+				this.light( K.W( [ - 2.8, 0.7, - 1.5 ] ), 0.4, () => true, 2.5 );
+
+			}
+
+			const sh = this.shrine;
+			if ( sh?.info.candles ) this.light( sh.W( sh.info.candles ).add( new THREE.Vector3( 0, 0.1, 0 ) ), 0.25, () => true, 2 );
+			if ( this.lamp ) this.light( this.lamp.clone(), 1.6, () => !! this.lampLit );
 
 		}
 
@@ -689,18 +792,35 @@ export class StoryProps {
 	_poster() {
 
 		const P = PLACES.poster, td = this.app.terrainData, path = this.story.path;
-		let best = null, bd = 6;
+		// a trunk at the wood's edge, a few steps off the path, facing it (the poster once hung
+		// from a point with no tree near it: "the missing notice is floating in mid air")
+		const d0 = path.nearest( P.x, P.z ).d;
+		let best = null, bs = 1e9;
 		for ( const t of this.app.forest.trees ) {
 
-			if ( Math.abs( t.x - P.x ) > 6 || Math.abs( t.z - P.z ) > 6 ) continue;
-			const d = Math.hypot( t.x - P.x, t.z - P.z );
-			if ( d < bd && this.app.forest.variants[ t.variant ].trunk ) { bd = d; best = t; }
+			if ( Math.abs( t.x - P.x ) > 40 || Math.abs( t.z - P.z ) > 40 ) continue;
+			const v = this.app.forest.variants[ t.variant ];
+			if ( ! v.trunk || v.trunk * t.s < 0.12 ) continue;
+			const n = path.nearest( t.x, t.z );
+			if ( n.dist < 2.2 || n.dist > 6 || Math.abs( n.d - d0 ) > 30 ) continue;
+			const score = Math.abs( n.dist - 3.2 ) + Math.abs( n.d - d0 ) * 0.1;
+			if ( score < bs ) { bs = score; best = t; }
 
 		}
 
-		const s = path.at( path.nearest( P.x, P.z ).d );
 		const tx = best ? best.x : P.x, tz = best ? best.z : P.z;
-		const r = best ? this.app.forest.variants[ best.variant ].trunk * best.s * 0.85 : 0.05;
+		const s = path.at( path.nearest( tx, tz ).d );
+		// (the trunk's radius at chest height, a little less than at its foot)
+		const r = best ? this.app.forest.variants[ best.variant ].trunk * best.s * 0.78 : 0.07;
+		if ( ! best ) {
+
+			// no tree: its own post
+			const k = new Kit( ( x, z ) => td.heightAt( x, z ) );
+			k.pole( new THREE.Vector3( tx, td.heightAt( tx, tz ) - 0.3, tz ), new THREE.Vector3( tx, td.heightAt( tx, tz ) + 1.8, tz ), 0.07, M.LOG, col( '#6e6254' ), 3 );
+			this.group.add( this._mesh( k.build(), this.material, 'poster-post' ) );
+			this.story.collision.circle( tx, tz, 0.09, 'post' );
+
+		}
 		const nx = s.x - tx, nz = s.z - tz, nl = Math.hypot( nx, nz ) || 1;
 		const yaw = Math.atan2( nx / nl, nz / nl );
 		const y = td.heightAt( tx, tz ) + 1.45;
@@ -802,25 +922,47 @@ export class StoryProps {
 
 		const g = BANKS.find( ( b ) => b.h < 0 );
 		if ( ! g ) return;
-		const path = this.story.path, C = this.story.collision;
+		const td = this.app.terrainData, path = this.story.path, C = this.story.collision;
 		const [ ax, az ] = g.a, [ bx, bz ] = g.b, l = Math.hypot( bx - ax, bz - az );
 		const ux = ( bx - ax ) / l, uz = ( bz - az ) / l, nx = - uz, nz = ux;
 		const X = path.at( path.ids.gully );
 		const tx = ( X.x - ax ) * ux + ( X.z - az ) * uz;
+		const off = g.w + 1.6;
+		const at = ( t, side ) => [ ax + ux * t + nx * off * side, az + uz * t + nz * off * side ];
 		this.gully = { a: g.a, b: g.b, cross: X, u: [ ux, uz ], n: [ nx, nz ] };
+		// its rims, the whole length, but for the footbridge; closed across at both ends
 		for ( const side of [ - 1, 1 ] ) {
 
-			const off = side * ( g.w + 1.6 );
 			const run = ( t0, t1 ) => {
 
 				const pts = [];
-				for ( let t = t0; t <= t1 + 0.01; t += 4 ) pts.push( [ ax + ux * t + nx * off, az + uz * t + nz * off ] );
+				for ( let t = t0; t < t1; t += 4 ) pts.push( at( t, side ) );
+				pts.push( at( t1, side ) );
 				C.polyline( pts, 0.25, 'gully' );
 
 			};
 
-			run( l * 0.08, tx - 0.95 );
-			run( tx + 0.95, l * 0.92 );
+			run( 0, tx - 0.95 );
+			run( tx + 0.95, l );
+
+		}
+
+		for ( const t of [ 0, l ] ) C.polyline( [ at( t, - 1 ), at( t, 1 ) ], 0.25, 'gully' );
+		// and from its ends, a deer fence round the planting: west, up onto the steep face of the
+		// spur; east, across to the stream - so the only way on from the tarn is over the
+		// footbridge (the fence stands on the north side of the gully's end)
+		const west = [ at( 0, 1 ), [ - 205, 672 ], [ - 216, 686 ], [ - 226, 700 ], [ - 232, 705 ] ];
+		const east = [ at( l, 1 ), [ - 60, 646 ], [ - 20, 645 ], [ 20, 646 ], [ 63.5, 645.5 ] ];
+		const mat = paintedMaterial( wireMeshTexture(), { side: THREE.DoubleSide, rough: 0.5 } );
+		for ( const pts of [ west, east ] ) {
+
+			const F = deerFence( ( x, z ) => td.heightAt( x, z ), pts );
+			this.group.add( this._mesh( F.geometry, this.material, 'deer-fence' ) );
+			const m = new THREE.Mesh( F.mesh, mat );
+			m.name = 'deer-fence-mesh';
+			m.castShadow = true;
+			this.group.add( m );
+			C.polyline( pts, 0.12, 'deerfence' );
 
 		}
 
@@ -879,6 +1021,18 @@ export class StoryProps {
 		ring( k, new THREE.Vector3( lp.x, lp.y + 0.045, lp.z ), new THREE.Vector3( nx, 0, nz ), 0.022, 0.005 );
 		this.topChain = this._mesh( k.build(), this.material, 'top-gate-chain' );
 		this.group.add( this.topChain );
+		// (and on from the tarn's edge, along its east shore and down to the gully's rim: the gate
+		// could be walked round through the tarn's shallows - "you can just walk around the padlocked
+		// gate by the hut")
+		{
+
+			const start = pts[ 0 ];
+			const more = [ start, [ - 90.8, 676 ], [ - 90.6, 667 ], [ - 91.4, 658 ], [ - 92.4, 651 ], [ - 93.1, 646.4 ] ];
+			const F2 = buildFence( ground, more, - 1, 13 );
+			this.group.add( this._mesh( F2.geometry, this.material, 'top-fence-2' ) );
+			C.polyline( more, 0.09, 'fence' );
+
+		}
 
 	}
 
@@ -1228,6 +1382,7 @@ export class StoryProps {
 	update( dt, time ) {
 
 		this.glow?.update( dt, time );
+		this._updateLights( time );
 		// the smoke
 		const cam = this.app.camera;
 		this.kilnSmoke?.update( dt, time, cam );

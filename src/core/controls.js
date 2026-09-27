@@ -75,6 +75,7 @@ export class Controls {
 		};
 
 		d.addEventListener( 'contextmenu', ( e ) => e.preventDefault() );
+		document.addEventListener( 'pointerlockchange', () => { this._lockedAt = performance.now(); this._moveAvg = 8; } );
 		const canLook = () => this.enabled || this.lookFree;
 		d.addEventListener( 'pointerdown', ( e ) => {
 
@@ -91,6 +92,15 @@ export class Controls {
 			if ( ! canLook() || e.pointerType === 'touch' ) return;
 			if ( document.pointerLockElement === d ) {
 
+				// Chrome now and then reports one wild movement under pointer lock (hundreds of
+				// pixels in a single event, often just after the lock is taken or on a stutter):
+				// the view would jump. A single event far beyond the recent ones is dropped.
+				const mag = Math.hypot( e.movementX, e.movementY );
+				const avg = this._moveAvg ?? 8;
+				const now = performance.now();
+				const fresh = now - ( this._lockedAt ?? 0 ) < 250;
+				if ( fresh || ( mag > 180 && mag > avg * 8 ) ) return;
+				this._moveAvg = avg * 0.8 + mag * 0.2;
 				look( e.movementX, e.movementY );
 				return;
 
