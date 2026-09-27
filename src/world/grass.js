@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { commonParsGLSL, terrainUniformsGLSL, terrainLookupFnGLSL } from '../shaders/common.glsl.js';
 import { noiseGLSL } from '../shaders/noise.glsl.js';
 import { paletteGLSL } from '../shaders/palette.glsl.js';
-import { sharedUniforms } from '../core/uniforms.js';
+import { sharedUniforms, U } from '../core/uniforms.js';
 import { RNG } from '../core/rng.js';
 
 // "Infinite" grass: a fixed grid of blade instances tiled around the camera.
@@ -250,9 +250,6 @@ export class GrassLayer {
 		const n = Math.floor( tile / spacing );
 		const rng = new RNG( seed );
 		const blade = bladeGeometry( segs );
-		const geo = new THREE.InstancedBufferGeometry();
-		geo.index = blade.index;
-		geo.setAttribute( 'position', blade.getAttribute( 'position' ) );
 		const off = new Float32Array( n * n * 4 );
 		let k = 0;
 		for ( let j = 0; j < n; j ++ ) {
@@ -268,8 +265,14 @@ export class GrassLayer {
 
 		}
 
-		geo.setAttribute( 'aOff', new THREE.InstancedBufferAttribute( off, 4 ) );
-		geo.instanceCount = n * n;
+		// The tile in K x K chunks, each its own draw: the shader wraps every blade into the
+		// square round the camera, so a chunk of the tile always lands in a known square of the
+		// ground (update() moves its bounding sphere there), and three.js skips the chunks out
+		// of each camera's view - the eye's and every mirror's - instead of running the vertex
+		// shader for every blade in the tile, behind you as well.
+		const K = Math.max( 1, Math.min( 8, Math.floor( n / 24 ) ) ), per = Math.ceil( n / K );
+		this.tile = tile;
+		this.chunks = [];
 		this.uniforms = {
 			...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ),
 			...sharedUniforms(),
@@ -289,10 +292,66 @@ export class GrassLayer {
 			lights: true,
 			side: THREE.DoubleSide,
 		} );
-		this.mesh = new THREE.Mesh( geo, this.material );
-		this.mesh.frustumCulled = false;
-		this.mesh.layers.set( 1 );
+		this.mesh = new THREE.Group();
 		this.mesh.name = type ? 'reeds' : 'grass';
+		for ( let cb = 0; cb < K; cb ++ ) for ( let ca = 0; ca < K; ca ++ ) {
+
+			const i0 = ca * per, i1 = Math.min( n, i0 + per ), j0 = cb * per, j1 = Math.min( n, j0 + per );
+			if ( i1 <= i0 || j1 <= j0 ) continue;
+			const sub = new Float32Array( ( i1 - i0 ) * ( j1 - j0 ) * 4 );
+			let q = 0;
+			for ( let j = j0; j < j1; j ++ ) for ( let i = i0; i < i1; i ++ ) {
+
+				sub.set( off.subarray( ( j * n + i ) * 4, ( j * n + i ) * 4 + 4 ), q );
+				q += 4;
+
+			}
+
+			const geo = new THREE.InstancedBufferGeometry();
+			geo.index = blade.index;
+			geo.setAttribute( 'position', blade.getAttribute( 'position' ) );
+			geo.setAttribute( 'aOff', new THREE.InstancedBufferAttribute( sub, 4 ) );
+			geo.instanceCount = ( i1 - i0 ) * ( j1 - j0 );
+			geo.boundingSphere = new THREE.Sphere( new THREE.Vector3(), 1 );
+			const m = new THREE.Mesh( geo, this.material );
+			m.layers.set( 1 );
+			m.name = this.mesh.name;
+			m.frustumCulled = true;
+			this.mesh.add( m );
+			// the chunk's offsets span [ x0, x1 ) x [ z0, z1 )
+			this.chunks.push( { m, x0: i0 * spacing, x1: i1 * spacing, z0: j0 * spacing, z1: j1 * spacing } );
+
+		}
+
+	}
+
+	setLayer( l ) {
+
+		for ( const c of this.chunks ) c.m.layers.set( l );
+
+	}
+
+	// the chunks' bounding spheres, where the shader puts their blades round the viewer (x, y, z)
+	update( x, y, z ) {
+
+		const T = this.tile;
+		const place = ( a0, a1, c ) => {
+
+			const k0 = Math.floor( ( c - a0 ) / T + 0.5 ), k1 = Math.floor( ( c - ( a1 - 1e-3 ) ) / T + 0.5 );
+			// (a chunk across the seam of the wrap is split between the two far edges: cover it all)
+			return k0 === k1 ? [ a0 + k0 * T, a1 + k0 * T ] : [ c - T / 2, c + T / 2 ];
+
+		};
+
+		for ( const ch of this.chunks ) {
+
+			const [ xa, xb ] = place( ch.x0, ch.x1, x ), [ za, zb ] = place( ch.z0, ch.z1, z );
+			const S = ch.m.geometry.boundingSphere;
+			// (the ground's height across a chunk is unknown here: a generous margin up and down)
+			S.center.set( ( xa + xb ) / 2, y, ( za + zb ) / 2 );
+			S.radius = Math.hypot( xb - xa, zb - za ) / 2 + 30;
+
+		}
 
 	}
 
@@ -309,8 +368,17 @@ export class Meadow {
 		this.far = new GrassLayer( { tile: far * 2, spacing: 0.34 / Math.sqrt( d ), segs: 3, radius: far, fadeIn: near * 0.85, heightRange: [ 0.28, 0.65 ], width: 0.1, seed: 5 } );
 		this.reeds = new GrassLayer( { tile: 90, spacing: 0.3, segs: 4, radius: 45, heightRange: [ 1.1, 2.1 ], width: 0.035, type: 1, seed: 9 } );
 		// (the far grass is for the eye only: no mirror needs it - LAYERS.DETAIL)
-		this.far.mesh.layers.set( 5 );
+		this.far.setLayer( 5 );
 		this.group.add( this.near.mesh, this.far.mesh, this.reeds.mesh );
+
+	}
+
+	// once a frame, before any pass: where the blades are round the viewer
+	update( camera ) {
+
+		const F = U.uFocus.value, p = camera.position;
+		const x = F.w > 0.5 ? F.x : p.x, z = F.w > 0.5 ? F.y : p.z;
+		for ( const l of [ this.near, this.far, this.reeds ] ) l.update( x, p.y, z );
 
 	}
 

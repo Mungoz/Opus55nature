@@ -381,6 +381,7 @@ export class App {
 		this.forest.update( this.camera );
 		this.rocks.update( this.camera );
 		this.waterPlants.update( this.camera );
+		this.meadow.update( this.camera );
 		splitSharedMaterials( this.scene );
 		// compile in the background where the browser supports it (keeps the loader animating)
 		await r.compileAsync( this.scene, this.camera );
@@ -643,6 +644,7 @@ export class App {
 		this.forest.update( this.camera );
 		this.rocks.update( this.camera );
 		this.waterPlants.update( this.camera );
+		this.meadow.update( this.camera );
 		const sunEl = this.sky.sunElevation;
 		const day = sunEl > - 7 && this.weather.state.rain < 0.3;
 		// murmurations gather in the late afternoon and at dusk
