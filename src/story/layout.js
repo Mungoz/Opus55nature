@@ -292,6 +292,20 @@ export function waterClear( x, z, kind ) {
 	const dx = x - j.x, dz = z - j.z;
 	const lx = c * dx - s * dz, lz = s * dx + c * dz;
 	if ( lz > - 3 && lz < 26 && lx > - 7 && lx < 8 ) return true;
+	// the row-in's lane, from out in the bay to the berth (boatscene.rowIn, in the jetty's frame):
+	// nothing growing up through the boat as it comes in
+	if ( lz > 10 && lz < 100 && lx > - 6 && lx < 38 ) {
+
+		const L = [ [ 2.5, 16.6 ], [ 3.5, 23.6 ], [ 8.5, 40.6 ], [ 19.5, 66.1 ], [ 30.5, 91.6 ] ];
+		for ( let i = 0; i < L.length - 1; i ++ ) {
+
+			const [ ax, az ] = L[ i ], [ bx, bz ] = L[ i + 1 ], dx = bx - ax, dz = bz - az;
+			const u = Math.min( 1, Math.max( 0, ( ( lx - ax ) * dx + ( lz - az ) * dz ) / ( dx * dx + dz * dz ) ) );
+			if ( Math.hypot( ax + dx * u - lx, az + dz * u - lz ) < 3.4 ) return true;
+
+		}
+
+	}
 	for ( const b of [ PLACES.boatEnd, PLACES.boatJ ] ) if ( Math.hypot( x - b.x, z - b.z ) < 6 ) return true;
 	// nothing grows up through the boardwalk's planks
 	if ( Math.abs( z - 290 ) < 70 && x < - 195 && x > - 255 && boardwalkDist( x, z ) < ( kind === 'reed' ? 1.05 : 0.9 ) ) return true;

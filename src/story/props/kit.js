@@ -263,12 +263,13 @@ void main() {
 			// inside: larch needles and a few leaves settle in the bottom; rainwater stands
 			// in the bilge, a small dark mirror
 			float floorish = smoothstep( 0.6, 0.9, n0.y ) * ( 1.0 - smoothstep( 0.03, 0.14, vObj.y ) );
-			vec3 vo = voronoi( p.xz * 19.0 );
-			float leaf = smoothstep( 0.32, 0.18, vo.x ) * step( 0.6, vo.z ) * floorish;
-			alb = mix( alb, mix( vec3( 0.55, 0.36, 0.07 ), vec3( 0.3, 0.14, 0.04 ), hash11( vo.z * 91.0 ) ), leaf );
+			// (a few sodden leaves, a hand's breadth apart at most, dark brown - not a pattern)
+			vec3 vo = voronoi( vec2( p.x * 7.0, p.z * 5.0 ) );
+			float leaf = smoothstep( 0.26, 0.14, vo.x ) * step( 0.9, vo.z ) * floorish;
+			alb = mix( alb, mix( vec3( 0.3, 0.18, 0.05 ), vec3( 0.17, 0.09, 0.03 ), hash11( vo.z * 91.0 ) ), leaf * 0.9 );
 			float nd = abs( sin( dot( p.xz, vec2( 173.0, 91.0 ) ) + gnoise( p.xz * 30.0 ) * 8.0 ) );
-			float needles = smoothstep( 0.93, 0.99, nd ) * floorish * step( 0.1, gnoise3( p * 6.0 ) + 0.4 );
-			alb = mix( alb, vec3( 0.62, 0.45, 0.1 ), needles * 0.8 );
+			float needles = smoothstep( 0.95, 0.995, nd ) * floorish * step( 0.3, gnoise3( p * 6.0 ) + 0.4 );
+			alb = mix( alb, vec3( 0.46, 0.33, 0.1 ), needles * 0.55 );
 			mirror = ( 1.0 - smoothstep( 0.038, 0.046, vObj.y ) ) * smoothstep( 0.85, 0.95, n0.y ) * ( 1.0 - leaf * 0.8 );
 			h *= 1.0 - mirror;
 		}
