@@ -235,6 +235,11 @@ export function buildSignpost( ground, x, z, arms, seed = 9, { register: withReg
 		// uvs: x along the arm, y up
 		const p = eg.getAttribute( 'position' ), uv = eg.getAttribute( 'uv' );
 		for ( let j = 0; j < p.count; j ++ ) uv.setXY( j, p.getX( j ) / len, ( p.getY( j ) + hgt / 2 ) / hgt );
+		// painted both sides, as trail signs are: on the back the lettering reads the right way
+		// round too (its arrow end then on the left)
+		if ( ! eg.getAttribute( 'normal' ) ) eg.computeVertexNormals();
+		const nr = eg.getAttribute( 'normal' );
+		for ( let j = 0; j < p.count; j ++ ) if ( nr.getZ( j ) < - 0.5 ) uv.setX( j, 1 - uv.getX( j ) );
 		eg.translate( 0.075, 0, - 0.01 );
 		const m = new THREE.Mesh( eg, paintedMaterial( tex, { side: THREE.DoubleSide } ) );
 		m.position.set( x, top - 0.18 - i * 0.24, z );

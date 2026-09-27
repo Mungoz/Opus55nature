@@ -261,6 +261,9 @@ export class Water {
 		// small waters far away borrow the lake's mirror image instead of rendering their own
 		this.fallback = opts.fallback || null;
 		this.farDist = opts.farDist ?? Infinity;
+		// { detail, cheap }: grounds for the mirror, swapped beyond nearDist
+		this.reflectNear = null;
+		this.nearDist = opts.nearDist ?? 45;
 		const own = { tex: rig.mirrorSampler.value, mat: rig.textureMatrix.value };
 		const centre = new THREE.Vector3();
 		const mirror = this.mesh.onBeforeRender;
@@ -275,10 +278,13 @@ export class Water {
 			this.uniforms.mirrorSampler.value = far ? this.fallback.uniforms.mirrorSampler.value : own.tex;
 			this.uniforms.textureMatrix.value = far ? this.fallback.uniforms.textureMatrix.value : own.mat;
 			if ( far ) return;
-			for ( const o of this.reflectOnly ) o.layers.enable( 0 );
+			// (the detailed ground for a mirror seen from near, the cheap one from further off)
+			const near = ! this.reflectNear || camera.position.distanceTo( centre ) < this.nearDist;
+			const list = near ? this.reflectOnly : [ ...this.reflectOnly.filter( ( o ) => o !== this.reflectNear.detail ), this.reflectNear.cheap ];
+			for ( const o of list ) o.layers.enable( 0 );
 			renderer.setClearColor( 0x000000, 1 );
 			mirror( renderer, scene, camera );
-			for ( const o of this.reflectOnly ) o.layers.disable( 0 );
+			for ( const o of list ) o.layers.disable( 0 );
 
 		};
 

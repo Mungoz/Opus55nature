@@ -416,7 +416,8 @@ ${ __HORROR__ ? `#if STORY
 	// ---------- lighting ----------
 	float cavity = mix( 1.0, 0.55 + 0.45 * cav, detailFade );
 	float occl = ao * cavity * ( 1.0 - wForest * 0.45 );
-	float sh = sunShadow( wp, N );
+	// (no shadow lookups when there is no direct light to cast them: after sunset, before moonrise)
+	float sh = dot( uSunColor, vec3( 1.0 ) ) > 1e-4 ? sunShadow( wp, N ) : 1.0;
 	// canopy shade inside dense stands (trees far away are not in the shadow cascades)
 	sh *= 1.0 - wForest * 0.55 * smoothstep( 80.0, 400.0, dist ) * ( 1.0 - canopyW * 0.7 );
 	// (wet turf under the blades hardly gleams; bare earth, rock and stones do)

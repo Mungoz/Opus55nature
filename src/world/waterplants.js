@@ -591,9 +591,10 @@ export class WaterPlants {
 		} );
 		const rng = new RNG( 5150 );
 		this.sets = {
-			sedge: { variants: [ makeSedge( rng ), makeSedge( rng ), makeSedge( rng ) ], items: [], maxD: 150, shadow: true },
-			rush: { variants: [ makeRush( rng ), makeRush( rng ) ], items: [], maxD: 130, shadow: true },
-			horsetail: { variants: [ makeHorsetail( rng ), makeHorsetail( rng ) ], items: [], maxD: 110, shadow: false },
+			// (drawn out to where a tussock is still more than a speck)
+			sedge: { variants: [ makeSedge( rng ), makeSedge( rng ), makeSedge( rng ) ], items: [], maxD: 95, shadow: true },
+			rush: { variants: [ makeRush( rng ), makeRush( rng ) ], items: [], maxD: 85, shadow: true },
+			horsetail: { variants: [ makeHorsetail( rng ), makeHorsetail( rng ) ], items: [], maxD: 65, shadow: false },
 		};
 		// (reeds come in two sets sharing their clumps: the full ones near, light ones far)
 		if ( reedbeds.length ) {

@@ -467,13 +467,14 @@ export class Streams {
 				reflectScale: 0.6,
 				ripples: pd.plunge ? undefined : this.lake.ripples,
 				fallback: this.lake,
-				farDist: 220,
+				farDist: 120,
 				name: 'pond',
 				// (an edition may darken a pond, so it mirrors)
 				peat: pd.peat ?? 0,
 			} );
 			w.uniforms.size.value = 3.5;
 			w.reflectOnly.push( this.terrainMesh );
+			w.reflectNear = { detail: this.terrainMesh, cheap: this.reflectMesh };
 			if ( pd.plunge ) this.plunge = w;
 			this.ponds.push( w );
 			this.group.add( w.mesh );

@@ -314,7 +314,8 @@ export class GroundCover {
 
 		// pebbles (most of them, a few cm across) on a light mesh; the larger cobbles, a fifth
 		// of the stones, on a finer one - and that mesh only carries their instances
-		const stoneTile = 56, cut = 0.78;
+		// (pebbles a few centimetres across are lost beyond 15-20 m: the tile is no wider)
+		const stoneTile = 36, cut = 0.78;
 		const all = instanced( stoneGeometry( 1 ), stoneTile, 0.3 / k, 11 );
 		const big = instanced( stoneGeometry( 2 ), stoneTile, 0.3 / k, 11 );
 		// density never exceeds 0.55 (strand) + 0.03 (waterline) + 0.2 (scree): instances whose
@@ -345,7 +346,7 @@ export class GroundCover {
 
 		}
 
-		const flowerTile = 64;
+		const flowerTile = 44;
 		this.flowers = new THREE.Mesh( instanced( flowerGeometry(), flowerTile, 0.42 / k, 13 ), new THREE.ShaderMaterial( {
 			vertexShader: flowerVert,
 			fragmentShader: flowerFrag,

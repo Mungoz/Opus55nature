@@ -530,7 +530,12 @@ export class StoryProps {
 		// blazes: every 50-60 m, on a trunk beside the path, or on a marker post
 		const blazes = [];
 		const trees = this.app.forest.trees;
-		for ( let d = path.ids.jettyLand + 30; d < path.ids.strand; d += 55 ) {
+		// (every 55 m; and every 14 m where the way is not obvious: from the trough's end up
+		// behind the hut and round the pen to the tarn)
+		const marks = [];
+		for ( let d = path.ids.jettyLand + 30; d < path.ids.strand; d += 55 ) marks.push( d );
+		for ( let d = path.ids.troughEnd + 8; d < path.ids.tarn - 4; d += 14 ) marks.push( d );
+		for ( const d of marks ) {
 
 			const s = path.at( d );
 			let best = null, bd = 3.6;

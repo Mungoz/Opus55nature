@@ -170,7 +170,8 @@ void main() {
 		rough = mix( rough, 0.22, soaked );
 	#endif
 	float ao = vAO * mix( 0.6 + 0.4 * t.a, 1.0, 0.3 );
-	float sh = sunShadow( wp, N );
+	// (no shadow lookups when there is no direct light to cast them: after sunset, before moonrise)
+	float sh = dot( uSunColor, vec3( 1.0 ) ) > 1e-4 ? sunShadow( wp, N ) : 1.0;
 	vec3 col = shadeSurface( alb, Nd, V, wp, ao, sh, rough, 0.035 );
 	if ( wp.y < uWaterLevel ) col += alb * uSunColor * sh * caustics( wp ) * max( uSunDir.y, 0.0 ) * underwaterLight( wp );
 	col = waterColumn( col, wp, uSunColor * sh );

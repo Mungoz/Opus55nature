@@ -433,7 +433,7 @@ Regression check:
 
 ## 12. Mobile and performance
 
-- [x] Decide whether the horror build supports phones. The nature build does.
+- [x] Decide whether the horror build supports phones. The nature build does. **Revised after playtesting (27 Sep): the horror edition is desktop-only** — about 3 fps on a phone even at Low; playing the same on a phone would need the scene cut past recognition. Desktop frame time is still worked on.
 - [x] Budget the new mirrors (puddles, trough, the reflection-only figure and body) with `tools/gpuprof.mjs` and `tools/mobiletest.mjs`. The puddle mirror is one small water moved to the nearest puddle (0 when none is within 16 m); the figure and body add a few thousand triangles to a mirror pass.
 - [x] The props are merged single meshes. Check their draw calls and triangle counts once in the game. (The boardwalk is 0.07M triangles; the boats 0.02M each; all props together under 0.2M.)
 - [x] First cuts (`tools/gpuprof.mjs`, high, 1600x900, this machine): jetty 85 -> 73 ms, strand 75 -> 66 ms, boardwalk 62 -> 60 ms.
