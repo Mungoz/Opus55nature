@@ -392,6 +392,180 @@ export class StorySound {
 
 	}
 
+	// ------------------------------------------------------------------ the night wood
+	// The valley goes quiet by stages (the birds, the wind, the lapping); what is left is the
+	// sound of a wood at dusk and after: trees creaking in the air, a twig going somewhere behind
+	// you, tawny owls answering each other, stags roaring far off (October: the rut), ravens off
+	// the crags at dusk, a dog barking across the lake in the night. a: { cam, dir (view, xz),
+	// woods 0..1, dusk, night, lake (way to the lake, xz or null), second (past the hut) }
+	ambience( dt, a ) {
+
+		if ( ! this.on ) return;
+		const T = this._amb ??= { creak: 6, snap: 30, owl: 12, roar: 25, raven: 30, dog: 50 };
+		const rnd = ( a0, a1 ) => a0 + Math.random() * ( a1 - a0 );
+		const around = ( d0, d1, y = 0 ) => {
+
+			const ang = Math.random() * Math.PI * 2, d = rnd( d0, d1 );
+			return new THREE.Vector3( a.cam.x + Math.cos( ang ) * d, a.cam.y + y, a.cam.z + Math.sin( ang ) * d );
+
+		};
+
+		for ( const k in T ) T[ k ] -= dt;
+		// trees creaking, rubbing, in the wood
+		if ( T.creak <= 0 ) {
+
+			T.creak = rnd( 7, 18 ) / Math.max( 0.3, a.woods );
+			if ( a.woods > 0.25 ) this.creak( around( 12, 35, 6 ), rnd( 0.9, 2.2 ), 0.12 + Math.random() * 0.1, rnd( 90, 140 ), rnd( 150, 230 ) );
+
+		}
+
+		// a twig snapping behind you, not far - now and then
+		if ( T.snap <= 0 ) {
+
+			T.snap = rnd( 45, 90 );
+			if ( a.woods > 0.3 && a.second ) {
+
+				const d = rnd( 7, 14 ), side = ( Math.random() - 0.5 ) * 0.8;
+				const p = new THREE.Vector3( a.cam.x - a.dir.x * d + a.dir.z * side * d, a.cam.y - 1.5, a.cam.z - a.dir.z * d - a.dir.x * side * d );
+				this.snap( p );
+
+			}
+
+		}
+
+		// owls, in the wood, from dusk
+		if ( T.owl <= 0 ) {
+
+			T.owl = rnd( 22, 45 );
+			if ( a.woods > 0.1 && ( a.dusk > 0.35 || a.night > 0.2 ) ) {
+
+				this.a.owl( around( 60, 140, 14 ) );
+				// (and another, answering, further off)
+				if ( Math.random() < 0.6 ) setTimeout( () => this.a.owl( around( 150, 260, 20 ) ), rnd( 2500, 5000 ) );
+
+			}
+
+		}
+
+		// a stag roaring, far off in the valley
+		if ( T.roar <= 0 ) {
+
+			T.roar = rnd( 50, 110 );
+			if ( a.second ) {
+
+				let p = null;
+				for ( let k = 0; k < 8 && ! p; k ++ ) {
+
+					const q = around( 180, 320, 10 );
+					if ( ! a.lake || ( q.x - a.cam.x ) * a.lake.x + ( q.z - a.cam.z ) * a.lake.z < 0 ) p = q;
+
+				}
+
+				if ( p ) this.a.roar( p );
+
+			}
+
+		}
+
+		// ravens off the crags at dusk
+		if ( T.raven <= 0 ) {
+
+			T.raven = rnd( 60, 120 );
+			if ( a.dusk > 0.3 && a.night < 0.5 ) this.raven( around( 100, 200, 60 ) );
+
+		}
+
+		// a dog, across the lake, in the night
+		if ( T.dog <= 0 ) {
+
+			T.dog = rnd( 80, 150 );
+			if ( a.night > 0.4 && a.lake ) {
+
+				const p = new THREE.Vector3( a.cam.x + a.lake.x * 500, 5, a.cam.z + a.lake.z * 500 );
+				const n = 2 + Math.floor( Math.random() * 3 );
+				for ( let i = 0; i < n; i ++ ) setTimeout( () => this.dogBark( p ), i * rnd( 420, 700 ) );
+
+			}
+
+		}
+
+	}
+
+	// a farm dog barking, far off (a rough "rowf": a buzz bent down through its mouth, a breath)
+	dogBark( p ) {
+
+		if ( ! this.on ) return;
+		const ctx = this.ctx, dest = this._at( p, 60 ), t = this.a.now() + 0.02;
+		const o = ctx.createOscillator();
+		o.type = 'sawtooth';
+		o.frequency.setValueAtTime( 520 + Math.random() * 60, t );
+		o.frequency.exponentialRampToValueAtTime( 330, t + 0.13 );
+		const b = ctx.createBiquadFilter();
+		b.type = 'bandpass';
+		b.frequency.setValueAtTime( 1300, t );
+		b.frequency.exponentialRampToValueAtTime( 700, t + 0.13 );
+		b.Q.value = 2;
+		const g = ctx.createGain();
+		g.gain.setValueAtTime( 0.0001, t );
+		g.gain.exponentialRampToValueAtTime( 0.3, t + 0.015 );
+		g.gain.exponentialRampToValueAtTime( 0.0001, t + 0.16 );
+		o.connect( b ).connect( g ).connect( dest );
+		o.start( t );
+		o.stop( t + 0.2 );
+		this._noise( dest, t, 0.08, 'bandpass', 1800, 1, 0.06, 0.005 );
+
+	}
+
+	// a dry twig breaking underfoot - someone's
+	snap( p ) {
+
+		if ( ! this.on ) return;
+		const dest = this._at( p, 4 ), t = this.a.now() + 0.01;
+		for ( let i = 0; i < 3; i ++ ) {
+
+			const tt = t + i * ( 0.004 + Math.random() * 0.01 );
+			this.a._tone( dest, tt, 0.02, 2200 + Math.random() * 1800, 1600, 0.16 - i * 0.04 );
+			this._noise( dest, tt, 0.018, 'highpass', 1800, 0.8, 0.22 - i * 0.05, 0.001 );
+
+		}
+
+		this._noise( dest, t + 0.03, 0.12, 'bandpass', 900, 0.8, 0.05, 0.02 );
+
+	}
+
+	// a raven's deep croak, twice
+	raven( p ) {
+
+		if ( ! this.on ) return;
+		const ctx = this.ctx, dest = this._at( p, 30 );
+		let t = this.a.now() + 0.02;
+		const n = 1 + Math.floor( Math.random() * 3 );
+		for ( let k = 0; k < n; k ++ ) {
+
+			const o = ctx.createOscillator();
+			o.type = 'sawtooth';
+			const f0 = 310 + Math.random() * 40;
+			o.frequency.setValueAtTime( f0, t );
+			o.frequency.linearRampToValueAtTime( f0 * 0.82, t + 0.2 );
+			const b1 = ctx.createBiquadFilter(), b2 = ctx.createBiquadFilter();
+			b1.type = b2.type = 'bandpass';
+			b1.frequency.value = 850; b1.Q.value = 3;
+			b2.frequency.value = 1700; b2.Q.value = 4;
+			const g = ctx.createGain();
+			g.gain.setValueAtTime( 0.0001, t );
+			g.gain.exponentialRampToValueAtTime( 0.12, t + 0.03 );
+			g.gain.exponentialRampToValueAtTime( 0.0001, t + 0.24 );
+			o.connect( b1 ).connect( g );
+			o.connect( b2 ).connect( g );
+			g.connect( dest );
+			o.start( t );
+			o.stop( t + 0.3 );
+			t += 0.34 + Math.random() * 0.15;
+
+		}
+
+	}
+
 	// a woodpecker drumming on a dead trunk: a burst of knocks, quickening and fading
 	drum( p, gain = 0.4 ) {
 

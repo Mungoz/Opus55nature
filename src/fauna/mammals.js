@@ -100,19 +100,21 @@ export class Mammals {
 		// --- a small herd grazing the open lakeshore east of the start
 		this.deer = [];
 		const herd = this._findMeadow( ...( at.herd ?? [ 34, 488 ] ), 9 );
-		for ( let i = 0; i < 5; i ++ ) {
+		// (and an edition's other groups: [ { x, z, n, stag } ] - deer in the woods)
+		const groups = [ { x: herd.x, y: herd.y, n: 5, stag: true, meadow: true }, ...( at.moreDeer ?? [] ).map( ( g ) => ( { x: g.x, y: g.z, n: g.n ?? 2, stag: !! g.stag } ) ) ];
+		for ( const grp of groups ) for ( let i = 0; i < grp.n; i ++ ) {
 
-			const d = instance( i === 0 ? stagProto : hindProto );
-			d.stag = i === 0;
+			const d = instance( grp.stag && i === 0 ? stagProto : hindProto );
+			d.stag = grp.stag && i === 0;
 			d.mesh.scale.setScalar( d.stag ? 1.0 : 0.88 + rng.next() * 0.06 );
-			d.pos = this._dryPoint( herd.x, herd.y, 3, 12 );
+			d.pos = this._dryPoint( grp.x, grp.y, 2, grp.meadow ? 12 : 7 );
 			d.heading = rng.next() * Math.PI * 2;
 			d.state = 'graze';
 			d.timer = rng.range( 2, 10 );
 			d.phase = rng.next();
 			d.speed = 0;
 			d.target = d.pos.clone();
-			d.home = new THREE.Vector2( herd.x, herd.y );
+			d.home = new THREE.Vector2( grp.x, grp.y );
 			d.neck = 1;
 			d.head = 0.4;
 			d.yaw = 0;

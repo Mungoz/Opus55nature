@@ -987,6 +987,18 @@ export class Story {
 		this.sound.drone += ( drone - this.sound.drone ) * Math.min( 1, dt * ( drone > this.sound.drone ? 1.5 : 0.35 ) );
 		this.sound.porch = this.props.underPorch( this.cam.x, this.cam.z ) ? 1 : 0;
 		this.sound.update( dt, { rain: app.weather.state.rain, wetness: app.weather.wetness, camera: app.camera } );
+		// the night wood's sounds, while you walk (not in the storm, over a page, or at the end)
+		if ( this.begun && ! this.ended && ! this.storming && ! this.reading ) {
+
+			const cam = app.camera.position, h = app.hours;
+			app.camera.getWorldDirection( _v );
+			const dl = Math.hypot( _v.x, _v.z ) || 1;
+			const woods = app.layout?.woodsAt ? Math.max( app.layout.woodsAt( cam.x, cam.z ), app.layout.woodsAt( cam.x + 20, cam.z ), app.layout.woodsAt( cam.x - 20, cam.z ), app.layout.woodsAt( cam.x, cam.z + 20 ), app.layout.woodsAt( cam.x, cam.z - 20 ) ) : 0;
+			this._lakeDir ??= { t: - 1, v: null };
+			if ( this.time - this._lakeDir.t > 5 ) this._lakeDir = { t: this.time, v: this.waterSide( cam ) };
+			this.sound.ambience( dt, { cam, dir: { x: _v.x / dl, z: _v.z / dl }, woods: Math.max( woods, this.progress > this.path.ids.tarn ? 0.35 : 0 ), dusk: THREE.MathUtils.smoothstep( h, 17.3, 17.7 ), night: THREE.MathUtils.smoothstep( h, 17.75, 18.1 ), lake: this._lakeDir.v, second: this.progress > this.path.ids.hut } );
+
+		}
 		// lost for a minute and a half: the cowbell rings from the direction of the path
 		if ( this.lost > 90 && ( this._lostBell = ( this._lostBell ?? 0 ) - dt ) <= 0 ) {
 

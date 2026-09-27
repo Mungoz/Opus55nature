@@ -191,7 +191,8 @@ export const BEATS = [
 		run: async ( S ) => {
 
 			const app = S.app, M = app.mammals, td = app.terrainData;
-			const deer = M.deer;
+			// (the herd: the first five - the rest live in the woods)
+			const deer = M.deer.slice( 0, 5 );
 			// the ford: a reach of the stream about 420 m down from the fall
 			const R = td.river;
 			let i = R.findIndex( ( s ) => s.s > 420 );
@@ -294,7 +295,7 @@ export const BEATS = [
 		},
 		skip: ( S ) => {
 
-			for ( const d of S.app.mammals.deer ) { teleport( d, 140, 592 ); d.home.set( 140, 592 ); d.cmd = null; }
+			for ( const d of S.app.mammals.deer.slice( 0, 5 ) ) { teleport( d, 140, 592 ); d.home.set( 140, 592 ); d.cmd = null; }
 
 		},
 	},
@@ -1393,7 +1394,7 @@ export const BEATS = [
 		id: 'E14-starlings', at: 'strand', lead: - 45,
 		run: async ( S ) => {
 
-			const app = S.app, M = app.starlings, bed = app.layout.REEDBEDS[ 0 ];
+			const app = S.app, M = app.starlings;
 			// in from down the lake, to wheel low over the water off the shore ahead - where the
 			// view down the shoreline from the path is open all the way along (tools/out/q_flockview.js)
 			M.floor = 7;
@@ -1423,21 +1424,48 @@ export const BEATS = [
 
 			} );
 			void roar;
-			// it wheels until you are well along the strand, then goes down into the reeds ahead
+			// it wheels until you are well along the strand, then pours down into the tall spruces at
+			// the wood's edge behind the strand (not the reeds - "they should disappear into the woods")
 			await S.until( () => S.progress > S.path.ids.strand + 45 || S.time - t0 > 130 );
 			M.keepAway = null;
-			M.dismiss( V( bed.x, 20, bed.z ), bed );
+			const td = app.terrainData, F = app.forest;
+			// (the trees ahead along the shore, a little inland: in view as you walk on)
+			const ahead = S.path.at( S.path.ids.strand + 95 ), lake = S.waterSide( ahead );
+			const edge = V( ahead.x - lake.x * 28, 0, ahead.z - lake.z * 28 );
+			const crowns = F.trees.filter( ( t ) => Math.hypot( t.x - edge.x, t.z - edge.z ) < 30 && F.variants[ t.variant ].height * t.s > 12 && F.variants[ t.variant ].species !== 'snag' ).slice( 0, 24 );
+			const roostAt = crowns.length ? crowns.reduce( ( c, t ) => c.add( V( t.x, 0, t.z ) ), V( 0, 0, 0 ) ).divideScalar( crowns.length ) : edge.clone();
+			M.dismiss( V( roostAt.x, 30, roostAt.z ), { x: roostAt.x, z: roostAt.z, len: 12, wid: 12, yaw: 0, y: td.heightAt( roostAt.x, roostAt.z ) + 10, pour: 10 } );
+			if ( crowns.length && M.roost ) {
+
+				// a perch for each bird somewhere in a crown, high up, inside its reach
+				const T = M.roost.T;
+				for ( let i = 0; i < M.n; i ++ ) {
+
+					const t = crowns[ i % crowns.length ], v = F.variants[ t.variant ];
+					const H = v.height * t.s, hk = 0.45 + Math.random() * 0.45, rr = v.radius * t.s * ( 1 - hk * 0.8 ) * Math.sqrt( Math.random() );
+					const a = Math.random() * Math.PI * 2;
+					T[ i * 3 ] = t.x + Math.cos( a ) * rr;
+					T[ i * 3 + 1 ] = td.heightAt( t.x, t.z ) + H * hk;
+					T[ i * 3 + 2 ] = t.z + Math.sin( a ) * rr;
+
+				}
+
+				M.roost.c.set( roostAt.x, td.heightAt( roostAt.x, roostAt.z ) + 12, roostAt.z );
+
+			}
+
 			await S.until( () => M.roost?.landed > 30 || M.phase === 'roosted' );
-			S.sound.roost( V( bed.x, 0.5, bed.z ), bed.len * 0.6 );
+			S.sound.roost( V( roostAt.x, td.heightAt( roostAt.x, roostAt.z ) + 10, roostAt.z ), 18 );
+			S.ui.caption( '[ the trees chatter with starlings ]', 3.5 );
 			await S.until( () => M.phase === 'roosted' );
 			M.centre = null;
 			M.pull = 1;
 			M.stretch = 0;
 			M.space2 = 4;
 			// and when you come close, silence
-			await S.until( () => Math.hypot( S.cam.x - bed.x, S.cam.z - bed.z ) < 44 );
+			await S.until( () => Math.hypot( S.cam.x - roostAt.x, S.cam.z - roostAt.z ) < 50 || S.progress > S.path.ids.strand + 110 );
 			S.sound.roost( null );
-			S.ui.caption( '[ the reeds fall silent ]', 3.5 );
+			S.ui.caption( '[ the trees fall silent ]', 3.5 );
 
 		},
 		skip: ( S ) => {

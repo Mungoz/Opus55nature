@@ -460,6 +460,8 @@ export function faunaAt( td ) {
 				// (each with the point its holes face)
 				[ - 125.7, 740.7, - 131.2, 734.9 ], [ - 128, 747, - 135.6, 739 ], [ - 133.7, 746.9, - 138.5, 741.8 ], [ - 124.4, 746.4, - 133.4, 737 ] ],
 			face: [ 92, 738 ],
+			// deer in the Black Wood and round the tarn, off the path in its glades and edges
+			moreDeer: [ { x: - 122, z: 706, n: 2 }, { x: - 178, z: 676, n: 3, stag: true }, { x: - 108, z: 578, n: 2 }, { x: - 170, z: 512, n: 2 }, { x: - 236, z: 470, n: 3, stag: true } ],
 			// a hare that sits tight in the path (E5), and others along the way
 			hares: [ [ 95, 604 ], [ 58, 600 ], [ 118, 676 ], [ - 150, 732 ], [ - 222, 474 ], [ - 30, 660 ] ],
 			// the bear works the lower edge of the larch wood (E13)
@@ -475,7 +477,7 @@ export function faunaAt( td ) {
 			chough: { crag: [ - 240, 150, 830 ], spots: [ [ - 110, 60, 700 ], [ - 160, 72, 752 ], [ 0, 52, 650 ], [ - 60, 58, 610 ] ] },
 		},
 		small: {
-			flocks: [ [ 12, 756 ], [ - 58, 700 ], [ 104, 610 ], [ - 214, 660 ], [ 70, 478 ] ],
+			flocks: [ [ 12, 756 ], [ - 58, 700 ], [ 104, 610 ], [ - 214, 660 ], [ 70, 478 ], [ - 150, 700 ], [ - 100, 600 ], [ - 190, 540 ], [ - 225, 480 ], [ - 130, 740 ] ],
 			wagtails: { x0: 62, x1: 108, z0: 424, z1: 452 },
 			// a dipper at the stream's mouth (E3), one under the footbridge (E8)
 			dippers: [ 478, 184 ],
