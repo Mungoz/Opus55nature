@@ -481,8 +481,16 @@ export class Sky {
 		this.lutPass.material.uniforms.uMoonE.value.set( MOON_E * phase, MOON_E * phase, MOON_E * phase );
 		this.lutPass.material.uniforms.uOvercast.value = this.overcast;
 		this.irrPass.material.uniforms.uOvercast.value = this.overcast;
-		this.lutPass.render( this.renderer, this.lutRT );
-		this.irrPass.render( this.renderer, this.irrRT );
+		// (the tables only when what they depend on has moved: the sun and moon, the overcast)
+		const key = this._lutKey || ( this._lutKey = { h: NaN, o: NaN } );
+		if ( ! ( Math.abs( hours - key.h ) < 0.0008 ) || Math.abs( this.overcast - key.o ) > 0.002 ) {
+
+			key.h = hours;
+			key.o = this.overcast;
+			this.lutPass.render( this.renderer, this.lutRT );
+			this.irrPass.render( this.renderer, this.irrRT );
+
+		}
 
 		// dome
 		const du = this.domeUniforms;

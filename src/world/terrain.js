@@ -174,10 +174,8 @@ void main() {
 	vec4 rockT = rX * bw.x + rY * bw.y + rZ * bw.z;
 	vec4 rockT2 = texture( tMat, vec3( wp.xz * rs * 0.21 + 0.37, ROCK ) ) * bw.y + texture( tMat, vec3( wp.zy * rs * 0.21, ROCK ) ) * bw.x + texture( tMat, vec3( wp.xy * rs * 0.21, ROCK ) ) * bw.z;
 	rockT = mix( rockT, rockT2, 0.4 );
-	vec3 nX = unpackN( texture( tMatN, vec3( wp.zy * rs, ROCK ) ) );
-	vec3 nY = unpackN( texture( tMatN, vec3( wp.xz * rs, ROCK ) ) );
-	vec3 nZ = unpackN( texture( tMatN, vec3( wp.xy * rs, ROCK ) ) );
-	vec3 rockDN = vec3( 0.0, nX.y, nX.x ) * bw.x + vec3( nY.x, 0.0, nY.y ) * bw.y + vec3( nZ.x, nZ.y, 0.0 ) * bw.z;
+	// (its detail normal is fetched further down, only where rock shows)
+	vec3 rockDN = vec3( 0.0 );
 	vec3 rockAlb = decode( rockT.rgb );
 	rockAlb *= 0.85 + macro * 0.25;
 	// geology: strata of differing tone, iron-ochre stains, dark water streaks down the cliffs
@@ -190,8 +188,8 @@ void main() {
 
 	// macro relief for distant faces: ribs, gullies and boulder fields the heightmap
 	// is too coarse to hold. Triplanar so steep faces don't stretch.
-	vec3 macroDN;
-	{
+	vec3 macroDN = vec3( 0.0 );
+	if ( dist > 80.0 ) {
 		float e = 4.0;
 		#define MH( uv ) ( texture2D( uNoiseTex, ( uv ) / 170.0 ).r * 0.75 + texture2D( uNoiseTex, ( uv ) / 60.0 + 0.3 ).g * 0.25 )
 		float x0 = MH( wp.zy ), xz = MH( wp.zy + vec2( e, 0.0 ) ), xy = MH( wp.zy + vec2( 0.0, e ) );
@@ -206,7 +204,8 @@ void main() {
 	// ---------- beach stones ----------
 	vec2 puv = wp.xz / 2.4;
 	vec4 pebT = texture( tMat, vec3( puv, PEBBLE ) );
-	vec3 pebDN = tn2w( unpackN( texture( tMatN, vec3( puv, PEBBLE ) ) ) );
+	vec3 pebDN = vec3( 0.0 );
+	if ( dist < 400.0 ) pebDN = tn2w( unpackN( texture( tMatN, vec3( puv, PEBBLE ) ) ) );
 	vec3 pebAlb = decode( pebT.rgb ) * ( 0.8 + 0.35 * gnoise( wp.xz * 0.11 ) );
 	{
 		// a second, larger pebble scale, rotated, breaks up the tiling
@@ -227,14 +226,16 @@ void main() {
 	// ---------- soil / forest floor ----------
 	vec2 suv = wp.xz / 3.2;
 	vec4 soilT = texture( tMat, vec3( suv, SOIL ) );
-	vec3 soilDN = tn2w( unpackN( texture( tMatN, vec3( suv, SOIL ) ) ) );
+	vec3 soilDN = vec3( 0.0 );
+	if ( dist < 400.0 ) soilDN = tn2w( unpackN( texture( tMatN, vec3( suv, SOIL ) ) ) );
 	vec3 soilAlb = decode( soilT.rgb );
 
 	// ---------- meadow turf ----------
 	vec2 tuv = wp.xz / 2.2;
 	vec4 turfT = texture( tMat, vec3( tuv, TURF ) );
 	vec4 turfT2 = texture( tMat, vec3( wp.xz / 8.7 + 0.41, TURF ) );
-	vec3 turfDN = tn2w( unpackN( texture( tMatN, vec3( tuv, TURF ) ) ) );
+	vec3 turfDN = vec3( 0.0 );
+	if ( dist < 400.0 ) turfDN = tn2w( unpackN( texture( tMatN, vec3( tuv, TURF ) ) ) );
 	vec3 turf = decode( mix( turfT.rgb, turfT2.rgb, 0.35 ) );
 	vec3 gcol = grassColor( wp.xz, h );
 	// tint the turf toward the local grass palette (patches of green, straw and rust)
@@ -262,10 +263,12 @@ void main() {
 	cav = mix( cav, soilT.a, fW );
 	// distant forest: the ground between far trees reads as continuous canopy
 	float canopyW = smoothstep( 0.06, 0.4, wForest ) * smoothstep( 120.0, 600.0, dist );
-	float larchK = saturate( 0.18 + smoothstep( 120.0, 520.0, h ) * 0.5 + gnoise( wp.xz * 0.012 + vec2( 11.0, -3.0 ) ) * 0.35 );
-	vec3 canopy = mix( decode( vec3( 0.1, 0.16, 0.1 ) ), decode( vec3( 0.62, 0.46, 0.16 ) ), smoothstep( 0.35, 0.8, larchK + gnoise( wp.xz * 0.05 ) * 0.25 ) );
-	canopy *= 0.75 + 0.5 * texture2D( uNoiseTex, wp.xz / 90.0 ).b;
-	alb = mix( alb, canopy, canopyW );
+	if ( canopyW > 0.0 ) {
+		float larchK = saturate( 0.18 + smoothstep( 120.0, 520.0, h ) * 0.5 + gnoise( wp.xz * 0.012 + vec2( 11.0, -3.0 ) ) * 0.35 );
+		vec3 canopy = mix( decode( vec3( 0.1, 0.16, 0.1 ) ), decode( vec3( 0.62, 0.46, 0.16 ) ), smoothstep( 0.35, 0.8, larchK + gnoise( wp.xz * 0.05 ) * 0.25 ) );
+		canopy *= 0.75 + 0.5 * texture2D( uNoiseTex, wp.xz / 90.0 ).b;
+		alb = mix( alb, canopy, canopyW );
+	}
 	// scree and gravel where nothing grows (neither grass nor forest)
 	float bare = ( 1.0 - smoothstep( 0.05, 0.4, wGrass + wForest ) ) * ( 1.0 - wShore );
 	vec3 scree = mix( decode( texture( tMat, vec3( wp.xz / 4.0, PEBBLE ) ).rgb ) * 0.8, rockAlb, 0.55 );
@@ -359,6 +362,13 @@ ${ __HORROR__ ? `#if STORY
 	}
 #endif` : '' }
 	// rock
+	// (the work below is skipped wherever its weight is nil: the result is the same)
+	if ( wRock > 0.0 && dist < 400.0 ) {
+		vec3 nX = unpackN( texture( tMatN, vec3( wp.zy * rs, ROCK ) ) );
+		vec3 nY = unpackN( texture( tMatN, vec3( wp.xz * rs, ROCK ) ) );
+		vec3 nZ = unpackN( texture( tMatN, vec3( wp.xy * rs, ROCK ) ) );
+		rockDN = vec3( 0.0, nX.y, nX.x ) * bw.x + vec3( nY.x, 0.0, nY.y ) * bw.y + vec3( nZ.x, nZ.y, 0.0 ) * bw.z;
+	}
 	alb = mix( alb, rockAlb, wRock );
 	dn = mix( dn, rockDN, wRock );
 	rough = mix( rough, 0.75, wRock );
