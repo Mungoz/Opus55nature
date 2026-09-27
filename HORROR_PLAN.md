@@ -434,8 +434,14 @@ Regression check:
 ## 12. Mobile and performance
 
 - [x] Decide whether the horror build supports phones. The nature build does.
-- [ ] Budget the new mirrors (puddles, trough, the reflection-only figure and body) with `tools/gpuprof.mjs` and `tools/mobiletest.mjs`.
-- [ ] The props are merged single meshes. Check their draw calls and triangle counts once in the game.
+- [x] Budget the new mirrors (puddles, trough, the reflection-only figure and body) with `tools/gpuprof.mjs` and `tools/mobiletest.mjs`. The puddle mirror is one small water moved to the nearest puddle (0 when none is within 16 m); the figure and body add a few thousand triangles to a mirror pass.
+- [x] The props are merged single meshes. Check their draw calls and triangle counts once in the game. (The boardwalk is 0.07M triangles; the boats 0.02M each; all props together under 0.2M.)
+- [x] First cuts (`tools/gpuprof.mjs`, high, 1600x900, this machine): jetty 85 -> 73 ms, strand 75 -> 66 ms, boardwalk 62 -> 60 ms.
+  - no shadow maps without direct light: the sun is down from 17:18 and the moon not yet up, so the whole second half had been drawing 5-8 ms of unseen shadows;
+  - coarse meshes for far waterfowl (0.24M -> 0.03M triangles a pass) and far mammals;
+  - ground cover, the far grass and the lily pads kept out of every mirror (LAYERS.DETAIL); the stream's mirror uses the cheap ground when the stream is far;
+  - after dark the horror edition draws the far meadow to two thirds of its reach.
+- [ ] The scene is geometry-bound (13-28M triangles a frame at high; the phone emulation costs the same as desktop). The next cuts would be the grass tiles (every blade instance runs its vertex shader, culled or not), the forest in the mirrors, and the detailed terrain in the stream's mirror.
 
 ## 13. Order of work
 
