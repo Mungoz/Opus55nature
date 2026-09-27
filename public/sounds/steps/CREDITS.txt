@@ -1,0 +1,9 @@
+Footstep recordings used by the horror edition (all CC0 / public domain):
+
+footstep_grass_*, footstep_wood_*, footstep_concrete_*, footstep_carpet_*
+  "Impact Sounds" by Kenney (www.kenney.nl), CC0 - see LICENSE-Kenney-CC0.txt
+
+footstep_sand_*
+  "Fantozzi's Footsteps (Grass/Sand & Stone)" by Fantozzi, submitted to OpenGameArt by qubodup,
+  CC0 - https://opengameart.org/content/fantozzis-footsteps-grasssand-stone
+  (the Grass/Sand takes, renamed)

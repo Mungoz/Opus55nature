@@ -535,6 +535,7 @@ export function buildLodge( ground ) {
 		const top = roofAt + 1.25;
 		cyl( k, PIPE.x, roofAt - 0.25, PIPE.z, 0.08, top - roofAt + 0.25, M.IRON, col( '#403e3b' ), 12 );
 		cyl( k, PIPE.x, top - 0.02, PIPE.z, 0.085, 0.05, M.IRON, col( '#5e5d58' ), 12 );
+		info.pipeTop = [ PIPE.x, top + 0.2, PIPE.z ];
 		// flashing: a square of sheet on the shingles, the pipe's collar
 		k.box( PIPE.x + 0.03, roofAt + 0.04, PIPE.z, 0.62, 0.012, 0.6, M.IRON, col( '#5b5a55' ), { rot: [ 0, 0, PITCH ] } );
 		cyl( k, PIPE.x, roofAt, PIPE.z, 0.11, 0.12, M.IRON, col( '#56554f' ), 12, 0.09 );

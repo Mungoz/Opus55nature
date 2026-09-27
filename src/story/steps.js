@@ -1,30 +1,29 @@
-// Footsteps. Each is a recorded step (Kenney's CC0 "Impact Sounds": grass, wood, concrete, snow,
-// carpet - public/sounds/steps) with, for the grounds no recording covers, a short texture made
-// here laid over it:
-//   grass    grass                      wood     wood (the jetty, the bridge, the boardwalk)
+// Footsteps. Each is a recorded step (public/sounds/steps, all CC0 - see CREDITS.txt there), for
+// some grounds with a short texture made here laid quietly over it:
+//   gravel   the trail (most of the walk): grass-and-grit steps (Fantozzi), a soft heel under them
+//   grass    grass                      wood     planks (the jetty, the bridges, the boardwalk)
 //   stone    concrete (the hut's flags)  earth    carpet, and needles crackling (forest floor)
-//   gravel   snow, a little quicker, and the stones' crunch (the trail - most of the walk)
-//   shingle  concrete, and stones knocking together
-//   wet      grass, a little slower, and water squeezed out and dripping
-//   mud      carpet, slower, and the squelch
-// The first try at footsteps was made from nothing: long swelling swishes and thuds, a heel and
-// a toe a fifth of a second apart - at four steps a second, "tiny steps into squelching mud".
-// Measured against recordings (tools/stepref.mjs), a real step is short (15-60 ms, 160 for
-// snow), rises at once, is one impact, and most of it is the thump. So the thump is recorded,
-// and anything made here is short, sudden and quiet under it.
+//   shingle  grit steps, and stones knocking together (the strands)
+//   wet      grass, and a few drops (the grass soaked after the storm)
+//   mud      grass, slower, a little squelch (only right at the water's edge)
+//   wade     in the water: no step, the water pushed aside (story/sound.js wade)
+// (Tried and dropped: steps made from nothing - "tiny steps into squelching mud" - then a snow
+// recording for the trail and a swept squelch for wet grass - "too loud and squelchy".)
 
-// what each ground is made of: the recording, its speed, the texture over it (and how loud)
+// what each ground is made of: the recording, its speed, what lies under it (another recording,
+// quieter), the texture over it (and how loud), and the whole step's level
 export const GROUND = {
-	grass: { rec: 'grass', vol: 0.85 },
-	wet: { rec: 'grass', rate: 0.9, tex: 'splash', mix: 0.5, vol: 0.9 },
-	earth: { rec: 'carpet', rate: 0.95, tex: 'needles', mix: 0.35, vol: 0.8 },
-	gravel: { rec: 'snow', rate: 1.22, tex: 'crunch', mix: 0.55 },
-	shingle: { rec: 'concrete', rate: 0.92, tex: 'clack', mix: 0.6 },
-	wood: { rec: 'wood' },
-	stone: { rec: 'concrete', vol: 0.9 },
-	mud: { rec: 'carpet', rate: 0.82, tex: 'squelch', mix: 0.6, vol: 0.9 },
+	gravel: { rec: 'sand', under: 'carpet', underMix: 0.35, vol: 0.75 },
+	grass: { rec: 'grass', vol: 0.6 },
+	wet: { rec: 'grass', rate: 0.95, tex: 'drips', mix: 0.22, vol: 0.62 },
+	earth: { rec: 'carpet', tex: 'needles', mix: 0.28, vol: 0.55 },
+	shingle: { rec: 'sand', rate: 0.9, tex: 'clack', mix: 0.4, vol: 0.7 },
+	wood: { rec: 'wood', vol: 0.72 },
+	stone: { rec: 'concrete', vol: 0.6 },
+	mud: { rec: 'grass', rate: 0.85, tex: 'squelch', mix: 0.18, vol: 0.5 },
 };
-export const RECORDINGS = [ 'grass', 'wood', 'concrete', 'snow', 'carpet' ].flatMap( ( k ) => [ 0, 1, 2, 3, 4 ].map( ( i ) => `footstep_${ k }_00${ i }` ) );
+export const RECORDINGS = [ 'grass', 'wood', 'concrete', 'carpet' ].flatMap( ( k ) => [ 0, 1, 2, 3, 4 ].map( ( i ) => `footstep_${ k }_00${ i }` ) )
+	.concat( [ 0, 1, 2, 3, 4, 5 ].map( ( i ) => `footstep_sand_00${ i }` ) );
 
 const DUR = 0.2;
 const TAKES = 6;
@@ -182,6 +181,13 @@ const MAKE = {
 			ping( d, sr, t, a * 0.45, f * ( 2.2 + R() * 0.7 ), dec * 0.6 );
 
 		}
+
+	},
+
+	// drops flicked off soaked grass
+	drips( d, sr ) {
+
+		for ( const t of scatter( 5 + R() * 6, exp( 0.004, 0.04 ), 0.12 ) ) ping( d, sr, t, Math.pow( R(), 1.5 ) * 0.5, 1800 + R() * 2400, 0.0015 + R() * 0.002 );
 
 	},
 

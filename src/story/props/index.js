@@ -18,6 +18,7 @@ import { buildShrine } from './shrine.js';
 import { buildClearing, buildGullyBridge } from './clearing.js';
 import { buildCamp, buildKiln } from './camp.js';
 import { drawValleyMap } from './map.js';
+import { Smoke } from './smoke.js';
 import { woodsAt } from '../layout.js';
 import { Water } from '../../world/water.js';
 
@@ -550,6 +551,23 @@ export class StoryProps {
 		this.camp = this._placeProp( buildCamp, Ca.x, Ca.z, Ca.yaw, 'camp' );
 		this.kiln = this._placeProp( buildKiln, Ki.x, Ki.z, Ki.yaw, 'kiln' );
 		this._gullyBridge();
+		// smoke: seeping from the kiln's vents (thicker from its crown), and a thread of it from the
+		// lodge's stovepipe - someone kept the stove in
+		{
+
+			const K = this.kiln, v = K.info.vents || [];
+			const src = v.map( ( p, i ) => ( { p: K.W( p ), rate: i >= v.length - 5 ? 0.32 : 0.1, size: i >= v.length - 5 ? 0.3 : 0.2, rise: i >= v.length - 5 ? 0.5 : 0.3 } ) );
+			this.kilnSmoke = new Smoke( src, 200 );
+			this.group.add( this.kilnSmoke.mesh );
+			const L = this.lodge;
+			if ( L?.info.pipeTop ) {
+
+				this.lodgeSmoke = new Smoke( [ { p: L.W( L.info.pipeTop ), rate: 0.7, size: 0.14, rise: 0.7 } ], 80 );
+				this.group.add( this.lodgeSmoke.mesh );
+
+			}
+
+		}
 
 	}
 
@@ -1210,6 +1228,10 @@ export class StoryProps {
 	update( dt, time ) {
 
 		this.glow?.update( dt, time );
+		// the smoke
+		const cam = this.app.camera;
+		this.kilnSmoke?.update( dt, time, cam );
+		this.lodgeSmoke?.update( dt, time, cam );
 		// the forest lodge's lamp breathes too
 		if ( this.lodge?.lampAt ) LAMP2.value.w = 1.6 * ( 0.9 + 0.07 * Math.sin( time * 2.1 + 1 ) + 0.04 * Math.sin( time * 8.3 ) );
 		// the spout's rings, small and often

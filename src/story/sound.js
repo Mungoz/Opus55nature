@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GROUND, RECORDINGS, TEXTURES, TAKES, buildTexture } from './steps.js';
 
 // how loud a recorded step peaks (each is brought to this as it loads)
-const STEP_PEAK = 0.34;
+const STEP_PEAK = 0.2;
 
 // The horror edition's sounds, synthesised like the rest of the soundscape (nothing is
 // sampled): a cowbell, footsteps on each kind of ground and their echo, gate and door
@@ -228,6 +228,19 @@ export class StorySound {
 
 		if ( ! this.on ) return;
 		this._build();
+		// in the water: the water pushed aside, and a drip or two falling back
+		if ( surface === 'wade' ) {
+
+			setTimeout( () => {
+
+				this.wade( p, 0.32 * gain * ( 0.85 + Math.random() * 0.3 ) );
+				setTimeout( () => this.drip( p, 0.08 * gain ), 180 + Math.random() * 120 );
+
+			}, when * 1000 );
+			return;
+
+		}
+
 		const G = GROUND[ surface ] ?? GROUND.grass;
 		const recs = this.recs[ G.rec ];
 		if ( ! recs?.length ) return; // (still loading)
@@ -257,6 +270,19 @@ export class StorySound {
 		src.playbackRate.value = ( G.rate ?? 1 ) * ( 0.94 + Math.random() * 0.12 );
 		src.connect( out );
 		src.start( t );
+		// (a quieter recording under it: the heel's weight)
+		if ( G.under && this.recs[ G.under ]?.length ) {
+
+			const u = ctx.createBufferSource();
+			u.buffer = this._pick( this.recs[ G.under ], G.under );
+			u.playbackRate.value = 0.9 + Math.random() * 0.1;
+			const ug = ctx.createGain();
+			ug.gain.value = G.underMix ?? 0.3;
+			u.connect( ug ).connect( out );
+			u.start( t );
+
+		}
+
 		if ( G.tex ) {
 
 			if ( ! this.tex[ G.tex ]?.length ) this._makeTex( G.tex );

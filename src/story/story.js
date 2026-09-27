@@ -505,11 +505,13 @@ export class Story {
 		td.biomeAt( x, z, bio );
 		const h = td.heightAt( x, z );
 		const deck = this.collision.onDeck( x, z );
-		// (the hut's porch and its steps are flags; the jetty, the bridge and the boardwalk, planks)
+		const depth = Math.max( this.waterAt( x, z ), 0 ) - h;
+		// (the hut's porch and its steps are flags; the jetty, the bridges and the boardwalk, planks)
 		if ( deck ) s = deck.tag === 'hut' ? 'stone' : 'wood';
+		else if ( depth > 0.03 ) s = 'wade';
 		else if ( this.ground.trailDist( x, z ) < 0.45 ) s = 'gravel';
 		else if ( bio[ 3 ] > 0.4 || h < 0.9 ) s = 'shingle';
-		else if ( this.waterAt( x, z ) > h - 0.3 ) s = 'mud';
+		else if ( depth > - 0.06 ) s = 'mud';
 		else if ( bio[ 1 ] > 0.5 ) s = 'earth';
 		else if ( this.app.weather.wetness > 0.5 ) s = 'wet';
 		this.sound.step( s, null, 0.9 );
@@ -517,7 +519,7 @@ export class Story {
 
 			// half a beat late, from a few steps behind
 			const b = this.behind( 3 );
-			this.sound.step( s === 'wood' || s === 'stone' ? s : 'shingle', new THREE.Vector3( b.x, td.heightAt( b.x, b.z ) + 0.1, b.z ), 0.75, 0.38 );
+			this.sound.step( s, new THREE.Vector3( b.x, td.heightAt( b.x, b.z ) + 0.1, b.z ), 0.75, 0.38 );
 
 		}
 
