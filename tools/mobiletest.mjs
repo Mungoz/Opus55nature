@@ -51,11 +51,24 @@ for ( let i = 0; i < 10; i ++ ) {
 await touch( 'touchEnd', [] );
 await new Promise( ( r ) => setTimeout( r, 600 ) );
 const yaw = await page.evaluate( () => window.app.controls.yaw );
-// tap the rain button in the weather bar
-await page.tap( '#weatherbar [data-w="rain"]' );
-await new Promise( ( r ) => setTimeout( r, 4000 ) );
-await page.screenshot( { path: path.join( outDir, 'm-3-rain.png' ) } );
+const horror = await page.evaluate( () => document.body.classList.contains( 'horror' ) );
+if ( ! horror ) {
+
+	// tap the rain button in the weather bar
+	await page.tap( '#weatherbar [data-w="rain"]' );
+	await new Promise( ( r ) => setTimeout( r, 4000 ) );
+	await page.screenshot( { path: path.join( outDir, 'm-3-rain.png' ) } );
+
+} else {
+
+	// the horror edition: no toolbar or weather bar; the pause menu opens from a tap on the
+	// corner, and the reading page from a tap
+	await page.screenshot( { path: path.join( outDir, 'm-3-horror.png' ) } );
+	console.log( 'story progress', await page.evaluate( () => window.app.story.progress.toFixed( 1 ) ) );
+
+}
+
 console.log( 'start', start.map( Math.round ), 'after stick', moved.map( Math.round ), 'yaw', yaw.toFixed( 2 ) );
-console.log( 'weather', await page.evaluate( () => window.app.weather.name ) );
+if ( ! horror ) console.log( 'weather', await page.evaluate( () => window.app.weather.name ) );
 console.log( logs.filter( ( l ) => ! l.includes( 'X3595' ) && ! l.includes( 'vite' ) ).slice( 0, 20 ).join( '\n' ) );
 await browser.close();
