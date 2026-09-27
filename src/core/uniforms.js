@@ -19,6 +19,9 @@ export const U = {
 	uNearXf: { value: new THREE.Vector4() },
 	uFarXf: { value: new THREE.Vector4() },
 	uTShadow: { value: null }, // r: near region, g: whole world
+	// the terrain's baked noises over the near region (TerrainData.bakeNoise)
+	uTNoiseA: { value: null },
+	uTNoiseB: { value: null },
 	uNoiseTex: { value: null },
 	// x: haze density, y: valley mist density, z: mist scale height, w: rain/wetness
 	uFog: { value: new THREE.Vector4( 2.0, 0.00035, 16, 0 ) },

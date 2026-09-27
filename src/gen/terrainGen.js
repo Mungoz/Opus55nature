@@ -197,6 +197,40 @@ void main() {
 }
 `;
 
+// Noise the terrain's shading needs that depends only on where you are - the broad tone
+// variations, the rock's ochre stains and water streaks, the snowline's wander, the distant
+// canopy's larch-and-spruce mottle, the trail's braiding - baked once over the near region
+// (2.5 m a texel) instead of evaluated for every pixel every frame. The same functions, so
+// the same values (to half-float precision; the finest is 20 m from crest to crest).
+//   A: macro, ochre, streak, snowline     B: larch mix, canopy, trail side, braid offset
+const noiseBakeFrag = /* glsl */ `
+${noiseGLSL}
+uniform sampler2D uHNear;
+uniform sampler2D uHFar;
+uniform vec4 uNearXf;
+uniform vec4 uFarXf;
+uniform float uRes;
+uniform float uWhich;
+float nearW( vec2 p ) {
+	vec2 uv = ( p - uNearXf.xy ) * uNearXf.z;
+	vec2 e = min( uv, 1.0 - uv );
+	return smoothstep( 0.0, 0.03, min( e.x, e.y ) );
+}
+float terrainH( vec2 p ) {
+	float hf = textureLod( uHFar, ( p - uFarXf.xy ) * uFarXf.z, 0.0 ).r;
+	float w = nearW( p );
+	if ( w <= 0.0 ) return hf;
+	float hn = textureLod( uHNear, ( p - uNearXf.xy ) * uNearXf.z, 0.0 ).r;
+	return mix( hf, hn, w );
+}
+void main() {
+	vec2 p = uNearXf.xy + gl_FragCoord.xy / uRes * uNearXf.w;
+	float h = terrainH( p );
+	if ( uWhich < 0.5 ) gl_FragColor = vec4( gnoise( p * 0.004 ) * 0.5 + gnoise( p * 0.019 ) * 0.3, gnoise( p * 0.0032 + h * 0.003 ), gnoise( vec2( ( p.x + p.y ) * 0.05, h * 0.0025 ) ), gnoise( p * 0.02 ) );
+	else gl_FragColor = vec4( gnoise( p * 0.012 + vec2( 11.0, -3.0 ) ), gnoise( p * 0.05 ), gnoise( p * 0.019 + 2.0 ), gnoise( p * 0.05 + 1.3 ) );
+}
+`;
+
 function regionXf( r ) {
 
 	const [ ox, oz ] = regionOrigin( r );
@@ -540,13 +574,70 @@ export class TerrainData {
 
 	get shadowTex() { return this.shadowRT.texture; }
 
+	// the baked noises (see noiseBakeFrag): [ A, B ]
+	bakeNoise( res = 1024 ) {
+
+		if ( this.noiseRT ) return this.noiseRT.map( ( t ) => t.texture );
+		this.noiseRT = [ 0, 1 ].map( ( which ) => {
+
+			const rt = makeTarget( res, res, { name: 'terrain-noise-' + which } );
+			new FullscreenPass( passMaterial( noiseBakeFrag, {
+				uHNear: { value: this.near.hnTex },
+				uHFar: { value: this.far.hnTex },
+				uNearXf: { value: this.nearXf },
+				uFarXf: { value: this.farXf },
+				uRes: { value: res },
+				uWhich: { value: which },
+			} ) ).render( this.renderer, rt );
+			return rt;
+
+		} );
+		return this.noiseRT.map( ( t ) => t.texture );
+
+	}
+
+	// The landscape's shadow, re-marched as the sun moves. Not all in one frame (180 steps a
+	// texel over two 2048-square regions stalls a frame for a fifth of a second): a strip at a
+	// time into a second map, which replaces the first when it is whole. onSwap( texture ) is
+	// told of the new map.
 	updateShadows( sunDir, force = false ) {
 
-		if ( ! force && sunDir.angleTo( this._lastShadowDir ) < 0.0012 ) return false;
+		const res = this.shadowRT.width, strips = 64;
+		if ( force ) {
+
+			this._lastShadowDir.copy( sunDir );
+			this.shadowPass.material.uniforms.uSunDir.value.copy( sunDir );
+			this.shadowPass.render( this.renderer, this.shadowRT );
+			this._sweep = null;
+			return true;
+
+		}
+
+		if ( this._sweep ) {
+
+			const k = this._sweep.k ++, h = Math.ceil( res / strips );
+			const y = k * h;
+			if ( y < res ) this.shadowPass.render( this.renderer, this._back, this._strip.set( 0, y, res, Math.min( h, res - y ) ) );
+			if ( this._sweep.k >= strips ) {
+
+				[ this.shadowRT, this._back ] = [ this._back, this.shadowRT ];
+				this._sweep = null;
+				this.onShadowSwap?.( this.shadowRT.texture );
+				return true;
+
+			}
+
+			return false;
+
+		}
+
+		if ( sunDir.angleTo( this._lastShadowDir ) < 0.0025 ) return false;
 		this._lastShadowDir.copy( sunDir );
 		this.shadowPass.material.uniforms.uSunDir.value.copy( sunDir );
-		this.shadowPass.render( this.renderer, this.shadowRT );
-		return true;
+		this._back ??= makeTarget( res, res, { type: THREE.UnsignedByteType } );
+		this._strip ??= new THREE.Vector4();
+		this._sweep = { k: 0 };
+		return false;
 
 	}
 

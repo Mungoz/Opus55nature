@@ -212,6 +212,8 @@ export class App {
 		U.uNearXf.value.copy( td.nearXf );
 		U.uFarXf.value.copy( td.farXf );
 		U.uTShadow.value = td.shadowTex;
+		td.onShadowSwap = ( t ) => { U.uTShadow.value = t; };
+		[ U.uTNoiseA.value, U.uTNoiseB.value ] = td.bakeNoise();
 		td.ponds.forEach( ( pd, i ) => PONDS_GC.value[ i ].set( pd.c.x, pd.c.y, pd.r, pd.surf ) );
 
 		await step( 0.3, 'Painting the sky' );
@@ -383,8 +385,14 @@ export class App {
 		this.waterPlants.update( this.camera );
 		this.meadow.update( this.camera, this._groundFn ??= ( x, z ) => this.terrainData.heightAt( x, z ) );
 		splitSharedMaterials( this.scene );
-		// compile in the background where the browser supports it (keeps the loader animating)
+		// compile in the background where the browser supports it (keeps the loader animating).
+		// Against the target the scene is really drawn into (linear, like the mirrors'), not the
+		// canvas: the output's colour space is part of each program's key, and a program built
+		// for the wrong one is built again the first time its object is seen - a stall of a
+		// third of a second in the middle of the walk.
+		r.setRenderTarget( this.post.sceneRT );
 		await r.compileAsync( this.scene, this.camera );
+		r.setRenderTarget( null );
 		this.render();
 
 		await step( 1, 'Ready' );

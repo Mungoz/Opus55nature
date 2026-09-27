@@ -68,36 +68,62 @@ export function buildTerrainGeometry( data, spacing = 2, growth = 1.03, extent =
 
 	}
 
-	const idx = new Uint32Array( ( nx - 1 ) * ( nz - 1 ) * 6 );
-	k = 0;
-	for ( let j = 0; j < nz - 1; j ++ ) {
+	// in chunks of C x C cells, each with its own index range and bounding sphere, so that each
+	// camera draws only the chunks in its view (one vertex buffer shared by all)
+	const C = 40, chunks = [];
+	for ( let cj = 0; cj < nz - 1; cj += C ) for ( let ci = 0; ci < nx - 1; ci += C ) {
 
-		for ( let i = 0; i < nx - 1; i ++ ) {
+		const idx = [];
+		let lo = Infinity, hi = - Infinity;
+		for ( let j = cj; j < Math.min( cj + C, nz - 1 ); j ++ ) for ( let i = ci; i < Math.min( ci + C, nx - 1 ); i ++ ) {
 
 			if ( ! quadSeen( xs[ i ], xs[ i + 1 ], zs[ j ], zs[ j + 1 ] ) ) continue;
 			const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
 			// alternate the diagonal for a less directional triangulation
-			if ( ( i + j ) & 1 ) {
-
-				idx[ k ++ ] = a; idx[ k ++ ] = c; idx[ k ++ ] = b;
-				idx[ k ++ ] = b; idx[ k ++ ] = c; idx[ k ++ ] = d;
-
-			} else {
-
-				idx[ k ++ ] = a; idx[ k ++ ] = c; idx[ k ++ ] = d;
-				idx[ k ++ ] = a; idx[ k ++ ] = d; idx[ k ++ ] = b;
-
-			}
+			if ( ( i + j ) & 1 ) idx.push( a, c, b, b, c, d );
+			else idx.push( a, c, d, a, d, b );
+			for ( const v of [ a, b, c, d ] ) { lo = Math.min( lo, pos[ v * 3 + 1 ] ); hi = Math.max( hi, pos[ v * 3 + 1 ] ); }
 
 		}
 
+		if ( ! idx.length ) continue;
+		const x0 = xs[ ci ], x1 = xs[ Math.min( ci + C, nx - 1 ) ], z0 = zs[ cj ], z1 = zs[ Math.min( cj + C, nz - 1 ) ];
+		const sphere = new THREE.Sphere( new THREE.Vector3( ( x0 + x1 ) / 2, ( lo + hi ) / 2, ( z0 + z1 ) / 2 ), Math.hypot( x1 - x0, z1 - z0, hi - lo ) / 2 + 1 );
+		chunks.push( { index: new Uint32Array( idx ), sphere } );
+
 	}
 
-	const g = new THREE.BufferGeometry();
-	g.setAttribute( 'position', new THREE.BufferAttribute( pos, 3 ) );
-	g.setIndex( new THREE.BufferAttribute( idx.slice( 0, k ), 1 ) );
-	g.computeBoundingSphere();
-	g.boundingSphere.radius = extent * 2;
+	return { position: new THREE.BufferAttribute( pos, 3 ), chunks };
+
+}
+
+// The terrain as a group of those chunks, each culled against each camera's view on its own
+// (the eye's and every mirror's). The chunks share the group's layers, so enabling a layer on
+// the group (a mirror's reflect-only list does) enables them all.
+function terrainGroup( built, material, name, layer ) {
+
+	const g = new THREE.Group();
+	g.name = name;
+	g.layers.set( layer );
+	for ( const c of built.chunks ) {
+
+		const geo = new THREE.BufferGeometry();
+		geo.setAttribute( 'position', built.position );
+		geo.setIndex( new THREE.BufferAttribute( c.index, 1 ) );
+		geo.boundingSphere = c.sphere;
+		const m = new THREE.Mesh( geo, material );
+		m.layers = g.layers;
+		m.name = name;
+		m.frustumCulled = true;
+		m.castShadow = false;
+		m.receiveShadow = true;
+		// the terrain's shader is the costliest in the frame: draw it after grass, trees and
+		// rocks so that the ground they hide is rejected by the depth test instead of shaded
+		m.renderOrder = 5;
+		g.add( m );
+
+	}
+
 	return g;
 
 }
@@ -121,6 +147,8 @@ uniform sampler2DArray tMatN;
 #define SOIL 2.0
 #define TURF 3.0
 uniform float uGrassFar;
+uniform sampler2D uTNoiseA;
+uniform sampler2D uTNoiseB;
 uniform vec4 uCrop[ 12 ]; // turf grazed short; entries with strength 1 are marmot burrow mouths
 varying vec3 vWorldPos;
 
@@ -128,6 +156,20 @@ vec3 decode( vec3 c ) { return pow( c, vec3( 2.2 ) ); }
 vec3 unpackN( vec4 t ) { vec2 xy = t.xy * 2.0 - 1.0; return vec3( xy, sqrt( max( 0.0, 1.0 - dot( xy, xy ) ) ) ); }
 // tangent-space slope of an xz-projected texture -> world-space perturbation
 vec3 tn2w( vec3 t ) { return vec3( t.x, 0.0, t.y ); }
+// the noises that depend only on where you are, baked at load over the near region
+// (TerrainData.bakeNoise); beyond it, the same evaluated here
+bool inBake( vec2 p ) {
+	vec2 uv = ( p - uNearXf.xy ) * uNearXf.z;
+	return uv.x > 0.001 && uv.y > 0.001 && uv.x < 0.999 && uv.y < 0.999;
+}
+vec4 bakedA( vec2 p, float h ) {
+	if ( inBake( p ) ) return texture2D( uTNoiseA, ( p - uNearXf.xy ) * uNearXf.z );
+	return vec4( gnoise( p * 0.004 ) * 0.5 + gnoise( p * 0.019 ) * 0.3, gnoise( p * 0.0032 + h * 0.003 ), gnoise( vec2( ( p.x + p.y ) * 0.05, h * 0.0025 ) ), gnoise( p * 0.02 ) );
+}
+vec4 bakedB( vec2 p ) {
+	if ( inBake( p ) ) return texture2D( uTNoiseB, ( p - uNearXf.xy ) * uNearXf.z );
+	return vec4( gnoise( p * 0.012 + vec2( 11.0, -3.0 ) ), gnoise( p * 0.05 ), gnoise( p * 0.019 + 2.0 ), gnoise( p * 0.05 + 1.3 ) );
+}
 ${ __HORROR__ ? `#if STORY
 float storyPuddle = 0.0, storyMud = 0.0;
 // raindrop rings on a puddle (as on the lake): each cell a drop landing at its own rhythm
@@ -162,7 +204,8 @@ void main() {
 	vec4 bio = biomeAt( wp.xz );
 	float h = wp.y;
 	float steep = 1.0 - N.y;
-	float macro = gnoise( wp.xz * 0.004 ) * 0.5 + gnoise( wp.xz * 0.019 ) * 0.3;
+	vec4 nA = bakedA( wp.xz, h ), nB = bakedB( wp.xz );
+	float macro = nA.x;
 
 	// ---------- rock (triplanar, two scales against tiling) ----------
 	vec3 bw = pow( abs( N ), vec3( 4.0 ) );
@@ -181,9 +224,9 @@ void main() {
 	// geology: strata of differing tone, iron-ochre stains, dark water streaks down the cliffs
 	float band = gnoise( vec2( h * 0.045 + macro * 2.0, 0.5 ) ) + gnoise( vec2( h * 0.12, 3.0 ) ) * 0.4;
 	rockAlb *= mix( vec3( 0.86, 0.85, 0.84 ), vec3( 1.1, 1.05, 0.99 ), smoothstep( -0.6, 0.6, band ) );
-	float ochre = smoothstep( 0.2, 0.75, gnoise( wp.xz * 0.0032 + h * 0.003 ) + band * 0.25 );
+	float ochre = smoothstep( 0.2, 0.75, nA.y + band * 0.25 );
 	rockAlb = mix( rockAlb, rockAlb * vec3( 1.3, 0.96, 0.66 ), ochre * 0.5 );
-	float streak = smoothstep( 0.3, 0.85, gnoise( vec2( ( wp.x + wp.z ) * 0.05, h * 0.0025 ) ) );
+	float streak = smoothstep( 0.3, 0.85, nA.z );
 	rockAlb *= 1.0 - streak * 0.35 * smoothstep( 0.25, 0.5, steep );
 
 	// macro relief for distant faces: ribs, gullies and boulder fields the heightmap
@@ -264,8 +307,8 @@ void main() {
 	// distant forest: the ground between far trees reads as continuous canopy
 	float canopyW = smoothstep( 0.06, 0.4, wForest ) * smoothstep( 120.0, 600.0, dist );
 	if ( canopyW > 0.0 ) {
-		float larchK = saturate( 0.18 + smoothstep( 120.0, 520.0, h ) * 0.5 + gnoise( wp.xz * 0.012 + vec2( 11.0, -3.0 ) ) * 0.35 );
-		vec3 canopy = mix( decode( vec3( 0.1, 0.16, 0.1 ) ), decode( vec3( 0.62, 0.46, 0.16 ) ), smoothstep( 0.35, 0.8, larchK + gnoise( wp.xz * 0.05 ) * 0.25 ) );
+		float larchK = saturate( 0.18 + smoothstep( 120.0, 520.0, h ) * 0.5 + nB.x * 0.35 );
+		vec3 canopy = mix( decode( vec3( 0.1, 0.16, 0.1 ) ), decode( vec3( 0.62, 0.46, 0.16 ) ), smoothstep( 0.35, 0.8, larchK + nB.y * 0.25 ) );
 		canopy *= 0.75 + 0.5 * texture2D( uNoiseTex, wp.xz / 90.0 ).b;
 		alb = mix( alb, canopy, canopyW );
 	}
@@ -318,8 +361,8 @@ ${ __HORROR__ ? `#if STORY
 			float rag = gnoise( wp.xz * 3.1 ) * 0.09 + gnoise( wp.xz * 9.0 ) * 0.045;
 			float halfW = 0.28 + 0.11 * gnoise( wp.xz * 0.17 + 4.0 ) + 0.05 * gnoise( wp.xz * 0.7 );
 			float tread = 1.0 - smoothstep( halfW - 0.07, halfW + 0.07, ad + rag );
-			float side = gnoise( wp.xz * 0.019 + 2.0 ) > 0.0 ? 1.0 : -1.0;
-			float braidOff = 0.95 + 0.3 * gnoise( wp.xz * 0.05 + 1.3 );
+			float side = nB.z > 0.0 ? 1.0 : -1.0;
+			float braidOff = 0.95 + 0.3 * nB.w;
 			// (a second, fainter line trodden beside the first, only here and there)
 			float braidOn = smoothstep( 0.35, 0.6, gnoise( wp.xz * 0.025 + 7.7 ) ) * ( 1.0 - smoothstep( 0.2, 0.6, wForest ) ) * 0.6;
 			float braid = braidOn * ( 1.0 - smoothstep( 0.1, 0.22, abs( off - side * braidOff ) + rag ) );
@@ -375,7 +418,7 @@ ${ __HORROR__ ? `#if STORY
 	cav = mix( cav, rockT.a, wRock );
 
 	// ---------- snow ----------
-	float snowline = 1020.0 + macro * 160.0 + gnoise( wp.xz * 0.02 ) * 25.0;
+	float snowline = 1020.0 + macro * 160.0 + nA.w * 25.0;
 	float snow = smoothstep( snowline, snowline + 90.0, h );
 	snow *= 1.0 - smoothstep( 0.2 + rockT.a * 0.12, 0.36, steep );
 	// wind-blown dusting clinging to ledges and gullies
@@ -491,21 +534,9 @@ export class Terrain {
 			lights: true,
 		} );
 
-		this.mesh = new THREE.Mesh( buildTerrainGeometry( data, quality.terrainSpacing ), this.material );
-		this.mesh.name = 'terrain';
-		this.mesh.frustumCulled = false;
-		this.mesh.castShadow = false;
-		this.mesh.receiveShadow = true;
-		this.mesh.layers.set( 1 );
-
+		this.mesh = terrainGroup( buildTerrainGeometry( data, quality.terrainSpacing ), this.material, 'terrain', 1 );
 		// coarser copy for the water reflection pass
-		this.reflectMesh = new THREE.Mesh( buildTerrainGeometry( data, quality.terrainSpacing * 2.5, 1.045 ), this.material );
-		this.reflectMesh.frustumCulled = false;
-		this.reflectMesh.layers.set( 2 );
-		// the terrain's shader is the costliest in the frame: draw it after grass, trees and
-		// rocks so that the ground they hide is rejected by the depth test instead of shaded
-		this.mesh.renderOrder = 5;
-		this.reflectMesh.renderOrder = 5;
+		this.reflectMesh = terrainGroup( buildTerrainGeometry( data, quality.terrainSpacing * 2.5, 1.045 ), this.material, 'terrain-reflect', 2 );
 
 	}
 
