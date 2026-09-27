@@ -8,7 +8,8 @@ import { buildBoots } from './boots.js';
 import { creatureMaterial } from '../../fauna/creature.js';
 import { Kit } from './kit.js';
 import { Glow } from './glow.js';
-import { PLACES } from '../layout.js';
+import { PLACES, BOARDWALK } from '../layout.js';
+import { buildBoardwalk } from './boardwalk.js';
 import { Water } from '../../world/water.js';
 
 const V = ( x, y, z ) => new THREE.Vector3( x, y, z );
@@ -64,6 +65,7 @@ export class StoryProps {
 		this._fence();
 		this._junction();
 		this._wayside();
+		this._boardwalk();
 		this.app.scene.add( this.group );
 
 	}
@@ -118,6 +120,17 @@ export class StoryProps {
 		this.berth = f.toWorld( info.berth.x, 0, info.berth.z );
 		this.bollard = f.toWorld( info.bollard.x, info.bollard.y, info.bollard.z );
 		this.cleat = f.toWorld( info.cleat.x, info.cleat.y, info.cleat.z );
+
+	}
+
+	// ------------------------------------------------------------------ the boardwalk
+	_boardwalk() {
+
+		const td = this.app.terrainData;
+		const bw = this.boardwalk = buildBoardwalk( BOARDWALK, ( x, z ) => td.heightAt( x, z ) );
+		this.group.add( this._mesh( bw.geometry, this.material, 'boardwalk' ) );
+		const C = this.story.collision;
+		for ( const d of bw.decks ) C.deck( d.x, d.z, d.hx, d.hz, d.yaw, d.y, 'boardwalk' );
 
 	}
 

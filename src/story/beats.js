@@ -773,44 +773,102 @@ export const BEATS = [
 		skip: ( S ) => ( S.echo = true ),
 	},
 
-	// F7: along the dark shore your reflection walks with you in the still water, and a second
-	// one keeps pace a few steps behind it - still whenever you look, closer each time you look
-	// away. A stone breaks it; when the rings settle it is closer.
+	// F7: out along the old boardwalk over the shallows, a hand's breadth over the water.
+	// Someone is wading after you, a few steps behind, just off the boards on the lake side:
+	// in the still water you see its reflection, against the pale mist mirrored there, and the
+	// rings spreading from where it walks - and on the water itself, nothing. Still whenever
+	// you look, a little closer each time you look away. A stone breaks it; when the rings
+	// settle it is closer. (The strip between the boards and the bank mirrors only the dark
+	// bank; the lake side mirrors the mist - tools/out/q_shoredist.js)
 	{
-		id: 'F7-shore', at: 'strand', lead: 60,
+		id: 'F7-shore', at: 'strand', lead: 62,
 		run: async ( S ) => {
 
-			const F = S.figure;
-			S.shadowing = { gap: 2.6 };
+			const F = S.figure, td = S.app.terrainData, water = S.app.water;
+			S.shadowing = { gap: 16 };
 			F.tilt = 0.7;
+			F.pose = 'stand';
+			// beside a point of the boardwalk, off its lake side, standing on the bed
+			const wadeBeside = ( b ) => {
+
+				const nx = b.tz, nz = - b.tx;
+				const side = td.heightAt( b.x + nx * 4, b.z + nz * 4 ) < td.heightAt( b.x - nx * 4, b.z - nz * 4 ) ? 1 : - 1;
+				const x = b.x + nx * side * 0.9, z = b.z + nz * side * 0.9;
+				// (thigh-deep, as if on something under the water: enough of it above the surface
+				// for its mirror image to be a person)
+				return { x, z, y: Math.max( td.heightAt( x, z ), - 0.62 ) };
+
+			};
+
+			let last = null, rip = 0, told = false;
 			const follow = S.every( ( dt ) => {
 
 				if ( ! S.shadowing ) return true;
 				if ( S.unseenFor > 0.25 ) {
 
-					// a few steps behind you along the shore, a little nearer the water
-					const b = S.behind( S.shadowing.gap );
-					const toWater = S.waterSide( b );
-					const x = b.x + toWater.x * 0.8, z = b.z + toWater.z * 0.8;
-					F.place( x, z, Math.atan2( S.cam.x - x, S.cam.z - z ) );
+					const p = wadeBeside( S.behind( S.shadowing.gap ) );
+					F.place( p.x, p.z, Math.atan2( S.cam.x - p.x, S.cam.z - p.z ), p.y );
 					if ( F.mode !== 'reflect' ) F.setMode( 'reflect' );
+					// wading: rings from where it walks, and the sound of it, never quite in step
+					if ( last && Math.hypot( p.x - last.x, p.z - last.z ) > 0.7 ) {
+
+						water.addRipple( p.x, p.z, 0.35 );
+						S.sound.wade( V( p.x, 0, p.z ), 0.22 );
+						if ( ! told ) {
+
+							told = true;
+							S.ui.caption( '[ wading, behind you ]', 3.5 );
+
+						}
+
+						last = p;
+
+					}
+
+					last ??= p;
 
 				}
 
-				void dt;
+				// and standing, the water laps round it now and then
+				rip -= dt;
+				if ( rip <= 0 && F.mode === 'reflect' ) {
+
+					rip = 2.5 + Math.random() * 3;
+					water.addRipple( F.pos.x, F.pos.z, 0.12 );
+
+				}
+
 				return false;
 
 			} );
 			void follow;
+			// each time it has been seen and you look away, it comes on a little
+			let seen = 0;
+			const closer = S.every( () => {
+
+				if ( ! S.shadowing ) return true;
+				if ( S.sight.reflect > 0 && S.seenFor > 0.6 ) seen = 1;
+				else if ( seen && S.unseenFor > 1.5 ) {
+
+					seen = 0;
+					S.shadowing.gap = Math.max( 5, S.shadowing.gap - 2.5 );
+
+				}
+
+				return false;
+
+			} );
+			void closer;
 			S.onStone = ( p ) => {
 
 				if ( ! S.shadowing || p.distanceTo( F.pos ) > 18 ) return;
 				// when the rings settle, it is closer
-				setTimeout( () => { if ( S.shadowing ) S.shadowing.gap = Math.max( 1.1, S.shadowing.gap - 0.9 ); }, 2500 );
+				setTimeout( () => { if ( S.shadowing ) S.shadowing.gap = Math.max( 4, S.shadowing.gap - 4 ); }, 2500 );
 
 			};
 
-			await S.until( () => S.progress > S.path.ids.boat - 14 );
+			// into the reeds, where it is lost among the stems
+			await S.until( () => S.progress > S.path.ids.boatJ + 12 );
 			S.shadowing = null;
 			await S.untilUnseen( 0.5 );
 			F.setMode( 'hidden' );

@@ -6,6 +6,33 @@ import { Path } from './path.js';
 
 const D2R = Math.PI / 180;
 
+// The fishermen's boardwalk along the west shore: about 2.8 m out from the waterline over the
+// shallows (the shore shelves ~0.3 m in a metre), coming ashore at either end. [ x, z ]
+function BOARDWALK_LINE() {
+
+	return [ [ - 205, 352 ], [ - 204.6, 344 ], [ - 207.7, 335 ], [ - 212.7, 325 ], [ - 217.45, 315 ], [ - 221.45, 305 ], [ - 224.7, 295 ], [ - 227.45, 285 ], [ - 230.2, 275 ], [ - 233.45, 265 ], [ - 236.7, 255 ], [ - 239.95, 245 ], [ - 242.5, 236 ], [ - 245.6, 229 ], [ - 248.4, 224 ] ];
+
+}
+
+export const BOARDWALK = BOARDWALK_LINE();
+
+// how far (x, z) is from the boardwalk's line
+export function boardwalkDist( x, z ) {
+
+	let d = Infinity;
+	for ( let i = 0; i < BOARDWALK.length - 1; i ++ ) {
+
+		const [ ax, az ] = BOARDWALK[ i ], [ bx, bz ] = BOARDWALK[ i + 1 ];
+		const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
+		const u = Math.min( 1, Math.max( 0, ( ( x - ax ) * dx + ( z - az ) * dz ) / l2 ) );
+		d = Math.min( d, Math.hypot( ax + dx * u - x, az + dz * u - z ) );
+
+	}
+
+	return d;
+
+}
+
 // ---------------------------------------------------------------------------
 // Places
 // ---------------------------------------------------------------------------
@@ -123,13 +150,11 @@ export const ROUTE = [
 	// 11. out onto the west strand
 	{ x: - 216, z: 430 },
 	{ x: - 212, z: 404, id: 'strand' },
-	// 12. north along the dark shore, a few metres above the water
-	{ x: - 221, z: 378 },
-	{ x: - 232, z: 352 },
-	{ x: - 240, z: 326 },
-	{ x: - 245, z: 300 },
-	{ x: - 248, z: 276, id: 'boatJ' },
-	{ x: - 250, z: 250 },
+	// 12. down to the water, and along the old boardwalk over the shallows - a hand's breadth
+	// over the water, the bank a few metres off - past J.'s boat and through the reeds
+	{ x: - 213, z: 384 },
+	{ x: - 207.5, z: 366 },
+	...BOARDWALK_LINE().map( ( [ x, z ], i ) => ( { x, z, deck: true, ...( i === 9 ? { id: 'boatJ' } : {} ) } ) ),
 	// 13. the boat
 	{ x: - 249.5, z: 219.6, id: 'boat' },
 ];
@@ -201,6 +226,8 @@ export function waterClear( x, z, kind ) {
 	const lx = c * dx - s * dz, lz = s * dx + c * dz;
 	if ( lz > - 3 && lz < 26 && lx > - 7 && lx < 8 ) return true;
 	for ( const b of [ PLACES.boatEnd, PLACES.boatJ ] ) if ( Math.hypot( x - b.x, z - b.z ) < 6 ) return true;
+	// nothing grows up through the boardwalk's planks
+	if ( Math.abs( z - 290 ) < 70 && x < - 195 && x > - 255 && boardwalkDist( x, z ) < ( kind === 'reed' ? 1.05 : 0.9 ) ) return true;
 	const t = PLACES.tarn;
 	const r = Math.hypot( x - t.x, z - t.z );
 	// the tarn stays open, but for a few pads in its northern lobe
