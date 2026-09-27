@@ -331,8 +331,9 @@ export class GrassLayer {
 
 	}
 
-	// the chunks' bounding spheres, where the shader puts their blades round the viewer (x, y, z)
-	update( x, y, z ) {
+	// the chunks' bounding spheres, where the shader puts their blades round the viewer (x, y, z);
+	// ground( x, z ), if given, the terrain's height (else a generous margin up and down)
+	update( x, y, z, ground = null ) {
 
 		const T = this.tile;
 		const place = ( a0, a1, c ) => {
@@ -347,9 +348,27 @@ export class GrassLayer {
 
 			const [ xa, xb ] = place( ch.x0, ch.x1, x ), [ za, zb ] = place( ch.z0, ch.z1, z );
 			const S = ch.m.geometry.boundingSphere;
-			// (the ground's height across a chunk is unknown here: a generous margin up and down)
-			S.center.set( ( xa + xb ) / 2, y, ( za + zb ) / 2 );
-			S.radius = Math.hypot( xb - xa, zb - za ) / 2 + 30;
+			const cx = ( xa + xb ) / 2, cz = ( za + zb ) / 2, half = Math.hypot( xb - xa, zb - za ) / 2;
+			if ( ground ) {
+
+				// the ground's spread over the chunk (its corners and middle), and the blades on it
+				let lo = Infinity, hi = - Infinity;
+				for ( const [ px, pz ] of [ [ xa, za ], [ xb, za ], [ xa, zb ], [ xb, zb ], [ cx, cz ] ] ) {
+
+					const h = ground( px, pz );
+					lo = Math.min( lo, h ); hi = Math.max( hi, h + 2.2 );
+
+				}
+
+				S.center.set( cx, ( lo + hi ) / 2, cz );
+				S.radius = Math.hypot( half, ( hi - lo ) / 2 ) + 1.5;
+
+			} else {
+
+				S.center.set( cx, y, cz );
+				S.radius = half + 30;
+
+			}
 
 		}
 
@@ -374,11 +393,11 @@ export class Meadow {
 	}
 
 	// once a frame, before any pass: where the blades are round the viewer
-	update( camera ) {
+	update( camera, ground = null ) {
 
 		const F = U.uFocus.value, p = camera.position;
 		const x = F.w > 0.5 ? F.x : p.x, z = F.w > 0.5 ? F.y : p.z;
-		for ( const l of [ this.near, this.far, this.reeds ] ) l.update( x, p.y, z );
+		for ( const l of [ this.near, this.far, this.reeds ] ) l.update( x, p.y, z, ground );
 
 	}
 
