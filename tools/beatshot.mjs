@@ -14,7 +14,7 @@ const page = await browser.newPage();
 await page.setViewport( { width: 1600, height: 900 } );
 page.on( 'pageerror', ( e ) => console.log( 'pageerror ' + e.message ) );
 page.on( 'console', ( m ) => { if ( m.type() === 'error' || m.text().startsWith( '[b]' ) ) console.log( m.text().slice( 0, 500 ) ); } );
-await page.goto( `http://localhost:5199/?autopilot&turbo=${turbo}&quality=high&beat=${beat}${extra}`, { waitUntil: 'load' } );
+await page.goto( `http://localhost:${process.env.PORT || 5199}/?autopilot&turbo=${turbo}&quality=high&beat=${beat}${extra}`, { waitUntil: 'load' } );
 await page.waitForFunction( () => document.body.classList.contains( 'ready' ), { timeout: 240000, polling: 300 } );
 await page.click( '#enter' );
 for ( const st of steps ) {

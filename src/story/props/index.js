@@ -678,6 +678,9 @@ export class StoryProps {
 		const marks = [];
 		for ( let d = path.ids.jettyLand + 30; d < path.ids.strand; d += 55 ) marks.push( d );
 		for ( let d = path.ids.troughEnd + 8; d < path.ids.tarn - 4; d += 14 ) marks.push( d );
+		// and through the Black Wood, from its edge to the strand (in its dusk, the one thing
+		// showing the way besides the trail)
+		for ( let d = path.ids.shrine + 6; d < path.ids.strand - 12; d += 16 ) if ( Math.abs( d - path.ids.gully ) > 9 ) marks.push( d );
 		for ( const d of marks ) {
 
 			const s = path.at( d );
@@ -782,6 +785,8 @@ export class StoryProps {
 	_boats() {
 
 		this.boatGeo = buildBoat();
+		// (the one on the west strand has had its oars taken up to the forest lodge to mend)
+		this.boatGeoBare = buildBoat( { oars: false } );
 		this.waterline = boatWaterline();
 		this.lidMat = new THREE.MeshBasicMaterial( { colorWrite: false, side: THREE.DoubleSide } );
 		// yours: moored alongside the jetty's head (the row-in brings it there)
@@ -793,6 +798,7 @@ export class StoryProps {
 
 			const E = PLACES.boatEnd, td = this.app.terrainData;
 			this.boatEnd = this._boat( 'boat-end' );
+			this.boatEnd.mesh.geometry = this.boatGeoBare;
 			const ax = Math.sin( E.yaw ), az = Math.cos( E.yaw );
 			const hb = td.heightAt( E.x - ax * 2.2, E.z - az * 2.2 ), hf = td.heightAt( E.x + ax * 2.2, E.z + az * 2.2 );
 			// the bow up on the stones, the stern afloat
@@ -835,6 +841,9 @@ export class StoryProps {
 		return { mesh: b, lid, rope: null };
 
 	}
+
+	// the oars laid in the boat on the strand
+	oarsIn() { this.boatEnd.mesh.geometry = this.boatGeo; }
 
 	placeBoat( b, x, z, yaw, { roll = 0, pitch = 0, y = - BOAT.draft } = {} ) {
 

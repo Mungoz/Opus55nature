@@ -126,6 +126,8 @@ void main() {
 	vec2 meadowC = vec2( 40.0, 640.0 );
 	float meadow = 1.0 - smoothstep( 150.0, 360.0, length( ( p - meadowC ) * vec2( 1.0, 0.8 ) ) + n2 * 90.0 );
 	forest *= 1.0 - meadow * 0.92;
+	// an edition's dense woods: forest floor right through them (the trees are placed on the CPU)
+	forest = max( forest, woods( p ) * 0.95 );
 	forest = clamp( forest, 0.0, 1.0 );
 
 	// Grass everywhere it can grow.
@@ -414,6 +416,9 @@ export class TerrainData {
 			uBankSeg: { value: Array.from( { length: 4 }, ( v, i ) => { const b = STORY_FEATURES.banks[ i ]; return b ? new THREE.Vector4( b.a[ 0 ], b.a[ 1 ], b.b[ 0 ], b.b[ 1 ] ) : new THREE.Vector4(); } ) },
 			uBankShape: { value: Array.from( { length: 4 }, ( v, i ) => { const b = STORY_FEATURES.banks[ i ]; return b ? new THREE.Vector4( b.h, b.w, i * 7.1 + 3.3, 0 ) : new THREE.Vector4(); } ) },
 			uPool: { value: new THREE.Vector4( 1e6, 1e6, 1, 0 ) },
+			uWoodsSeg: { value: Array.from( { length: 3 }, ( v, i ) => { const b = STORY_FEATURES.woods?.bands[ i ]; return b ? new THREE.Vector4( b.a[ 0 ], b.a[ 1 ], b.b[ 0 ], b.b[ 1 ] ) : new THREE.Vector4(); } ) },
+			uWoodsR: { value: Array.from( { length: 3 }, ( v, i ) => STORY_FEATURES.woods?.bands[ i ]?.r ?? 0 ) },
+			uWoodsClear: { value: Array.from( { length: 6 }, ( v, i ) => { const c = STORY_FEATURES.woods?.clear[ i ]; return c ? new THREE.Vector3( c[ 0 ], c[ 1 ], c[ 2 ] ) : new THREE.Vector3(); } ) },
 		};
 		this._measureWater();
 

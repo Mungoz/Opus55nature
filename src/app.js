@@ -242,6 +242,8 @@ export class App {
 		const keepOut = this.storyGround ? ( x, z, rr ) => this.storyGround.trailDist( x, z ) < rr + 0.7 || this.storyGround.channel( 3, x, z ) > 0.2 || this.storyGround.channel( 1, x, z ) > 0.35 : null;
 		// (and trees out of the sightlines the story needs)
 		this.forest.keepOut = keepOut && ( ( x, z, rr ) => keepOut( x, z, rr ) || ( rr > 1 && this.layout.treeClear( x, z ) ) );
+		// (and grows its dense woods)
+		if ( this.layout?.WOODS ) this.forest.extraWoods = { box: this.layout.WOODS.box, at: this.layout.woodsAt };
 		if ( this.options.showcase ) this.forest.showcase = { x: 30, z: 560, page: this.options.showcasePage || 0 };
 		this.treeCount = this.forest.place();
 		await step( 0.6, 'Turning the larches gold' );

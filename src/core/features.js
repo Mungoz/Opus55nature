@@ -21,7 +21,7 @@ const RIVER_CTRL = [
 // Edition-specific shaping (the horror edition fills this in before the terrain is built):
 // banks: low moraines [ { a: [ x, z ], b: [ x, z ], h, w } ]; pool: a reach of the stream
 // widened and deepened { s0, s1, widen, deepen } (s in metres from the fall)
-export const STORY_FEATURES = { banks: [], pool: null };
+export const STORY_FEATURES = { banks: [], pool: null, woods: null };
 
 export const RIVER_SAMPLES = 160;
 export const RIVER_CHUNK = 8; // segments per bounding box in the shader's coarse pass
@@ -114,6 +114,9 @@ uniform float uFeatures;          // 0 during the pre-pass that measures the nat
 uniform vec4 uBankSeg[ 4 ];       // moraine banks (edition-specific): segment ends ax, az, bx, bz
 uniform vec4 uBankShape[ 4 ];     // crest height (0: none), half-width, seed
 uniform vec4 uPool;               // a deepened pool on the stream: x, z, radius, extra depth
+uniform vec4 uWoodsSeg[ 3 ];      // an edition's dense woods: bands (segment ends ax, az, bx, bz)
+uniform float uWoodsR[ 3 ];       //   and their radii (0: none)
+uniform vec3 uWoodsClear[ 6 ];    //   clearings in them: x, z, radius
 const vec2 FALL_BASE = vec2( ${FALL.base.x.toFixed( 3 )}, ${FALL.base.y.toFixed( 3 )} );
 const vec2 FALL_OUT = vec2( ${FALL.out.x.toFixed( 5 )}, ${FALL.out.y.toFixed( 5 )} );
 const float FALL_H = ${FALL.height.toFixed( 1 )};
@@ -189,11 +192,32 @@ float applyFallStep( vec2 p, float h ) {
 	return h + step_ * span;
 }
 
-// Low moraine banks: rounded ridges with a wandering, humped crest and tapering ends.
+// An edition's dense woods (story/layout.js WOODS, woodsAt on the CPU): 1 in their heart, fading
+// over the bands' last 14 m, 0 in their clearings.
+float woods( vec2 p ) {
+	float w = 0.0;
+	for ( int i = 0; i < 3; i ++ ) {
+		if ( uWoodsR[ i ] <= 0.0 ) continue;
+		vec4 g = uWoodsSeg[ i ];
+		vec2 pa = p - g.xy, ba = g.zw - g.xy;
+		float t = clamp( dot( pa, ba ) / dot( ba, ba ), 0.0, 1.0 );
+		w = max( w, 1.0 - smoothstep( uWoodsR[ i ] - 14.0, uWoodsR[ i ], length( pa - ba * t ) ) );
+	}
+	if ( w <= 0.0 ) return 0.0;
+	for ( int i = 0; i < 6; i ++ ) {
+		vec3 c = uWoodsClear[ i ];
+		if ( c.z <= 0.0 ) continue;
+		w *= smoothstep( c.z, c.z + 6.0, length( p - c.xy ) );
+	}
+	return w;
+}
+
+// Low moraine banks: rounded ridges with a wandering, humped crest and tapering ends. (A
+// negative crest cuts a ravine instead.)
 float applyBanks( vec2 p, float h ) {
 	for ( int i = 0; i < 4; i ++ ) {
 		vec4 s = uBankShape[ i ];
-		if ( s.x <= 0.0 ) continue;
+		if ( s.x == 0.0 ) continue;
 		vec4 g = uBankSeg[ i ];
 		vec2 pa = p - g.xy, ba = g.zw - g.xy;
 		float len = length( ba );

@@ -13,7 +13,8 @@ export const CLOCK = [
 	[ 'jettyHead', 16.5 ], [ 'mouth', 16.53 ], [ 'ford', 16.58 ], [ 'gate', 16.66 ], [ 'pond', 16.7 ],
 	[ 'marmots', 16.76 ], [ 'signpost', 16.8 ], [ 'bridge', 16.87 ], [ 'hut', 16.93 ],
 	// (the storm runs the clock on while you shelter: see the storm beat)
-	[ 'trough', 17.44 ], [ 'troughEnd', 17.46 ], [ 'tarn', 17.52 ], [ 'pool', 17.58 ], [ 'wood', 17.63 ], [ 'bear', 17.72 ],
+	[ 'trough', 17.44 ], [ 'troughEnd', 17.46 ], [ 'tarn', 17.52 ], [ 'pool', 17.57 ], [ 'shrine', 17.59 ], [ 'wood', 17.61 ],
+	[ 'gully', 17.63 ], [ 'blackpond', 17.66 ], [ 'stand', 17.69 ], [ 'lodge', 17.71 ], [ 'camp', 17.73 ], [ 'bear', 17.75 ],
 	[ 'strand', 17.8 ], [ 'boatJ', 17.95 ], [ 'boat', 18.05 ],
 ];
 
@@ -600,6 +601,7 @@ export const BEATS = [
 
 				S.keyIt.enabled = false;
 				S.flags.hasKey = true;
+				S.hold( 'the gate key' );
 				P.hut.key.visible = false;
 				S.sound.knock( kp, 0.15 );
 				S.ui.caption( '[ an iron key, cold in your hand ]', 3.5 );
@@ -627,6 +629,7 @@ export const BEATS = [
 				}
 
 				gateIt.enabled = false;
+				S.hold( 'the gate key', false );
 				S.sound.latch( G.pos );
 				setTimeout( () => S.sound.knock( G.pos, 0.25 ), 300 );
 				P.topChain.visible = false;
@@ -962,7 +965,7 @@ export const BEATS = [
 
 			const b = S.app.mammals.bears[ 0 ];
 			// it's been rooting about here; if it has wandered, it is somewhere near
-			if ( dist2( b.pos, - 206, 572 ) > 30 ) await S.untilOffscreen( b.pos, 3 ).then( () => teleport( b, - 207, 574 ) );
+			if ( dist2( b.pos, - 192, 474 ) > 30 ) await S.untilOffscreen( b.pos, 3 ).then( () => teleport( b, - 191, 476 ) );
 			b.cmd = { do: 'forage' };
 			// first you hear it: something big rooting about off the path
 			await S.until( () => dist2( b.pos, S.cam.x, S.cam.z ) < 48 );
@@ -980,7 +983,7 @@ export const BEATS = [
 			await S.wait( 0.5 );
 			S.sound.woof( b.pos.clone().setY( 1 ) );
 			await S.wait( 0.4 );
-			const to = V( - 150, 0, 540 );
+			const to = V( - 140, 0, 486 );
 			b.cmd = { do: 'run', to, speed: 4.2 };
 			S.sound.crash( b.pos.clone().setY( 0.8 ), to.clone().sub( b.pos ).normalize(), 3.5 );
 
@@ -1262,7 +1265,31 @@ export const BEATS = [
 			m.updateMatrixWorld( true );
 			const ends = [ 2.2, - 2.2 ].map( ( z ) => new THREE.Vector3( 0, 0.55, z ).applyMatrix4( m.matrixWorld ) );
 			const e = ends.sort( ( a, c ) => a.distanceTo( S.cam ) - c.distanceTo( S.cam ) )[ 0 ];
-			S.addInteractable( { id: 'boat', x: e.x, y: e.y, z: e.z, r: 3.4, prompt: 'push off', use: () => S.ending() } );
+			// no oars in it (they are at the forest lodge: the note in the boat says so); bring
+			// them, lay them in, and push off. J.'s last page on the far thwart.
+			const it = S.addInteractable( { id: 'boat', x: e.x, y: e.y, z: e.z, r: 3.4, prompt: S.flags.oarsIn ? 'push off' : 'look in the boat', use: () => {
+
+				if ( S.flags.oarsIn ) return S.ending();
+				if ( S.holds( 'the oars' ) ) {
+
+					S.hold( 'the oars', false );
+					S.flags.oarsIn = true;
+					S.props.oarsIn();
+					S.sound.knock( e, 0.4 );
+					setTimeout( () => S.sound.knock( e, 0.3 ), 350 );
+					S.ui.caption( '[ the oars, laid in the boat ]', 3 );
+					it.prompt = 'push off';
+					return;
+
+				}
+
+				it.used = false;
+				S.ui.caption( '[ no oars in it ]', 3 );
+				S.ui.read( READS.boathouse );
+
+			} } );
+			const pg = new THREE.Vector3( 0, 0.62, - 1.3 ).applyMatrix4( m.matrixWorld );
+			S.addInteractable( { id: 'jlast', x: pg.x, y: pg.y, z: pg.z, r: 2.2, prompt: 'read the page', use: ( S2 ) => S2.ui.read( READS.jlast ) } );
 
 		},
 		skip: ( S ) => BEATS.find( ( b ) => b.id === 'boat' ).run( S ),

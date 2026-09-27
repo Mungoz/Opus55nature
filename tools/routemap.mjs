@@ -11,7 +11,7 @@ const page = await browser.newPage();
 await page.setViewport( { width: W, height: H } );
 page.on( 'pageerror', ( e ) => console.log( '[pageerror]', e.message ) );
 page.on( 'console', ( m ) => { if ( m.type() === 'error' ) console.log( '[console]', m.text() ); } );
-await page.goto( `http://localhost:5199/?shot=20&speed=0&t=12.5&weather=clear${query ? '&' + query : ''}`, { waitUntil: 'load' } );
+await page.goto( `http://localhost:${process.env.PORT || 5199}/?shot=20&speed=0&t=12.5&weather=clear${query ? '&' + query : ''}`, { waitUntil: 'load' } );
 await page.waitForFunction( 'window.__shotReady === true || window.__shotError', { timeout: 240000, polling: 250 } );
 const notes = await page.evaluate( async ( cx, cz, span ) => {
 

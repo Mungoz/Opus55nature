@@ -44,6 +44,8 @@ export class Controls {
 		this.floorAt = null;
 		this.canFly = true;
 		this.moveScale = 1;
+		// (a story may hold the eye at a height: up a ladder, on a raised stand)
+		this.fixedY = null;
 		// stride length (m) for a step-by-step head bob; 0 keeps the gentle sway
 		this.stride = 0;
 
@@ -304,7 +306,7 @@ export class Controls {
 				bobY = Math.sin( this.bob ) * 0.035 * Math.min( moving / 3, 1 );
 
 			}
-			const want = Math.max( ground, WORLD.waterLevel - 0.4 ) + this.eyeHeight + bobY;
+			const want = this.fixedY ?? Math.max( ground, WORLD.waterLevel - 0.4 ) + this.eyeHeight + bobY;
 			cam.position.y += ( want - cam.position.y ) * ( 1 - Math.exp( - dt * 14 ) );
 
 		} else {

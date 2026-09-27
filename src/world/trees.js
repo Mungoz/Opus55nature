@@ -541,10 +541,10 @@ export class Forest {
 		this.speciesVariants = { spruce: [ 0, 1, 2, 16, 16, 17, 18 ], larch: [ 3, 4, 5, 19, 20, 21 ], birch: [ 6, 7, 23 ], pine: [ 8, 9, 22 ], aspen: [ 10, 11 ], rowan: [ 12, 13 ], snag: [ 14, 15 ] };
 		// understorey and forest-floor props, drawn only near the camera
 		this.props = {
-			fern: { variants: [ makeFern( rng ), makeFern( rng ) ], maxD: 120, cap: 9000, shadow: true },
+			fern: { variants: [ makeFern( rng ), makeFern( rng ) ], maxD: 120, cap: 14000, shadow: true },
 			heath: { variants: [ makeHeath( rng ), makeHeath( rng ) ], maxD: 95, cap: 9000, shadow: false },
-			log: { variants: deadwood.logs, maxD: 190, loD: 40, cap: 1500, shadow: true },
-			stump: { variants: deadwood.stumps, maxD: 150, loD: 35, cap: 1500, shadow: true },
+			log: { variants: deadwood.logs, maxD: 190, loD: 40, cap: 2500, shadow: true },
+			stump: { variants: deadwood.stumps, maxD: 150, loD: 35, cap: 2500, shadow: true },
 			mush: { variants: [ makeMushrooms( rng, 'agaric' ), makeMushrooms( rng, 'agaric' ), makeMushrooms( rng, 'bolete' ) ], maxD: 55, cap: 1200, shadow: false },
 		};
 
@@ -733,6 +733,38 @@ export class Forest {
 		}
 
 		this.trees = trees;
+		// an edition's dense woods (extraWoods: { box, at( x, z ) 0..1 }): spruce close-set, with
+		// some larch and the odd dead snag - placed with dice of their own, so that no tree, shrub
+		// or prop placed after this moves
+		if ( this.extraWoods ) {
+
+			const W = this.extraWoods, r2 = new RNG( 4242 ), c3 = 3.4;
+			// (not on top of a tree already standing)
+			const cell = ( x, z ) => Math.floor( x / 3 ) * 8192 + Math.floor( z / 3 );
+			const taken = new Set();
+			for ( const t of trees ) taken.add( cell( t.x, t.z ) );
+			const [ x0, z0, x1, z1 ] = W.box;
+			for ( let z = z0; z < z1; z += c3 ) for ( let x = x0; x < x1; x += c3 ) {
+
+				const px = x + r2.next() * c3, pz = z + r2.next() * c3;
+				const w = W.at( px, pz );
+				const roll = r2.next(), k = r2.next(), vk = r2.next(), sk = r2.next(), rk = r2.next();
+				if ( w <= 0 || roll > w * 0.6 ) continue;
+				if ( taken.has( cell( px, pz ) ) ) continue;
+				const h = td.heightAt( px, pz );
+				if ( h < 1.2 ) continue;
+				td.normalAt( px, pz, n, 1.5 );
+				if ( n.y < 0.74 ) continue;
+				td.biomeAt( px, pz, bio );
+				if ( bio[ 2 ] > 0.5 || bio[ 3 ] > 0.4 ) continue;
+				const species = k < 0.84 ? 'spruce' : k < 0.96 ? 'larch' : 'snag';
+				const vs = this.speciesVariants[ species ];
+				taken.add( cell( px, pz ) );
+				trees.push( { x: px, y: h - 0.15, z: pz, s: 0.85 + sk * 0.4, rot: rk * Math.PI * 2, variant: vs[ Math.floor( vk * vs.length ) ], aspect: 0.85 + ( ( sk * 7.3 ) % 1 ) * 0.3, lean: 0, leanA: 0 } );
+
+			}
+
+		}
 
 		// shrubs along the shore and forest margins (near region only)
 		const shrubs = [];

@@ -135,18 +135,32 @@ export const ROUTE = [
 	{ x: - 145, z: 748 },
 	{ x: - 162, z: 761, id: 'pool' },
 	{ x: - 175, z: 757 },
-	// 10. north through the larch wood, along the foot of the west wall (clear of its scree)
+	// 10. the Black Wood (part two, HORROR_PLAN 16): in at its edge by a wayside shrine, the
+	// woodcutters' clearing, the gully and its footbridge, east to the black pond, back west by
+	// the glade with the hunting stand, the forester's lodge, the camp, the charcoal burners'
 	{ x: - 185, z: 743 },
-	{ x: - 191, z: 723 },
-	{ x: - 197, z: 700, id: 'wood' },
-	{ x: - 205, z: 678 },
-	{ x: - 214, z: 655 },
-	{ x: - 221, z: 628 },
-	{ x: - 227, z: 596 },
-	{ x: - 229, z: 562, id: 'bear' },
-	{ x: - 231, z: 528 },
-	{ x: - 229, z: 494 },
-	{ x: - 223, z: 462 },
+	{ x: - 189, z: 724, id: 'shrine' },
+	{ x: - 181, z: 706 },
+	{ x: - 170, z: 690, id: 'wood' },
+	{ x: - 157, z: 669 },
+	{ x: - 150.5, z: 656.5, deck: true },
+	{ x: - 145, z: 646, deck: true, id: 'gully' },
+	{ x: - 139.5, z: 635.5, deck: true },
+	{ x: - 133, z: 624 },
+	{ x: - 120, z: 605 },
+	{ x: - 101, z: 588 },
+	{ x: - 84, z: 570 },
+	{ x: - 76, z: 553, id: 'blackpond' },
+	{ x: - 88, z: 537 },
+	{ x: - 112, z: 539 },
+	{ x: - 133, z: 546 },
+	{ x: - 148, z: 551, id: 'stand' },
+	{ x: - 166, z: 543 },
+	{ x: - 180, z: 535, id: 'lodge' },
+	{ x: - 196, z: 517 },
+	{ x: - 204, z: 500, id: 'camp' },
+	{ x: - 211, z: 480 },
+	{ x: - 214, z: 461, id: 'bear' },
 	// 11. out onto the west strand
 	{ x: - 216, z: 430 },
 	{ x: - 212, z: 404, id: 'strand' },
@@ -175,14 +189,59 @@ export const BANKS = [
 	{ a: [ 64, 750 ], b: [ 150, 734 ], h: 4.5, w: 16 },
 	// a longer moraine closing off the east side of the first half
 	{ a: [ 140, 520 ], b: [ 158, 700 ], h: 6, w: 26 },
+	// the gully in the Black Wood: a ravine four metres deep, too steep to climb, across the way
+	// (its footbridge is missing its middle planks: HORROR_PLAN 16.3)
+	{ a: [ - 196, 652.6 ], b: [ - 94, 639.4 ], h: - 4.3, w: 5.2 },
 ];
+
+// The Black Wood (HORROR_PLAN 16): dense spruce across the valley floor between the plunge
+// pool and the west strand. Bands (segment a-b, radius r) of full density fading over their
+// last 14 m, with clearings cut out of them ( x, z, radius ) where its places stand.
+export const WOODS = {
+	bands: [
+		{ a: [ - 206, 716 ], b: [ - 214, 468 ], r: 30 },
+		{ a: [ - 162, 672 ], b: [ - 152, 482 ], r: 34 },
+		{ a: [ - 104, 630 ], b: [ - 60, 505 ], r: 32 },
+	],
+	clear: [
+		[ - 190, 724, 5 ], // the wayside shrine
+		[ - 160, 688, 11 ], // the woodcutters' clearing
+		[ - 150, 562, 15 ], // the glade under the hunting stand
+		[ - 190, 526, 12 ], // the forester's lodge
+		[ - 208, 492, 7 ], // the camp
+		[ - 203, 452, 12 ], // the charcoal burners'
+	],
+	box: [ - 250, 430, - 25, 755 ],
+};
+
+const segDist = ( x, z, [ ax, az ], [ bx, bz ] ) => {
+
+	const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
+	const t = Math.max( 0, Math.min( 1, ( ( x - ax ) * dx + ( z - az ) * dz ) / l2 ) );
+	return Math.hypot( x - ax - dx * t, z - az - dz * t );
+
+};
+
+const sm = ( a, b, x ) => { const t = Math.max( 0, Math.min( 1, ( x - a ) / ( b - a ) ) ); return t * t * ( 3 - 2 * t ); };
+
+// how deep in the Black Wood (x, z) is: 0 outside it or in a clearing, 1 in its heart (the
+// terrain's biome pass does the same on the GPU: woods() in core/features.js)
+export function woodsAt( x, z ) {
+
+	let w = 0;
+	for ( const b of WOODS.bands ) w = Math.max( w, 1 - sm( b.r - 14, b.r, segDist( x, z, b.a, b.b ) ) );
+	if ( w <= 0 ) return 0;
+	for ( const [ cx, cz, r ] of WOODS.clear ) w *= sm( r, r + 6, Math.hypot( x - cx, z - cz ) );
+	return w;
+
+}
 
 // the pool the footbridge crosses: a stretch of the stream widened and deepened
 export const BRIDGE_POOL = { s0: 128, s1: 182, widen: 2.1, deepen: 0.9 };
 
 // what the terrain generator shapes for this edition (see core/features.js)
 // (the tarn, pond 1, is peaty: dark enough to mirror)
-export const FEATURES = { banks: BANKS, pool: BRIDGE_POOL, peat: [ 0, 1, 0.4, 0 ] };
+export const FEATURES = { banks: BANKS, pool: BRIDGE_POOL, peat: [ 0, 1, 0.4, 0 ], woods: WOODS };
 
 // ---------------------------------------------------------------------------
 // Marks on the ground (story/ground.js): yards, landings, clearings under props
@@ -347,7 +406,8 @@ export function faunaAt( td ) {
 			// a hare that sits tight in the path (E5), and others along the way
 			hares: [ [ 95, 604 ], [ 58, 600 ], [ 118, 676 ], [ - 150, 732 ], [ - 222, 474 ], [ - 30, 660 ] ],
 			// the bear works the lower edge of the larch wood (E13)
-			bear: { start: [ - 206, 572 ], route: [ [ - 206, 572 ], [ - 211, 546 ], [ - 200, 592 ], [ - 214, 562 ] ] },
+			// (in the Black Wood, east of the way between the camp and the charcoal burners')
+			bear: { start: [ - 192, 474 ], route: [ [ - 192, 474 ], [ - 186, 490 ], [ - 197, 466 ], [ - 184, 481 ] ] },
 			// squirrels in the larch wood (E12), by the signpost and near the hut
 			squirrels: [ [ - 221, 642 ], [ - 214, 704 ], [ 4, 744 ], [ - 40, 725 ], [ - 233, 520 ] ],
 		},

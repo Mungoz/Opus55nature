@@ -219,21 +219,28 @@ export class BoatScene {
 	}
 
 	// --------------------------------------------------------------- the ending
+	// (HORROR_PLAN 16.5.) Out onto the lake; the rowing stops and the water goes still. Far out
+	// on it, against the pale band where the far shore's mist lies in the mirror, someone stands
+	// on the water - only in the water. Each time you look away it is nearer. When it stands
+	// beside the boat the view tips over into the lake and goes under. Last, from the shore:
+	// your boat rowing on out into the dark, with it at the oars.
+	// (The old ending - a face rising beside the gunwale - could hardly be seen: from a thwart the
+	// water right by the boat is looked at steeply, where it reflects almost nothing.)
 	async ending() {
 
 		const S = this.S, app = this.app, P = S.props, ui = S.ui;
 		if ( S.ended ) return;
 		S.ended = true;
 		S.input = false;
-		const variant = S.looked > S.lookLimit;
-		S.log.push( [ 'ending', Math.round( S.time ), variant ? 'stayed' : 'boat', Math.round( S.looked ) ] );
+		S.log.push( [ 'ending', Math.round( S.time ), 'boat', Math.round( S.looked ) ] );
+		for ( let i = 0; i < 6 && S.reading; i ++ ) ui.closeReading();
 		await ui.fade( 1, 1.4 );
-		// the boat, pushed off: a few strokes out from the shore, then drifting
+		// the boat, pushed off: out from the shore, then gliding to a stop
 		const b = P.boatEnd;
 		const from = b.mesh.position.clone().setY( 0 );
 		const q = S.waterSide( from );
 		const start = V( from.x + q.x * 4, 0, from.z + q.z * 4 );
-		const end = V( from.x + q.x * 30, 0, from.z + q.z * 30 );
+		const end = V( from.x + q.x * 36, 0, from.z + q.z * 36 );
 		const course = new THREE.CatmullRomCurve3( [ start, start.clone().lerp( end, 0.5 ), end ] );
 		P.placeBoat( b, start.x, start.z, Math.atan2( q.x, q.z ) );
 		b.lid.visible = true;
@@ -241,9 +248,9 @@ export class BoatScene {
 		app.controls.lookFree = true;
 		S.you.enable( true );
 		S.shadowing = null;
-		S.figure.setMode( 'hidden' );
+		const F = S.figure;
+		F.setMode( 'hidden' );
 		const shore = from.clone();
-		// out through the dark water, stroke by stroke, and gliding to a stop
 		let strokes = 0;
 		const rowing = this._drive( b, course, ( u, t ) => ( t < 17 ? 1.5 : Math.max( 0.06, 1.5 - ( t - 17 ) * 0.35 ) ), ( bb ) => {
 
@@ -253,12 +260,11 @@ export class BoatScene {
 		await S.wait( 0.5 );
 		await ui.fade( 0, 3 );
 		await rowing;
-		// the rings from the oars settle. The water goes still.
+		// the rings from the oars settle. The water goes still; your eyes open to the dark
 		S.skyOverride = { wind: 0.0, mist: 0.0028, lift: 0.42, keyLow: 0.11 };
 		app.water.uniforms.uCalm.value = 1;
-		// sitting still in the dark, your eyes open to it: the stars come out in the water
 		const tr = S.time;
-		const adapt = S.every( () => {
+		S.every( () => {
 
 			const k = THREE.MathUtils.smoothstep( S.time - tr, 0, 9 );
 			if ( ! S.skyOverride ) return true;
@@ -267,100 +273,140 @@ export class BoatScene {
 			return k >= 1;
 
 		} );
-		void adapt;
-		await S.wait( 6 );
-		const F = S.figure;
-		if ( ! variant ) {
+		await S.wait( 5 );
+		// which way the lake lies open longest: there the far shore is low and its mist pale, and a
+		// dark figure on the water shows against it in the mirror
+		const boatAt = b.mesh.position.clone().setY( 0 );
+		const dir = this._openWater( boatAt );
+		const side = V( dir.z, 0, - dir.x );
+		const eye = app.camera.position;
+		let dist = 30;
+		const put = () => {
 
-			// Lean out over the side where the fish rose, and in the still water your own face looks
-			// up at you - and beside it, at your shoulder, another: someone risen out of the water
-			// by the boat, head and shoulders, looking up at you. Only in the water. (Nothing in the
-			// boat can be seen in the water from the thwart - the hull is in the way - but a head
-			// beside the gunwale can, as your own can when you lean out.)
-			const p = V( 1.08, 0, SEAT.z + 0.55 ).applyMatrix4( b.mesh.matrixWorld );
-			const eye = app.camera.position;
-			F.place( p.x, p.z, Math.atan2( eye.x - p.x, eye.z - p.z ), - 1.02 );
-			F.pose = 'stand';
-			F.tilt = 0.35;
-			F.setMode( 'reflect' );
+			const p = V( boatAt.x + dir.x * dist + side.x * ( dist * 0.06 ), 0, boatAt.z + dir.z * dist + side.z * ( dist * 0.06 ) );
+			F.place( p.x, p.z, Math.atan2( eye.x - p.x, eye.z - p.z ), - 0.05 );
+			return p;
 
-		} else {
+		};
 
-			// your reflection isn't in the boat. It stands on the shore; it turns, and walks
-			// up into the trees.
-			S.you.enable( true );
-			app.director = this._keepSeat( b );
-			S.you.pose = 'stand';
-			S.you.mesh.position.set( shore.x, app.terrainData.heightAt( shore.x, shore.z ), shore.z );
-			S.you.mesh.rotation.set( 0, Math.atan2( q.x, q.z ), 0 );
+		F.pose = 'stand';
+		F.tilt = 0.4;
+		put();
+		F.setMode( 'reflect' );
+		// a cowbell, once, far off over the water, the way it stands
+		S.sound.cowbell( V( boatAt.x + dir.x * 120, 2, boatAt.z + dir.z * 120 ), 1, 0.6 );
+		let told = false, tLast = S.time;
+		while ( dist > 3.4 ) {
 
-		}
-
-		// a fish rises beside the boat - look
-		await S.wait( 2 );
-		const side = V( 1.8, 0, - 0.5 ).applyMatrix4( b.mesh.matrixWorld );
-		app.water.addRipple( side.x, side.z, 0.5 );
-		app.audio.splash( side.clone().setY( 0 ), 0.18 );
-		const t0 = S.time;
-		if ( ! variant ) {
-
-			// it watches you; it turns its face to you as you lean
-			const watch = S.every( () => {
-
-				if ( F.mode !== 'reflect' ) return true;
-				F.yaw = Math.atan2( app.camera.position.x - F.pos.x, app.camera.position.z - F.pos.z );
-				return false;
-
-			} );
-			void watch;
-			await S.until( () => ( S.sight.reflect > 0 && S.seenFor > 2.2 ) || S.time - t0 > 45 );
-			S.drone( 1, 10 );
-			// look up from the water to the place beside you: nobody; the water there closing over
-			await S.until( () => S.unseenFor > 0.3 || S.time - t0 > 60 );
-			F.setMode( 'hidden' );
-			for ( let k = 0; k < 3; k ++ ) app.water.addRipple( F.pos.x, F.pos.z, 0.35, k * 0.7 );
-			const bowDir = () => {
-
-				const d = F.pos.clone().sub( app.camera.position ).setY( 0 ).normalize();
-				const f = new THREE.Vector3();
-				app.camera.getWorldDirection( f );
-				return f.setY( 0 ).normalize().dot( d );
-
-			};
-
-			const t1 = S.time;
-			await S.until( () => bowDir() > 0.6 || S.time - t1 > 12 );
-			await S.wait( 1.6 );
-
-		} else {
-
-			const t1 = S.time;
-			await S.wait( 4 );
-			// it turns away and walks up into the trees
-			const you = S.you;
-			you.pose = 'walk';
-			const dir = V( - q.x, 0, - q.z );
-			you.mesh.rotation.y = Math.atan2( dir.x, dir.z );
-			await new Promise( ( res ) => S.every( ( dt ) => {
-
-				you.walkPhase += dt * 4;
-				you.mesh.position.addScaledVector( dir, dt * 1.0 );
-				you.mesh.position.y = app.terrainData.heightAt( you.mesh.position.x, you.mesh.position.z );
-				if ( S.time - t1 > 22 ) { res(); return true; }
-				return false;
-
-			} ) );
+			// nearer, whenever you look away from it (or in a while, if you never look)
+			await S.until( () => ( S.unseenFor > 1.4 && S.time - tLast > 2.5 ) || S.time - tLast > 22 );
+			tLast = S.time;
+			dist = Math.max( 3.4, dist * 0.6 );
+			const p = put();
+			for ( let k = 0; k < 3; k ++ ) app.water.addRipple( p.x, p.z, 0.4, k * 0.5 );
+			S.sound.wade( p.clone().setY( 0.2 ), 0.35 );
+			if ( ! told ) { told = true; S.ui.caption( '[ wading, out on the water ]', 3.5 ); }
+			S.drone( 0.4 + ( 30 - dist ) / 30 * 0.5, 4 );
 
 		}
 
+		// beside the boat. Look.
+		const tb = S.time;
+		await S.until( () => ( S.sight.reflect > 0 && S.seenFor > 1.0 ) || S.time - tb > 18 );
+		S.drone( 1, 8 );
+		await S.wait( 1.2 );
+		// the view tips over into the water, and under
+		await this._under();
+		// last: from the shore, your boat going out into the dark with it at the oars; where you
+		// were, the rings spreading
+		F.setMode( 'hidden' );
+		const gone = boatAt.clone();
+		const out = V( boatAt.x + dir.x * 70, 0, boatAt.z + dir.z * 70 );
+		const course2 = new THREE.CatmullRomCurve3( [ boatAt.clone(), boatAt.clone().lerp( out, 0.5 ), out ] );
+		const shoreEye = V( shore.x - q.x * 3, app.terrainData.heightAt( shore.x - q.x * 3, shore.z - q.z * 3 ) + 1.65, shore.z - q.z * 3 );
+		S.you.enable( false );
+		app.controls.lookFree = true;
+		F.pose = 'sit';
+		F.tilt = 0.2;
+		F.setMode( 'direct' );
+		const seat = () => {
+
+			const m = b.mesh;
+			m.updateMatrixWorld( true );
+			const p = SEAT.clone().applyMatrix4( m.matrixWorld );
+			F.place( p.x, p.z, m.rotation.y + Math.PI, p.y - 0.46 );
+
+		};
+
+		const away = this._drive( b, course2, () => 0.9, ( bb ) => this._stroke( bb ) );
+		// (the director drives the boat; the camera stays on the shore)
+		const drive = app.director;
+		app.director = ( dt ) => {
+
+			drive( dt );
+			seat();
+			app.camera.position.copy( shoreEye );
+
+		};
+
+		const c = app.controls;
+		c.yaw = c.targetYaw = Math.atan2( - ( boatAt.x - shoreEye.x ), - ( boatAt.z - shoreEye.z ) );
+		c.pitch = c.targetPitch = - 0.05;
+		for ( let k = 0; k < 4; k ++ ) app.water.addRipple( gone.x + side.x * 1.2, gone.z + side.z * 1.2, 0.5, k * 0.8 );
+		await ui.fade( 0, 3 );
+		await Promise.race( [ away, S.wait( 14 ) ] );
 		// black. A cowbell. The title.
-		await ui.fade( 1, 2.5 );
+		await ui.fade( 1, 3 );
+		app.director = null;
 		app.audio.mix.birds = 0;
 		await S.wait( 2 );
-		S.sound.cowbell( app.camera.position.clone().add( V( 0, 0, - 6 ) ), 1, 0.9 );
+		S.sound.cowbell( shoreEye.clone().add( V( 0, 0, - 6 ) ), 1, 0.9 );
 		await S.wait( 3.5 );
 		await ui.card( 'Larchmere', '', 7 );
 		ui.end();
+
+	}
+
+	// the view tipping over the gunwale into the water and going under: dark, and the sound of it
+	async _under() {
+
+		const S = this.S, app = this.app, c = app.controls, cam = app.camera;
+		app.director = null;
+		c.enabled = false;
+		c.lookFree = false;
+		const p0 = cam.position.clone(), yaw0 = c.yaw, pitch0 = c.pitch, t0 = S.time;
+		S.sound.wade( p0.clone().setY( 0 ), 0.9 );
+		S.ui.fade( 1, 2.2 );
+		await S.until( () => {
+
+			const u = Math.min( 1, ( S.time - t0 ) / 2.4 ), e = u * u;
+			c.pitch = c.targetPitch = THREE.MathUtils.lerp( pitch0, - 1.35, Math.min( 1, u * 1.6 ) );
+			c.yaw = c.targetYaw = yaw0;
+			cam.position.set( p0.x, THREE.MathUtils.lerp( p0.y, - 0.6, e ), p0.z );
+			return u >= 1;
+
+		} );
+		setTimeout( () => S.sound.drip( cam.position.clone(), 0.2 ), 300 );
+		await S.wait( 1.5 );
+		c.enabled = true;
+
+	}
+
+	// the direction from p over the lake with the most open water before the far shore
+	_openWater( p ) {
+
+		const td = this.app.terrainData;
+		let best = null, bl = - 1;
+		for ( let k = 0; k < 48; k ++ ) {
+
+			const a = k / 48 * Math.PI * 2, x = Math.sin( a ), z = Math.cos( a );
+			let l = 0;
+			while ( l < 900 && td.heightAt( p.x + x * l, p.z + z * l ) < - 0.2 ) l += 6;
+			if ( l > bl ) { bl = l; best = V( x, 0, z ); }
+
+		}
+
+		return best;
 
 	}
 

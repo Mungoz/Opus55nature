@@ -521,6 +521,51 @@ export class Story {
 
 	}
 
+	// things carried (the plank, the shed key, the oars): named low on the left while held
+	hold( name, on = true ) {
+
+		( this._held ??= new Set() )[ on ? 'add' : 'delete' ]( name );
+		this.ui.carry( [ ...this._held ] );
+
+	}
+
+	holds( name ) { return !! this._held?.has( name ); }
+
+	// climb: the eye carried along pts ( [ { x, y, z } ] eye positions, up a ladder or down it )
+	// over sec seconds, looking round allowed; at the end it stays there, held (pinned: no
+	// walking; look, and use things) - or, with free, it is put back on its feet
+	async climb( pts, sec, { free = false } = {} ) {
+
+		const c = this.app.controls, cam = this.cam;
+		this.input = false;
+		c.lookFree = true;
+		c.enabled = false;
+		const t0 = this.time;
+		const seg = [];
+		let total = 0;
+		for ( let i = 1; i < pts.length; i ++ ) { const l = Math.hypot( pts[ i ].x - pts[ i - 1 ].x, pts[ i ].y - pts[ i - 1 ].y, pts[ i ].z - pts[ i - 1 ].z ); seg.push( l ); total += l; }
+		await this.until( () => {
+
+			const u = Math.min( 1, ( this.time - t0 ) / sec ), e = u * u * ( 3 - 2 * u );
+			let d = e * total, i = 0;
+			while ( i < seg.length - 1 && d > seg[ i ] ) { d -= seg[ i ]; i ++; }
+			const k = seg[ i ] > 0 ? Math.min( 1, d / seg[ i ] ) : 1, a = pts[ i ], b = pts[ i + 1 ];
+			// (a little sway, rung by rung)
+			const sway = Math.sin( e * total * 5 ) * 0.015 * ( 1 - Math.abs( 2 * u - 1 ) );
+			cam.set( a.x + ( b.x - a.x ) * k + sway, a.y + ( b.y - a.y ) * k, a.z + ( b.z - a.z ) * k );
+			c.fixedY = cam.y;
+			return u >= 1;
+
+		} );
+		c.enabled = true;
+		c.lookFree = false;
+		this.input = true;
+		this.pinned = ! free;
+		c.fixedY = free ? null : pts[ pts.length - 1 ].y;
+		if ( c.velocity ) c.velocity.set( 0, 0, 0 );
+
+	}
+
 	wait( sec ) {
 
 		return new Promise( ( res ) => this._waits.push( { t: this.time + sec, res } ) );
@@ -638,7 +683,7 @@ export class Story {
 		const inRain = this.app.weather.state.rain > 0.4 && ! this.props.underPorch( cam.x, cam.z );
 		// (no slowing when you stray: the land and the fences keep you to the way; the cowbell
 		// calls you back if you are lost)
-		this.app.controls.moveScale = inRain ? this.moveScaleRain ?? 1 : 1;
+		this.app.controls.moveScale = this.pinned ? 0 : inRain ? this.moveScaleRain ?? 1 : 1;
 		if ( over > 125 && ! this.noclip ) {
 
 			// ease back: you can't go further out
@@ -846,6 +891,17 @@ export class Story {
 			M.far.uniforms.uDensity.value = 1 - 0.25 * k;
 			M.near.uniforms.uDensity.value = 1 - 0.15 * k;
 			for ( const [ u, v ] of this._lod.gc ) u.value = v * ( 1 - 0.35 * k );
+
+		}
+		// in the Black Wood nothing further than 60-odd metres can be seen for the trunks: the trees
+		// beyond that drawn as their far images (twice the near trees' triangles otherwise)
+		if ( this.app.layout?.woodsAt ) {
+
+			const cam = this.cam, F = this.app.forest, base = this.app.quality.treeNear;
+			let w = 0;
+			for ( const [ dx, dz ] of [ [ 0, 0 ], [ 12, 0 ], [ - 12, 0 ], [ 0, 12 ], [ 0, - 12 ] ] ) w = Math.max( w, this.app.layout.woodsAt( cam.x + dx, cam.z + dz ) );
+			const want = THREE.MathUtils.lerp( base, Math.min( base, 64 ), THREE.MathUtils.smoothstep( w, 0.05, 0.35 ) );
+			if ( Math.abs( want - F.sharedNear.uNearDist.value ) > 6 || ( want === base && F.sharedNear.uNearDist.value !== base ) ) F.setNearDistance( want );
 
 		}
 		// your boat goes from the jetty (it will be found on the west strand)

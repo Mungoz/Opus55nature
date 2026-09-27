@@ -66,6 +66,7 @@ export function initStoryUI( app ) {
 	const card = el( 'div', { id: 'story-card' }, root );
 	const caption = el( 'div', { id: 'story-caption' }, root );
 	const hintEl = el( 'div', { id: 'story-hint' }, root );
+	const carryEl = el( 'div', { id: 'story-carry' }, root );
 	const prompt = el( 'div', { id: 'story-prompt' }, root );
 	el( 'i', {}, prompt );
 	const promptLabel = el( 'span', {}, prompt );
@@ -214,6 +215,13 @@ export function initStoryUI( app ) {
 			caption.textContent = text;
 			caption.classList.add( 'show' );
 			capTimer = seconds;
+
+		},
+		// what you are carrying (the plank, a key, the oars): list of names, or empty
+		carry( items ) {
+
+			carryEl.textContent = items.length ? items.join( ' \u00b7 ' ) : '';
+			carryEl.classList.toggle( 'show', items.length > 0 );
 
 		},
 		// a nudge, when you seem not to know what to do next (shown whether captions are on or not)
