@@ -17,7 +17,9 @@ const vert = /* glsl */ `
 uniform mat4 textureMatrix;
 varying vec4 mirrorCoord;
 varying vec3 worldPosition;
+varying vec2 vLocal;
 void main() {
+	vLocal = position.xy;
 	vec4 wp = modelMatrix * vec4( position, 1.0 );
 	worldPosition = wp.xyz;
 	mirrorCoord = textureMatrix * wp;
@@ -39,8 +41,13 @@ uniform float uCalm;
 // a peaty water (0: clear like the lake): its body stained dark brown, the bed lost within a
 // hand's depth, so that it is a mirror
 uniform float uPeat;
+// a small water laid over a painted puddle: fade out toward its (unit-disc) rim; and whether the
+// shallows foam at all
+uniform float uRim;
+uniform float uFoam;
 varying vec4 mirrorCoord;
 varying vec3 worldPosition;
+varying vec2 vLocal;
 
 // three.js Water: four scales of the normal map drifting in different directions
 vec4 getNoise( vec2 uv ) {
@@ -156,7 +163,7 @@ void main() {
 	float lap = sin( t * 1.1 + wp.x * 0.35 + wp.z * 0.27 ) * 0.5 + 0.5;
 	float edge = smoothstep( 0.22 + lap * 0.12, 0.0, depth );
 	float foamN = texture2D( uNoiseTex, wp.xz * 0.35 + t * 0.02 ).b;
-	float foam = edge * smoothstep( 0.35, 0.8, foamN ) * 0.55 * ( 1.0 - smoothstep( 40.0, 220.0, dist ) );
+	float foam = edge * smoothstep( 0.35, 0.8, foamN ) * 0.55 * ( 1.0 - smoothstep( 40.0, 220.0, dist ) ) * uFoam;
 	float crest = texture2D( normalSampler, wp.xz / 9.0 + wind * t * 0.05 ).b;
 	foam = max( foam, smoothstep( 0.85, 0.95, crest ) * smoothstep( 1.4, 2.2, uWind.z ) * gust * 0.5 * smoothstep( 1.0, 4.0, depth ) );
 	foam = max( foam, saturate( splashFoam * 1.4 ) );
@@ -165,6 +172,7 @@ void main() {
 	alpha = mix( alpha, 1.0, foam );
 	// thin film where the bed rises through the surface
 	float film = smoothstep( -0.4, 0.02, depth );
+	if ( uRim > 0.0 ) film *= 1.0 - smoothstep( 1.0 - uRim, 1.0, length( vLocal ) );
 	gl_FragColor = vec4( col * film, alpha * film );
 }
 `;
@@ -227,6 +235,8 @@ export class Water {
 			uRipples: { value: this.ripples },
 			uCalm: { value: 0.3 },
 			uPeat: { value: opts.peat ?? 0 },
+			uRim: { value: opts.rim ?? 0 },
+			uFoam: { value: opts.foam ?? 1 },
 		};
 		this.material = new THREE.ShaderMaterial( {
 			name: 'LakeWater',

@@ -477,6 +477,9 @@ export const BEATS = [
 
 			S.props.setTroughCover( false );
 			S.flags.troughOpen = true;
+			// the ground as the storm leaves it: soaked, the puddles full
+			S.app.weather.wetness = 1;
+			S.app.weather.puddle = 1;
 
 		},
 	},

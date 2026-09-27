@@ -9,6 +9,7 @@ export const terrainUniformsGLSL = /* glsl */ `
 ${ __HORROR__ ? `#if STORY
 uniform sampler2D uStoryMap;
 uniform vec4 uStoryXf;
+uniform float uPuddle; // how full the trail's puddles are (fills in heavy rain, drains slowly)
 #endif` : '' }
 uniform sampler2D uHNear;
 uniform sampler2D uHFar;

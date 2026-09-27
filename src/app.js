@@ -197,6 +197,13 @@ export class App {
 		this.terrainData = new TerrainData( r );
 		await this.terrainData.generate();
 		const td = this.terrainData;
+		// (the story's puddles lie where the ground is flat and dished: painted now it is known)
+		if ( __HORROR__ ) {
+
+			this.puddles = this.layout.paintPuddles( this.storyGround, td );
+			this.storyGround.upload();
+
+		}
 		U.uHNear.value = td.near.hnTex;
 		U.uHFar.value = td.far.hnTex;
 		U.uBiomeNear.value = td.near.biomeTex;

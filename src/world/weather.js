@@ -117,6 +117,10 @@ export class Weather {
 		this.userWind = 1;
 		this.userClouds = null;
 		this.wetness = 0;
+		// how fast the ground dries after rain (per second), and the puddles drain
+		this.dryRate = 0.025;
+		this.puddle = 0;
+		this.puddleDrain = 0.004;
 		this.flash = 0;
 		this._strikeTimer = 8;
 		this._cycleTimer = 180;
@@ -310,7 +314,10 @@ export class Weather {
 
 		// surfaces soak quickly and dry slowly
 		if ( s.rain > 0.05 ) this.wetness = Math.min( 1, this.wetness + dt * s.rain * 0.08 );
-		else this.wetness = Math.max( 0, this.wetness - dt * 0.025 );
+		else this.wetness = Math.max( 0, this.wetness - dt * this.dryRate );
+		if ( s.rain > 0.3 ) this.puddle = Math.min( 1, this.puddle + dt * ( s.rain - 0.25 ) * 0.03 );
+		else this.puddle = Math.max( 0, this.puddle - dt * this.puddleDrain );
+		if ( U.uPuddle ) U.uPuddle.value = this.puddle;
 
 		// wind: gently veering direction, strength from weather x user setting, with gusts
 		this.windAngle += Math.sin( time * 0.013 ) * dt * 0.01;

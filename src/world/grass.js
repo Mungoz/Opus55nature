@@ -82,6 +82,8 @@ ${ __HORROR__ ? `#if STORY
 		float side = gnoise( p * 0.019 + 2.0 ) > 0.0 ? 1.0 : -1.0;
 		float braid = smoothstep( 0.35, 0.6, gnoise( p * 0.025 + 7.7 ) ) * 0.6 * ( 1.0 - smoothstep( 0.1, 0.2, abs( sm.x - side * ( 0.95 + 0.3 * gnoise( p * 0.05 + 1.3 ) ) ) + rag ) );
 		dens *= ( 1.0 - max( tread, braid * 0.85 ) ) * ( 1.0 - sm.w ) * ( 1.0 - sm.y * 0.55 );
+		// (nor in the dips where the puddles lie)
+		dens *= 1.0 - smoothstep( 0.2, 0.4, sm.z );
 	}
 #endif` : '' }
 	float keep = step( r1, dens * uDensity );

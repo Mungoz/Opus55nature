@@ -192,7 +192,7 @@ void main() {
 ${ __HORROR__ ? `#if STORY
 	{
 		vec4 sm = storyMap( p );
-		dens *= smoothstep( 0.45, 1.1, abs( sm.x ) ) * ( 1.0 - sm.w ) * ( 1.0 - sm.y * 0.8 );
+		dens *= smoothstep( 0.45, 1.1, abs( sm.x ) ) * ( 1.0 - sm.w ) * ( 1.0 - sm.y * 0.8 ) * ( 1.0 - smoothstep( 0.15, 0.35, sm.z ) );
 	}
 #endif` : '' }
 	if ( r1 > dens || fade <= 0.0 ) { gl_Position = vec4( 0.0, 0.0, -2.0, 1.0 ); return; }

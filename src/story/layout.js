@@ -211,6 +211,73 @@ export function paintGround( g ) {
 
 }
 
+// Puddles, for after the storm: in the tread's flattest, most dished spots from the hut yard to
+// the strand, spaced out, long along the path (after refs of rutted tracks after rain), now and
+// then a pair like the ruts of a cart. Painted into the ground marks (channel 2); returns them
+// for the near one's mirror: [ { x, z, rx, rz, yaw, level } ].
+export function paintPuddles( g, td ) {
+
+	const path = routePath(), ids = path.ids;
+	const hash = ( a, b ) => { const v = Math.sin( a * 127.1 + b * 311.7 ) * 43758.5453; return v - Math.floor( v ); };
+	const cands = [];
+	for ( let d = ids.hut - 30; d < ids.strand + 45; d += 1.5 ) {
+
+		const p = path.at( d );
+		if ( p.deck ) continue;
+		const h = td.heightAt( p.x, p.z );
+		if ( h < 0.6 ) continue;
+		let sum = 0, hi = - Infinity, lo = Infinity;
+		for ( let k = 0; k < 8; k ++ ) {
+
+			const a = k / 8 * Math.PI * 2, q = td.heightAt( p.x + Math.cos( a ) * 1.4, p.z + Math.sin( a ) * 1.4 );
+			sum += q; hi = Math.max( hi, q ); lo = Math.min( lo, q );
+
+		}
+
+		const slope = ( hi - lo ) / 2.8, dish = sum / 8 - h;
+		if ( slope > 0.11 ) continue;
+		cands.push( { d, p, h, score: dish * 60 - slope * 5 + hash( p.x, p.z ) * 0.5 } );
+
+	}
+
+	cands.sort( ( a, b ) => b.score - a.score );
+	const out = [];
+	for ( const c of cands ) {
+
+		if ( out.length >= 22 ) break;
+		if ( out.some( ( o ) => Math.abs( o.d - c.d ) < 13 ) ) continue;
+		const r = hash( c.p.z, c.p.x );
+		const add = ( d, scale ) => {
+
+			const p = path.at( d ), nx = p.tz, nz = - p.tx;
+			const off = ( hash( d, 3 ) - 0.5 ) * 0.45;
+			const x = p.x + nx * off, z = p.z + nz * off;
+			const rx = ( 0.7 + 1.3 * hash( d, 7 ) ) * scale, rz = ( 0.35 + 0.45 * hash( d, 11 ) ) * scale;
+			const yaw = Math.atan2( - p.tz, p.tx );
+			g.blob( 2, x, z, rx, rz, yaw, 1, 0.55 );
+			out.push( { d, x, z, rx, rz, yaw, level: td.heightAt( x, z ) + 0.012 } );
+
+		};
+
+		add( c.d, 1 );
+		if ( r < 0.4 ) add( c.d + 1.8 + r * 2, 0.7 );
+
+	}
+
+	// and in the hut's trodden yard, where the rain off the roof lands
+	const hut = PLACES.hut;
+	for ( const [ lx, lz, rx, rz ] of [ [ 1.6, 6.4, 1.1, 0.6 ], [ - 2.1, 8.9, 0.8, 0.5 ] ] ) {
+
+		const x = hut.x + Math.cos( hut.yaw ) * lx + Math.sin( hut.yaw ) * lz, z = hut.z - Math.sin( hut.yaw ) * lx + Math.cos( hut.yaw ) * lz;
+		g.blob( 2, x, z, rx, rz, hut.yaw, 1, 0.55 );
+		out.push( { d: ids.hut, x, z, rx, rz, yaw: hut.yaw, level: td.heightAt( x, z ) + 0.012 } );
+
+	}
+
+	return out;
+
+}
+
 // the area the ground marks cover: [ x0, z0, x1, z1 ]
 export const GROUND_BOX = [ - 285, 195, 120, 790 ];
 

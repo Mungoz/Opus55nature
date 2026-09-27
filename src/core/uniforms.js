@@ -36,7 +36,7 @@ export const U = {
 	uWaterAbsorb: { value: new THREE.Vector3( 0.42, 0.075, 0.07 ) },
 	uWaterScatter: { value: new THREE.Vector3( 0.012, 0.05, 0.048 ) },
 	// the horror edition's marks on the ground (trail, yards, puddles; see story/ground.js)
-	...( __HORROR__ ? { uStoryMap: { value: null }, uStoryXf: { value: new THREE.Vector4( 0, 0, 0, 0 ) } } : {} ),
+	...( __HORROR__ ? { uStoryMap: { value: null }, uStoryXf: { value: new THREE.Vector4( 0, 0, 0, 0 ) }, uPuddle: { value: 0 } } : {} ),
 };
 
 export function sharedUniforms( ...names ) {

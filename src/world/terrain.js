@@ -128,6 +128,27 @@ vec3 decode( vec3 c ) { return pow( c, vec3( 2.2 ) ); }
 vec3 unpackN( vec4 t ) { vec2 xy = t.xy * 2.0 - 1.0; return vec3( xy, sqrt( max( 0.0, 1.0 - dot( xy, xy ) ) ) ); }
 // tangent-space slope of an xz-projected texture -> world-space perturbation
 vec3 tn2w( vec3 t ) { return vec3( t.x, 0.0, t.y ); }
+${ __HORROR__ ? `#if STORY
+float storyPuddle = 0.0, storyMud = 0.0;
+// raindrop rings on a puddle (as on the lake): each cell a drop landing at its own rhythm
+vec2 puddleRings( vec2 p, float t ) {
+	vec2 s = vec2( 0.0 );
+	vec2 q = p * 3.1;
+	vec2 cell = floor( q );
+	for ( int j = -1; j <= 1; j ++ )
+	for ( int i = -1; i <= 1; i ++ ) {
+		vec2 c = cell + vec2( float( i ), float( j ) );
+		vec3 h = hash32( c );
+		float period = 0.6 + h.z * 0.8;
+		float ph = fract( t / period + h.x * 7.0 );
+		vec2 d = q - ( c + h.xy );
+		float dl = length( d ) + 1e-4;
+		float x = dl - ph * 1.1;
+		s += d / dl * sin( x * 26.0 ) * exp( -x * x * 40.0 ) * ( 1.0 - ph ) * ( 1.0 - ph );
+	}
+	return s;
+}
+#endif` : '' }
 
 void main() {
 	vec3 wp = vWorldPos;
@@ -326,6 +347,15 @@ ${ __HORROR__ ? `#if STORY
 			dn = mix( dn, gN * ( 0.25 + 0.5 * stones ), max( onPath, yard * 0.6 ) );
 			cav = mix( cav, mix( 0.55, gT.a, stones ), max( onPath, yard ) );
 		}
+		// puddles in the tread's dips (story/ground.js; after refs of rutted tracks after rain):
+		// filling as the storm soaks the ground and lying long after it, their rims ragged and
+		// drying back from the edges; round them the mud, dark and glossy
+		if ( sm.z > 0.0 && uPuddle > 0.0 ) {
+			float pz = sm.z - 0.22 * ( 1.0 - uPuddle ) + 0.1 * gnoise( wp.xz * 2.3 ) + 0.05 * gnoise( wp.xz * 7.0 );
+			float fill = smoothstep( 0.0, 0.3, uPuddle );
+			storyPuddle = smoothstep( 0.34, 0.42, pz ) * fill;
+			storyMud = smoothstep( 0.04, 0.3, pz ) * fill;
+		}
 	}
 #endif` : '' }
 	// rock
@@ -363,6 +393,20 @@ ${ __HORROR__ ? `#if STORY
 	alb *= 1.0 - wet * 0.5;
 	rough = mix( rough, mix( 0.22, 0.6, smoothstep( 60.0, 400.0, dist ) ), wet );
 
+${ __HORROR__ ? `#if STORY
+	// the mud: darker and wet; the puddle: still water over it, flat, a mirror for the sky, and
+	// ringed while it rains
+	if ( storyMud > 0.0 ) {
+		alb *= 1.0 - storyMud * 0.4;
+		wet = max( wet, storyMud * 0.85 );
+		rough = mix( rough, 0.25, storyMud );
+	}
+	if ( storyPuddle > 0.0 ) {
+		alb = mix( alb, alb * 0.4, storyPuddle );
+		rough = mix( rough, 0.02, storyPuddle );
+		wet = max( wet, storyPuddle );
+	}
+#endif` : '' }
 	// ---------- normal ----------
 	float detailFade = 1.0 - smoothstep( 60.0, 400.0, dist );
 	vec3 Nd = normalize( N + dn * 0.9 * detailFade );
@@ -378,6 +422,24 @@ ${ __HORROR__ ? `#if STORY
 	// (wet turf under the blades hardly gleams; bare earth, rock and stones do)
 	wetSheen = 1.0 - 0.8 * smoothstep( 0.2, 0.7, wGrass ) * ( 1.0 - wet );
 	vec3 col = shadeSurface( alb, Nd, V, wp, occl, sh, rough, mix( 0.03, 0.02, wet ) );
+${ __HORROR__ ? `#if STORY
+	// a puddle's surface: what the water mirrors (the sky here; the canopy's dark where trees
+	// stand over it; the near one has a true mirror, story/puddles.js) over the dark mud seen
+	// through it
+	if ( storyPuddle > 0.0 ) {
+		vec3 pn = vec3( 0.0, 1.0, 0.0 );
+		if ( uWeather.x > 0.01 ) {
+			vec2 rr = puddleRings( wp.xz, uTime ) * 0.25 * uWeather.x;
+			pn = normalize( vec3( -rr.x, 1.0, -rr.y ) );
+		}
+		vec3 R = reflect( -V, pn );
+		float fr = F_Schlick( 0.02, saturate( dot( pn, V ) ) );
+		vec3 sky = skyRadiance( normalize( vec3( R.x, max( R.y, 0.02 ), R.z ) ) ) * ( 1.0 - 0.85 * wForest ) * occl;
+		vec3 under = shadeSurface( alb, pn, V, wp, occl, sh, 0.6, 0.02 ) * 0.6;
+		vec3 spec = uSunColor * sh * specGGX( pn, V, uSunDir, 0.02, 0.02 );
+		col = mix( col, mix( under, sky, fr ) + spec, storyPuddle );
+	}
+#endif` : '' }
 
 	// snow sparkle
 	if ( snow > 0.1 ) {

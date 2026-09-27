@@ -9,6 +9,7 @@ import { Sight } from './sight.js';
 import { StorySound } from './sound.js';
 import { PlayerBody } from './player.js';
 import { BoatScene } from './boatscene.js';
+import { PuddleMirror } from './puddles.js';
 
 const _v = new THREE.Vector3();
 const _n = { dist: 0, d: 0, side: 0 };
@@ -115,11 +116,18 @@ export class Story {
 		app.geese.auto = false;
 		// (and the starlings come when they are sent for)
 		app.starlings.auto = false;
+		// after the storm the ground stays wet, and the puddles lie on the trail, for the rest of
+		// the walk; the nearest one a true mirror
+		app.weather.dryRate = 0.003;
+		app.weather.puddleDrain = 0.0006;
+		this.puddles = new PuddleMirror( app, app.puddles );
 		c.onStep = () => this._step();
 		// a skimmed stone breaking the water
 		app.onStoneSplash = ( p ) => this.onStone?.( p );
 
-		const start = this.jump && this.path.ids[ this.jump ] !== undefined ? this.path.ids[ this.jump ] : 0;
+		// (?beat= a waypoint, or a beat - a little before it begins)
+		const jb = this.jump && this.path.ids[ this.jump ] === undefined ? BEATS.find( ( b ) => b.id === this.jump ) : null;
+		const start = ! this.jump ? 0 : jb ? Math.max( 0, this.path.ids[ jb.at ] + ( jb.lead ?? 0 ) - 12 ) : this.path.ids[ this.jump ] ?? 0;
 		// the grade starts where it should be (no easing in from neutral)
 		const g0 = this.skyAt( start );
 		app.post.grade.set( g0.key, g0.contrast, g0.cool, g0.desat );
@@ -673,6 +681,7 @@ export class Story {
 		this.figure?.update( dt );
 		this.you?.update( dt );
 		this.props?.update( dt, this.time );
+		this.puddles?.update();
 		// your boat goes from the jetty (it will be found on the west strand)
 		if ( ! this.flags.boatGone && this.progress > this.path.ids.hut && this.offscreen( this.props.boat.mesh.position, 4 ) ) {
 
