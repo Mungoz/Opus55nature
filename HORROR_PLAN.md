@@ -82,8 +82,8 @@ The route is about 1.7 km of path, 14–16 minutes with the reading, the storm a
 | 8 | The tarn (−110, 682) in the mist | 60 m | 17:30 | Blue hour, mist rising | E9 the heron stands on the far shore; **F5** in the tarn's reflection the figure stands beside the heron; the heron stares at the empty place beside it and lifts off croaking; rings spread from an empty patch of water |
 | 9 | Along the plunge pool's north rim under the waterfall | 110 m | 17:34 | Blue hour | J.'s boots, paired neatly on the shingle, toes to the water; E10 the choughs stop wheeling and settle along a ledge in a silent row, all facing the same way |
 | 10 | North through the larch wood on the valley's west side | 260 m | 17:38 → 17:47 | Dusk under the trees | E11 deer standing frozen in the trees, all staring past you, back the way you came; E12 a red squirrel scolding at something behind you; E13 the bear rises on its hind legs, scenting, then crashes away downhill; cairns on stumps and stones along the path |
-| 11 | Out of the trees onto the west strand; the lantern is lit across the bay | 120 m | 17:47 → 17:52 | Dusk, moonrise | E14 the starlings' last murmuration over the lake, opening round an empty point above the water; **F6** far across the water, on the island's point, someone standing |
-| 12 | North along the dark west shore, pinched between the water and a rock band | 400 m | 17:52 → 18:05 | Nightfall, mist on the lake | **F7** your reflection walks beside you, and a second one keeps pace a few steps behind it; the stone beat; your footsteps echoed half a beat late; bare footprints into the water; cairns in the shallows; J.'s boat upturned in the reeds; E15 geese go over low in the dark, calling, then silence; the loon and its backwards answer |
+| 11 | Out of the trees onto the west strand; the lantern is lit across the bay, a point of light with its broken streak on the water | 120 m | 17:47 → 17:52 | Dusk, moonrise | E14 the starlings' last murmuration, low over the water down the shore ahead, streaming round an empty column standing up out of the lake, then pouring into the reedbed ahead; the reeds chatter, and fall silent all at once as you come near |
+| 12 | Down to the water and out along the old fishermen's boardwalk over the shallows (a hand's breadth over the water, the bank a few metres off), past J.'s boat upturned on the bank, through the silent reedbed to the landing | 180 m | 17:52 → 18:05 | Nightfall, mist on the lake | **F7** "[ wading, behind you ]": in the still water off the boards, against the mirrored mist, the reflection of someone thigh-deep a way behind you, and the rings from where it walks; on the water, nothing; closer each time you look away; the stone beat; your footsteps on the boards echoed half a beat late; E15 the mallards paddle away from an empty patch; geese go over low in the dark, calling, then silence; the loon and its backwards answer; **F6** out of the reeds at the landing: far across the water on the island's tip, between the island and the lantern, someone standing against the mist, doubled in the water; look away and the point is empty (the way the boat will go) |
 | 13 | Your boat, fetched up on the shingle, its line cut the same way | n/a | 18:05 → 18:10 | Night | The ending (9.11) |
 
 - [x] Agree the route (this table).
@@ -117,12 +117,20 @@ The valley's existing animals are cast in short scripted scenes along the route.
 | E11 | Larch wood | Red deer | Three hinds standing among the trees, frozen, all staring back down the path behind you; they don't run until you are very close | Deer freeze and stare at a predator they can't place |
 | E12 | Larch wood | Red squirrel | Scolds from a trunk, tail flicking, facing past you; then spirals up out of sight | The squirrel's alarm chatter is aimed at the threat |
 | E13 | Larch wood's lower edge | Brown bear | Rises on its hind legs to scent the air, drops, and crashes away downhill | Bears stand to see and smell, not to attack |
-| E14 | West strand | Starlings | The evening murmuration over the lake flows round an empty point above the water, then pours into the reeds | Murmurations open round a falcon |
+| E14 | West strand | Starlings | The evening murmuration comes in low over the water ahead, a dark ribbon against the mist, roaring as it turns; it streams round an empty column standing up out of the lake, again and again; then it wheels over the reedbed and pours down into it in a stream, nearest birds first; the reeds chatter, then fall silent all at once when you come near | Murmurations open round a falcon; flocks pour into reedbed roosts at dusk (refs: West Pier, Brighton) |
 | E15 | West shore | Geese, mallards | A skein goes over low in the dark, calling; the mallards on the water all turn and paddle away from an empty patch | Geese migrate at night in autumn |
 
 - [ ] An encounter system (`src/story/encounters.js`): stage off screen, trigger by progress or sight, play a timeline of animal commands (go to, look at, stare, flee, roar, whistle, fly), release.
 - [ ] Hooks in the animal systems so the director can command individual animals and set a "threat" they react to (9.6).
 - [ ] Review each encounter in the game against reference footage behaviour (the table's last column), and adjust timing.
+
+### 5.4 What the water can show (learned staging F7 and E14)
+
+- **Nothing near you is mirrored unless water lies between you and it.** The ray to a mirror image meets the water at the fraction eye / (eye + point) of the way there, so from a path 20-35 m back from the shore the lake shows nothing that stands by you. F7 needed the path out over the water: hence the boardwalk.
+- **You never see your own reflection from a deck**, and a follower on the boards is hidden the same way (the planks sit where its mirror image would be). The follower has to stand off the boards, in the water.
+- **At night a dark figure reads only against something light in the mirror.** Near water, seen steeply, mirrors the dark mountainside at low reflectance, and the strip between the boards and the bank mirrors the dark bank. The pale mist band at the far shore is the brightest thing in the lake's mirror, and it sits at grazing angles: the follower starts about 16 m back, where its mirror image lies against it.
+- **Measure sightlines before staging.** `tools/out/q_flockview.js` scores where a flock (or anything) stays in clear view from the path, crowns included. The murmuration first wheeled behind the strand's trees and the island.
+- **Murmurations need a ribbon.** A flock pulled to one point balls up. Each bird follows the loop a moment behind the others, so the flock streams out along it and folds at the turns. A column the flock parts round (rather than a sphere) reads as something standing there.
 
 ## 6. Map layout and performance: expect big changes
 
@@ -339,7 +347,10 @@ Tasks:
 | Puddles | Not started | See 9.9. |
 | Pasture fences and a gate (extended route) | Not started | Alpine split-rail and pole fences after reference photos; they funnel the first half and the gate creaks. |
 | Wayside cross at the signpost (extended route) | Not started | A plain wooden cross under a small shingled gable, a jar of dried flowers, after reference photos. |
-| J.'s boat, upturned in the reeds (extended route) | Not started | The second boat from `jetty.js`, capsized, a strake stove in, half in the water on the west shore. |
+| J.'s boat, upturned in the reeds (extended route) | Built | The second boat from `jetty.js`, capsized on the west bank by the boardwalk. |
+| The fishermen's boardwalk (F7) | Built (`props/boardwalk.js`) | After the Cosmeston and Federsee reed boardwalks: weathered planks across two stringers on post pairs, ~2.8 m out over the shallows; missing and split planks; sleepers where it comes ashore; decks to walk on, plants kept off it. |
+| Reedbed (E14) | Built (`waterplants.js`, `REEDBEDS` in layout) | Common reed after the Worthersee autumn beds: straw culms, drooping leaves, filament plumes, near and far detail sets. |
+| The lantern's glow | Built (`props/glow.js`) | A distance-sized point and mist halo; in the lake's mirror a column of crawling dashes, as a light on rippled water (refs: night lights on lakes). |
 | Marmot bank (extended route) | Not started | A second colony of burrows on the east bank for E6. |
 
 Environment changes:

@@ -906,6 +906,51 @@ export const BEATS = [
 		},
 	},
 
+	// F6: out of the reeds at the landing, the water opens east to the island, the lantern
+	// burning beyond it. On the island's far point, against the mist, someone standing, doubled
+	// in the still water - a small upright shape, the only one out there. Look away, and the
+	// point is empty. It is the way the boat will go. (Seen directly, like F1: at 170 m the
+	// reflection alone is a few pixels; the upright silhouette and its mirror image together
+	// read.)
+	{
+		id: 'F6-island', at: 'boat', lead: - 18,
+		run: async ( S ) => {
+
+			const td = S.app.terrainData, P = S.app.layout.PLACES.islandPoint;
+			// the island's tip - the end of it furthest round to the right as seen from the
+			// landing (toward the lantern), low by the water: there the open misty water is behind
+			// it, and behind its mirror image, not the island's own dark slope
+			const land = V( - 248, 0, 224 );
+			const vx = P.x - land.x, vz = P.z - land.z, vl = Math.hypot( vx, vz );
+			let best = null, bd = - Infinity;
+			for ( let dx = - 90; dx <= 90; dx += 0.5 ) for ( let dz = - 90; dz <= 90; dz += 0.5 ) {
+
+				const x = P.x + dx, z = P.z + dz, h = td.heightAt( x, z );
+				if ( h < 0.05 || h > 0.9 ) continue;
+				// how far round to the right of the line to the island, as an angle
+				const ox = x - land.x, oz = z - land.z;
+				const lat = ( vx * oz - vz * ox ) / ( vl * Math.hypot( ox, oz ) );
+				if ( lat > bd ) { bd = lat; best = [ x, z ]; }
+
+			}
+
+			if ( ! best ) return;
+			// standing at the very tip, at the water's edge, so nothing of the island is behind it
+			const [ fx, fz ] = best;
+			const F = S.figure;
+			F.place( fx, fz, Math.atan2( land.x - fx, land.z - fz ), Math.max( td.heightAt( fx, fz ), 0 ) );
+			F.tilt = 0.6;
+			F.pose = 'stand';
+			F.setMode( 'direct' );
+			const t0 = S.time;
+			await S.until( () => ( S.sight.direct > 0 && S.seenFor > 2.2 ) || S.ended || S.time - t0 > 90 );
+			if ( S.sight.direct > 0 && ! S.ended ) S.drone( 0.7, 5 );
+			await S.until( () => S.unseenFor > 1.2 || S.ended );
+			if ( ! S.ended ) F.setMode( 'hidden' );
+
+		},
+	},
+
 	// the boat: its line cut, like J.'s. The ending (ending.js)
 	{
 		id: 'boat', at: 'boat', lead: - 8,
