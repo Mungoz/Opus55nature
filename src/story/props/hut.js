@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Kit, M, col, mixc } from './kit.js';
+import { ring } from './jetty.js';
 
 // The herder's hut, after photographs of alp huts in the
 // Valais, Graubünden, Bavaria and Tyrol (mockups/refs): low and long under a big, shallow
@@ -200,15 +201,124 @@ export function buildHut( ground ) {
 
 	}
 
-	// the dark inside, seen through the door, windows, hatch and the gaps between logs
+	// --- inside. (It was a black box behind the door: "the open door is just brightness, you
+	// can't see inside".) One room under a boarded ceiling: a plank floor, the table facing the
+	// door with the storm lantern on it, a bench, shelves, the bunk along the west wall, the
+	// stove in the far corner. Lit only by the lantern (the props' shader keeps the sun and
+	// most of the sky out of it: see ROOM in kit.js).
 	{
 
-		const d = L - LOG_T * 2 - 0.02;
-		k.box( 0, EAVE / 2 - 0.05, 0, W - LOG_T * 2 - 0.02, EAVE, d, M.VOID, '#000000' );
-		const tri = new THREE.Shape( [ new THREE.Vector2( - ( W / 2 - 0.25 ), EAVE - 0.06 ), new THREE.Vector2( W / 2 - 0.25, EAVE - 0.06 ), new THREE.Vector2( 0, RIDGE - 0.14 ) ] );
-		const pg = new THREE.ExtrudeGeometry( tri, { depth: d, bevelEnabled: false } );
-		pg.translate( 0, 0, - d / 2 );
-		k.add( pg, M.VOID, '#000000' );
+		const x0 = - W / 2 + LOG_T, x1 = W / 2 - LOG_T, z0 = - L / 2 + LOG_T, z1 = L / 2 - LOG_T;
+		const ink = '#000000';
+		// the chinking in the gaps between the logs: a dark core inside each wall, round the openings
+		const chink = ( cx, cz, sx, sz, ya, yb ) => k.box( cx, ( ya + yb ) / 2, cz, sx, yb - ya, sz, M.VOID, ink );
+		const zf = L / 2 - LOG_T / 2, xs = W / 2 - LOG_T / 2, t = LOG_T * 0.45;
+		chink( 0, - zf, W, t, 0, EAVE );
+		chink( ( - W / 2 + DOOR[ 0 ] ) / 2, zf, DOOR[ 0 ] + W / 2, t, 0, EAVE );
+		chink( ( DOOR[ 0 ] + DOOR[ 1 ] ) / 2, zf, DOOR[ 1 ] - DOOR[ 0 ], t, DOOR_H + 0.02, EAVE );
+		chink( ( DOOR[ 1 ] + WIN_F[ 0 ] ) / 2, zf, WIN_F[ 0 ] - DOOR[ 1 ], t, 0, EAVE );
+		chink( ( WIN_F[ 0 ] + WIN_F[ 1 ] ) / 2, zf, WIN_F[ 1 ] - WIN_F[ 0 ], t, 0, WIN_F[ 2 ] - 0.02 );
+		chink( ( WIN_F[ 0 ] + WIN_F[ 1 ] ) / 2, zf, WIN_F[ 1 ] - WIN_F[ 0 ], t, WIN_F[ 3 ] + 0.02, EAVE );
+		chink( ( WIN_F[ 1 ] + W / 2 ) / 2, zf, W / 2 - WIN_F[ 1 ], t, 0, EAVE );
+		chink( xs, 0, t, L, 0, EAVE );
+		chink( - xs, ( - L / 2 + WIN_S[ 0 ] ) / 2, t, WIN_S[ 0 ] + L / 2, 0, EAVE );
+		chink( - xs, ( WIN_S[ 1 ] + L / 2 ) / 2, t, L / 2 - WIN_S[ 1 ], 0, EAVE );
+		chink( - xs, ( WIN_S[ 0 ] + WIN_S[ 1 ] ) / 2, t, WIN_S[ 1 ] - WIN_S[ 0 ], 0, WIN_S[ 2 ] - 0.02 );
+		chink( - xs, ( WIN_S[ 0 ] + WIN_S[ 1 ] ) / 2, t, WIN_S[ 1 ] - WIN_S[ 0 ], WIN_S[ 3 ] + 0.02, EAVE );
+		const board = ( a = 0.4 ) => mixc( '#6a4a2e', '#8a6a48', R() ).multiplyScalar( 0.75 + a * R() );
+		// the floor: planks from the door to the back wall
+		for ( let x = x0; x < x1 - 0.02; x += 0.19 ) k.box( x + 0.095, - 0.02, 0, 0.188, 0.04, z1 - z0, M.BOARD, board(), { axis: [ 0, 0, 1 ] } );
+		// the ceiling: joists across, boards over them (the loft above, out of sight)
+		for ( const z of [ - 3.1, - 1.05, 1.05, 3.1 ] ) k.box( 0, EAVE - 0.1, z, x1 - x0, 0.13, 0.11, M.LOG, logCol( EAVE, 0.1 ), { axis: [ 1, 0, 0 ], round: 0.015 } );
+		for ( let x = x0; x < x1 - 0.02; x += 0.2 ) k.box( x + 0.1, EAVE - 0.02, 0, 0.198, 0.03, z1 - z0, M.BOARD, board( 0.3 ), { axis: [ 0, 0, 1 ] } );
+		const cyl = ( kit, x, y, z, r, h, mat, c, seg = 12 ) => {
+
+			const g = new THREE.CylinderGeometry( r, r, h, seg );
+			g.translate( x, y + h / 2, z );
+			kit.add( g, mat, c, [ 0, 1, 0 ], [ x, y, z ] );
+
+		};
+
+		// the table, square on to the door, against the back wall
+		const tx = - 0.62, tz = z0 + 0.4, TH = 0.76;
+		k.box( tx, TH - 0.025, tz, 1.3, 0.05, 0.74, M.BOARD, board( 0.3 ), { axis: [ 1, 0, 0 ], round: 0.008 } );
+		for ( const [ dx, dz ] of [ [ - 0.57, - 0.29 ], [ 0.57, - 0.29 ], [ - 0.57, 0.29 ], [ 0.57, 0.29 ] ] ) k.box( tx + dx, ( TH - 0.05 ) / 2, tz + dz, 0.07, TH - 0.05, 0.07, M.LOG, logCol( 0.5, 0.2 ), { axis: [ 0, 1, 0 ] } );
+		for ( const dz of [ - 0.29, 0.29 ] ) k.box( tx, 0.16, tz + dz, 1.1, 0.05, 0.04, M.LOG, logCol( 0.5, 0.2 ), { axis: [ 1, 0, 0 ] } );
+		// a bench on the door's side of it
+		const bz = tz + 0.72;
+		k.box( tx, 0.445, bz, 1.2, 0.05, 0.28, M.BOARD, board( 0.3 ), { axis: [ 1, 0, 0 ], round: 0.008 } );
+		for ( const dx of [ - 0.5, 0.5 ] ) k.box( tx + dx, 0.21, bz, 0.05, 0.42, 0.26, M.BOARD, board( 0.3 ), { axis: [ 0, 1, 0 ] } );
+		// on the table: a tin plate and a cup, a candle end (the lantern and the key are parts)
+		cyl( k, tx + 0.05, TH, tz - 0.05, 0.1, 0.012, M.IRON, '#8a8680', 16 );
+		cyl( k, tx + 0.45, TH, tz - 0.14, 0.035, 0.07, M.IRON, '#6e6a64' );
+		cyl( k, tx - 0.47, TH, tz - 0.22, 0.012, 0.06, M.LEATHER, '#d8cfb8' );
+		// shelves on the back wall over the table: jars, tins, a pot
+		for ( const y of [ 1.42, 1.78 ] ) {
+
+			k.box( tx, y, z0 + 0.12, 1.5, 0.03, 0.22, M.BOARD, board( 0.3 ), { axis: [ 1, 0, 0 ] } );
+			for ( const dx of [ - 0.6, 0.6 ] ) k.box( tx + dx, y - 0.08, z0 + 0.05, 0.03, 0.14, 0.08, M.BOARD, board( 0.3 ) );
+			for ( let i = 0; i < 6; i ++ ) {
+
+				const x = tx - 0.65 + i * 0.25 + ( R() - 0.5 ) * 0.08, r = 0.035 + R() * 0.03, h = 0.08 + R() * 0.12;
+				const tin = R() < 0.4;
+				cyl( k, x, y + 0.015, z0 + 0.12 + ( R() - 0.5 ) * 0.06, r, h, tin ? M.IRON : M.STONE, tin ? mixc( '#5a5550', '#7a6040', R() ) : mixc( '#b8ae98', '#6a7a70', R() ) );
+
+			}
+
+		}
+
+		// the bunk along the west wall: a board box, a straw mattress, grey and red wool blankets
+		const kx = x0 + 0.46, kz0 = z0 + 0.05, kz1 = z0 + 2.2, kzc = ( kz0 + kz1 ) / 2;
+		k.box( kx, 0.2, kzc, 0.9, 0.4, kz1 - kz0, M.BOARD, board( 0.3 ), { axis: [ 0, 0, 1 ] } );
+		k.box( kx + 0.02, 0.46, kzc, 0.84, 0.12, kz1 - kz0 - 0.08, M.LEATHER, '#7a6a48', { round: 0.04 } );
+		k.box( kx + 0.03, 0.54, kzc + 0.3, 0.86, 0.06, 1.25, M.LEATHER, '#5a2a22', { round: 0.025 } );
+		k.box( kx + 0.03, 0.58, kz0 + 0.3, 0.7, 0.12, 0.32, M.LEATHER, '#6a6660', { round: 0.05 } );
+		// the stove in the far east corner, its pipe up through the ceiling; a kettle on it
+		const sx = x1 - 0.42, sz = z0 + 0.4;
+		k.box( sx, 0.36, sz, 0.55, 0.5, 0.5, M.IRON, '#2a2724', { round: 0.02 } );
+		for ( const [ dx, dz ] of [ [ - 0.22, - 0.2 ], [ 0.22, - 0.2 ], [ - 0.22, 0.2 ], [ 0.22, 0.2 ] ] ) k.box( sx + dx, 0.055, sz + dz, 0.05, 0.11, 0.05, M.IRON, '#2a2724' );
+		k.box( sx, 0.34, sz + 0.255, 0.28, 0.2, 0.02, M.IRON, '#33302c' );
+		k.pole( new THREE.Vector3( sx, 0.6, sz - 0.08 ), new THREE.Vector3( sx, EAVE, sz - 0.08 ), 0.06, M.IRON, '#2a2724', 3 );
+		cyl( k, sx + 0.1, 0.61, sz + 0.08, 0.09, 0.13, M.IRON, '#3a3530' );
+		// a box of split wood beside it, a bucket by the door
+		k.box( sx - 0.62, 0.2, sz + 0.05, 0.5, 0.4, 0.4, M.BOARD, board( 0.3 ), { round: 0.01 } );
+		for ( let i = 0; i < 7; i ++ ) k.box( sx - 0.62 + ( R() - 0.5 ) * 0.34, 0.42 + R() * 0.06, sz + 0.05 + ( R() - 0.5 ) * 0.26, 0.4, 0.08, 0.08, M.LOG, logCol( 0.4, 0.3 ), { rot: [ 0, ( R() - 0.5 ) * 0.4, 0 ], axis: [ 1, 0, 0 ] } );
+		cyl( k, x0 + 0.35, 0, z1 - 0.45, 0.14, 0.26, M.BOARD, board( 0.3 ) );
+		// a coat on a peg on the east wall
+		k.box( x1 - 0.06, 1.25, 1.2, 0.08, 0.7, 0.42, M.LEATHER, '#3e3a32', { round: 0.04 } );
+		// where things are, for the collision and the story
+		HUT.room = { x0, x1, z0, z1 };
+		HUT.furniture = [ [ tx, tz, 0.68, 0.4 ], [ tx, bz, 0.62, 0.16 ], [ kx, kzc, 0.47, ( kz1 - kz0 ) / 2 ], [ sx, sz, 0.3, 0.28 ], [ sx - 0.62, sz + 0.05, 0.27, 0.22 ] ];
+		HUT.lamp = new THREE.Vector3( tx + 0.3, TH + 0.12, tz + 0.08 );
+		HUT.key = new THREE.Vector3( tx - 0.22, TH + 0.012, tz + 0.14 );
+		HUT.pitch = Math.tan( PITCH );
+
+		// the storm lantern: an iron base and cap, a glass chimney glowing round the flame
+		{
+
+			const lk = new Kit( ground ), lp = HUT.lamp, y0 = TH + 0.012;
+			cyl( lk, lp.x, y0, lp.z, 0.065, 0.05, M.IRON, '#4a4540', 14 );
+			cyl( lk, lp.x, y0 + 0.05, lp.z, 0.05, 0.13, M.GLOW, '#2a1606', 14 );
+			cyl( lk, lp.x, y0 + 0.08, lp.z, 0.009, 0.035, M.GLOW, '#9a6a26', 6 );
+			cyl( lk, lp.x, y0 + 0.18, lp.z, 0.06, 0.03, M.IRON, '#4a4540', 14 );
+			cyl( lk, lp.x, y0 + 0.21, lp.z, 0.02, 0.04, M.IRON, '#4a4540', 8 );
+			for ( const a of [ 0, 2.1, 4.2 ] ) lk.box( lp.x + Math.cos( a ) * 0.058, y0 + 0.115, lp.z + Math.sin( a ) * 0.058, 0.008, 0.13, 0.008, M.IRON, '#4a4540' );
+			ring( lk, new THREE.Vector3( lp.x, y0 + 0.27, lp.z ), new THREE.Vector3( 0, 0, 1 ), 0.05, 0.005 );
+			parts.lamp = lk.build();
+
+		}
+
+		// the key: a big old iron key, lying on the table
+		{
+
+			const kk = new Kit( ground ), p = HUT.key;
+			ring( kk, new THREE.Vector3( p.x - 0.07, p.y + 0.006, p.z ), new THREE.Vector3( 0, 1, 0 ), 0.028, 0.006 );
+			kk.box( p.x + 0.015, p.y + 0.006, p.z, 0.12, 0.012, 0.012, M.IRON, '#4a4540' );
+			kk.box( p.x + 0.065, p.y + 0.006, p.z + 0.022, 0.02, 0.01, 0.035, M.IRON, '#4a4540' );
+			kk.box( p.x + 0.045, p.y + 0.006, p.z + 0.018, 0.012, 0.01, 0.025, M.IRON, '#4a4540' );
+			parts.key = kk.build();
+
+		}
 
 	}
 
@@ -577,6 +687,27 @@ export function buildHut( ground ) {
 		}
 
 		parts.cover = cover.build();
+		// the same boards wrenched off in the storm: flung down on the trodden earth on the far
+		// side from the door, one propped against the log, nails bent out of them
+		const off = new Kit( ground, k.ao );
+		for ( let i = 0; i < 6; i ++ ) {
+
+			const c = logCol( 1, 0.8 );
+			if ( i === 0 ) {
+
+				// propped against the trough's side, slanting
+				off.box( tp.x + ro + 0.22, axisY - 0.2, tp.z - 0.5, 0.85, 0.035, 0.22, M.BOARD, c, { rot: [ 0, 0.15, 1.05 ], axis: [ 1, 0, 0 ] } );
+				continue;
+
+			}
+
+			const x = tp.x + ro + 0.7 + R() * 0.9, z = tp.z - 1.1 + i * 0.45 + ( R() - 0.5 ) * 0.3;
+			off.box( x, ground( x, z ) + 0.02 + ( i % 3 === 2 ? 0.035 : 0 ), z, 0.85, 0.035, 0.22, M.BOARD, c, { rot: [ ( R() - 0.5 ) * 0.08, ( R() - 0.5 ) * 1.4, ( R() - 0.5 ) * 0.06 ], axis: [ 1, 0, 0 ] } );
+			off.box( x + 0.3, ground( x, z ) + 0.05, z, 0.006, 0.05, 0.006, M.IRON, '#3a342e' );
+
+		}
+
+		parts.coverOff = off.build();
 
 	}
 

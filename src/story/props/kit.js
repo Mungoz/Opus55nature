@@ -57,6 +57,9 @@ varying float vMat;
 varying float vAO;
 uniform vec4 uLamp;
 uniform vec4 uInside;
+uniform vec4 uRoom;
+uniform vec4 uRoomSize;
+uniform float uRoomPitch;
 
 // bump mapping without tangents (Mikkelsen): tilt N by the screen-space slope of a height
 vec3 bump( vec3 N, float h, float k ) {
@@ -321,6 +324,15 @@ void main() {
 	}
 
 	float sh = sunShadow( vWorldPos, N );
+	// indoors: no sun, and only a little of the sky, through the door and the chinks
+	if ( uRoomSize.x > 0.0 ) {
+		vec2 d = vWorldPos.xz - uRoom.xy;
+		vec2 l = vec2( uRoom.z * d.x - uRoom.w * d.y, uRoom.w * d.x + uRoom.z * d.y );
+		float roof = uRoomSize.w - abs( l.x ) * uRoomPitch - 0.06;
+		float indoor = step( abs( l.x ), uRoomSize.x ) * step( abs( l.y ), uRoomSize.y ) * step( uRoomSize.z, vWorldPos.y ) * step( vWorldPos.y, roof );
+		sh *= 1.0 - indoor;
+		ao *= mix( 1.0, 0.1, indoor );
+	}
 	// wood and stone darken and grow a skin of algae where the water laps them
 	float wl = vWorldPos.y - uWaterLevel;
 	float wet = smoothstep( 0.35, 0.02, wl ) * ( m == 5 || m == 14 ? 0.0 : 1.0 );
@@ -351,13 +363,63 @@ export const LAMP = { value: new THREE.Vector4( 0, 0, 0, 0 ) };
 // a lamp lit inside the hut: the dark inside, seen through the door and the gaps, glows with it
 // (position of the room's middle, brightness)
 export const INSIDE = { value: new THREE.Vector4( 0, 0, 0, 0 ) };
+// the hut's room: inside it the sun does not reach and the sky hardly does - it is lit by its
+// lantern (uLamp). ( centre x, z, cos yaw, sin yaw ), ( half width, half length, floor y,
+// the roof line's height at the ridge ), and the roof's slope
+export const ROOM = { value: new THREE.Vector4( 0, 0, 1, 0 ) };
+export const ROOM_SIZE = { value: new THREE.Vector4( 0, 0, 0, 0 ) };
+export const ROOM_PITCH = { value: 0 };
+
+// water running from a pipe: the sky and the light caught in it, streaks running down it, more
+// see-through face on than at its edges (a thin stream, on a cylinder whose uv.y runs 1 at the
+// top to 0 at the bottom)
+export function streamMaterial() {
+
+	return new THREE.ShaderMaterial( {
+		vertexShader: /* glsl */ `
+			varying vec3 vWorldPos;
+			varying vec3 vNormal;
+			varying vec2 vUv;
+			void main() {
+				vec4 wp = modelMatrix * vec4( position, 1.0 );
+				vWorldPos = wp.xyz;
+				vNormal = normalize( mat3( modelMatrix ) * normal );
+				vUv = uv;
+				gl_Position = projectionMatrix * viewMatrix * wp;
+			}
+		`,
+		fragmentShader: /* glsl */ `
+			${commonParsGLSL}
+			varying vec3 vWorldPos;
+			varying vec3 vNormal;
+			varying vec2 vUv;
+			uniform vec4 uLamp;
+			void main() {
+				vec3 N = normalize( vNormal );
+				vec3 V = normalize( cameraPosition - vWorldPos );
+				float fr = pow( 1.0 - abs( dot( N, V ) ), 3.0 );
+				vec3 R = reflect( - V, N );
+				vec3 col = skyRadiance( normalize( vec3( R.x, abs( R.y ) + 0.05, R.z ) ) ) * ( 0.3 + 0.7 * fr ) + uSunColor * 0.04;
+				if ( uLamp.w > 0.0 ) { vec3 Ld = uLamp.xyz - vWorldPos; col += vec3( 1.0, 0.62, 0.3 ) * uLamp.w * 0.15 / ( dot( Ld, Ld ) + 0.3 ); }
+				float run = 0.5 + 0.5 * sin( vUv.x * 12.566 + vUv.y * 26.0 + uTime * 12.0 ) * sin( vUv.y * 9.0 + uTime * 7.0 );
+				col = applyAtmosphere( col, vWorldPos );
+				gl_FragColor = vec4( col, ( 0.3 + 0.55 * fr ) * ( 0.65 + 0.35 * run ) );
+			}
+		`,
+		uniforms: { ...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ), ...sharedUniforms(), uLamp: LAMP },
+		lights: true,
+		transparent: true,
+		depthWrite: false,
+	} );
+
+}
 
 export function propMaterial( { side = THREE.FrontSide } = {} ) {
 
 	return new THREE.ShaderMaterial( {
 		vertexShader: vert,
 		fragmentShader: frag,
-		uniforms: { ...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ), ...sharedUniforms(), uLamp: LAMP, uInside: INSIDE },
+		uniforms: { ...THREE.UniformsUtils.merge( [ THREE.UniformsLib.lights ] ), ...sharedUniforms(), uLamp: LAMP, uInside: INSIDE, uRoom: ROOM, uRoomSize: ROOM_SIZE, uRoomPitch: ROOM_PITCH },
 		lights: true,
 		side,
 	} );

@@ -298,8 +298,9 @@ export class Figure {
 
 	}
 
-	// Walk along points (world, y ignored) at speed m/s; resolves on arrival.
-	walk( points, speed = 1.05, story ) {
+	// Walk along points (world, y ignored) at speed m/s; resolves on arrival. back: stepping
+	// backwards, facing the way it came.
+	walk( points, speed = 1.05, story, back = false ) {
 
 		this.pose = 'walk';
 		const pts = points.map( ( p ) => new THREE.Vector3( p.x, 0, p.z ) );
@@ -319,7 +320,7 @@ export class Figure {
 				const tgt = pts[ i ];
 				_v.set( tgt.x - this.pos.x, 0, tgt.z - this.pos.z );
 				const d = _v.length();
-				const want = Math.atan2( _v.x, _v.z );
+				const want = Math.atan2( _v.x, _v.z ) + ( back ? Math.PI : 0 );
 				let dy = want - this.yaw;
 				dy = Math.atan2( Math.sin( dy ), Math.cos( dy ) );
 				this.yaw += dy * Math.min( 1, dt * 3 );
@@ -330,7 +331,7 @@ export class Figure {
 					this.pos.x += _v.x / d * move;
 					this.pos.z += _v.z / d * move;
 					this.pos.y = this.app.terrainData.heightAt( this.pos.x, this.pos.z ) - 0.03;
-					this.walkPhase += move / 0.78 * Math.PI;
+					this.walkPhase += ( back ? - 1 : 1 ) * move / 0.78 * Math.PI;
 
 				}
 

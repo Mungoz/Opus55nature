@@ -81,7 +81,7 @@ const notes = await page.evaluate( async ( cx, cz, span ) => {
 		}
 
 		for ( let d = 0; d < P.length; d += 100 ) { const s = P.at( d ); const [ sx, sy ] = scr( s.x, s.z ); g.fillStyle = '#fff'; g.font = '10px sans-serif'; g.fillText( d + 'm', sx + 5, sy + 12 ); }
-		for ( const b of story.beats ) if ( b.at !== undefined ) { const s = P.at( b.at ); label( b.id, s.x, s.z, '#ff5' ); }
+		for ( const b of story.beats ) if ( b.at !== undefined ) { const s = P.at( story._beatAt( b ) ); label( b.id, s.x, s.z, "#ff5" ); }
 		for ( const e of story.encounters ?? [] ) label( e.id, e.x, e.z, '#f8a', 3 );
 		if ( story.blockers ) for ( const o of story.blockers.debugShapes() ) {
 

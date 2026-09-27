@@ -1168,12 +1168,13 @@ export class Mammals {
 		b.timer -= dt;
 		if ( b.cmd ) {
 
-			// rear: up on its hind legs, facing what it scents; run: away at a lope; forage
+			// rear: up on its hind legs, facing what it scents; scent: the same on all fours, the
+			// head high; run: away at a lope; forage
 			const c = b.cmd;
 			b.timer = 1e9;
-			if ( c.do === 'rear' ) {
+			if ( c.do === 'rear' || c.do === 'scent' ) {
 
-				b.state = 'rear';
+				b.state = c.do;
 				if ( c.watch ) b.heading = turnToward( b.heading, Math.atan2( c.watch.x - b.pos.x, c.watch.z - b.pos.z ), dt * 1.2 );
 
 			} else if ( c.do === 'run' ) {
@@ -1249,6 +1250,17 @@ export class Mammals {
 				}
 
 				break;
+			case 'scent': {
+
+				// stopped, square on to it, the head up high and the nose working the air in bouts
+				const sn = b.sniff?.update( 0 ) ?? 0;
+				neckT = - 0.2;
+				headT = - 0.4 - sn * 0.12 * ( 0.5 + 0.5 * Math.sin( time * 11 ) );
+				yawT = Math.sin( time * 0.5 ) * 0.08;
+				break;
+
+			}
+
 			case 'look':
 				// head up, scenting the air
 				neckT = - 0.05;

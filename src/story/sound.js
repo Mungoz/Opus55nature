@@ -1,5 +1,8 @@
 import * as THREE from 'three';
-import { buildTake, GROUNDS, TAKES } from './steps.js';
+import { GROUND, RECORDINGS, TEXTURES, TAKES, buildTexture } from './steps.js';
+
+// how loud a recorded step peaks (each is brought to this as it loads)
+const STEP_PEAK = 0.34;
 
 // The horror edition's sounds, synthesised like the rest of the soundscape (nothing is
 // sampled): a cowbell, footsteps on each kind of ground and their echo, gate and door
@@ -68,12 +71,35 @@ export class StorySound {
 		this.roof.connect( bp ).connect( this.roofGain ).connect( A.master );
 		this.roof.start();
 		// wind in the roof and the rain's roar under the eave are the soundscape's own
-		// the footsteps: takes of each kind of ground (steps.js), made one a frame (a few ms each)
-		// from here on - all of them long before the first step off the boat
-		this.steps = {};
-		this._toMake = GROUNDS.flatMap( ( g ) => Array( TAKES ).fill( g ) );
+		// water running into the trough by the hut
+		if ( this.spoutAt ) this.trickle( this.spoutAt );
+		// the footsteps (steps.js): the recorded steps, loaded now; the textures laid over some of
+		// them, made one a frame from here on - all long before the first step off the boat
+		this.recs = {};
+		this.tex = {};
+		this._toMake = TEXTURES.flatMap( ( g ) => Array( TAKES ).fill( g ) );
 		this._take = {};
 		this._foot = 1;
+		for ( const name of RECORDINGS ) {
+
+			fetch( `./sounds/steps/${ name }.ogg` ).then( ( r ) => r.arrayBuffer() ).then( ( b ) => ctx.decodeAudioData( b ) ).then( ( buf ) => {
+
+				// each brought to one peak
+				const d = buf.getChannelData( 0 );
+				let peak = 0;
+				for ( let i = 0; i < d.length; i ++ ) peak = Math.max( peak, Math.abs( d[ i ] ) );
+				for ( let c = 0; c < buf.numberOfChannels; c ++ ) {
+
+					const ch = buf.getChannelData( c );
+					for ( let i = 0; i < ch.length; i ++ ) ch[ i ] *= STEP_PEAK / Math.max( 1e-4, peak );
+
+				}
+
+				( this.recs[ name.split( '_' )[ 1 ] ] ??= [] ).push( buf );
+
+			} ).catch( ( e ) => console.warn( 'footstep', name, e ) );
+
+		}
 
 	}
 
@@ -145,7 +171,8 @@ export class StorySound {
 	cowbell( p, strikes = 1, gain = 1 ) {
 
 		if ( ! this.on ) return;
-		const ctx = this.ctx, dest = this._at( p, 14 );
+		// (it carries: a bell is made to be heard across a hillside)
+		const ctx = this.ctx, dest = this._at( p, 30 );
 		const wet = ctx.createGain();
 		wet.gain.value = 0.9;
 		dest.connect?.( wet );
@@ -161,7 +188,7 @@ export class StorySound {
 				o.frequency.value = f0 * r * ( 1 + ( Math.random() - 0.5 ) * 0.006 );
 				const g = ctx.createGain();
 				g.gain.setValueAtTime( 0.0001, t );
-				g.gain.exponentialRampToValueAtTime( amp * 0.3 * k, t + 0.004 );
+				g.gain.exponentialRampToValueAtTime( amp * 0.5 * k, t + 0.004 );
 				g.gain.exponentialRampToValueAtTime( 0.0001, t + dec * ( 0.8 + Math.random() * 0.4 ) );
 				o.connect( g ).connect( dest );
 				o.start( t );
@@ -170,7 +197,7 @@ export class StorySound {
 			}
 
 			// the clapper's knock: a tight burst of noise
-			this._noise( dest, t, 0.05, 'bandpass', 2600, 1.5, 0.35 * k, 0.002 );
+			this._noise( dest, t, 0.05, 'bandpass', 2600, 1.5, 0.55 * k, 0.002 );
 			t += 0.16 + Math.random() * 0.25;
 
 		}
@@ -194,25 +221,19 @@ export class StorySound {
 
 	// ------------------------------------------------------------------ steps
 	// one footstep on the kind of ground underfoot (steps.js: grass, wet, earth, gravel, shingle,
-	// wood, stone, mud): a take of it, never the same one twice running, a little faster or
-	// slower, louder or softer, each foot a touch to its own side; from p (an echo) if given
+	// wood, stone, mud): a recorded step with, for some grounds, a texture over it - never the
+	// same take twice running, a little faster or slower, louder or softer, each foot a touch to
+	// its own side; from p (an echo) if given
 	step( surface, p = null, gain = 1, when = 0 ) {
 
 		if ( ! this.on ) return;
 		this._build();
-		// (one needed before its turn: made now)
-		if ( ! this.steps[ surface ]?.length && GROUNDS.includes( surface ) ) this._makeTake( surface );
-		const takes = this.steps[ surface ] ?? this.steps.grass;
-		if ( ! takes?.length ) return;
-		let k = Math.floor( Math.random() * takes.length );
-		if ( k === this._take[ surface ] ) k = ( k + 1 ) % takes.length;
-		this._take[ surface ] = k;
+		const G = GROUND[ surface ] ?? GROUND.grass;
+		const recs = this.recs[ G.rec ];
+		if ( ! recs?.length ) return; // (still loading)
 		const ctx = this.ctx, t = this.a.now() + 0.01 + when;
-		const src = ctx.createBufferSource();
-		src.buffer = takes[ k ];
-		src.playbackRate.value = 0.93 + Math.random() * 0.14;
-		const g = ctx.createGain();
-		g.gain.value = gain * ( 0.8 + Math.random() * 0.35 );
+		const out = ctx.createGain();
+		out.gain.value = gain * ( G.vol ?? 1 ) * ( 0.82 + Math.random() * 0.3 );
 		let dest;
 		if ( p ) dest = this._at( p, 3 );
 		else {
@@ -230,16 +251,42 @@ export class StorySound {
 
 		}
 
-		src.connect( g ).connect( dest );
+		out.connect( dest );
+		const src = ctx.createBufferSource();
+		src.buffer = this._pick( recs, G.rec );
+		src.playbackRate.value = ( G.rate ?? 1 ) * ( 0.94 + Math.random() * 0.12 );
+		src.connect( out );
 		src.start( t );
+		if ( G.tex ) {
+
+			if ( ! this.tex[ G.tex ]?.length ) this._makeTex( G.tex );
+			const tx = ctx.createBufferSource();
+			tx.buffer = this._pick( this.tex[ G.tex ], G.tex );
+			tx.playbackRate.value = 0.94 + Math.random() * 0.12;
+			const tg = ctx.createGain();
+			tg.gain.value = ( G.mix ?? 0.5 ) * STEP_PEAK;
+			tx.connect( tg ).connect( out );
+			tx.start( t );
+
+		}
 
 	}
 
-	_makeTake( g ) {
+	// a take from list, not the one used last time for key
+	_pick( list, key ) {
+
+		let k = Math.floor( Math.random() * list.length );
+		if ( list.length > 1 && k === this._take[ key ] ) k = ( k + 1 ) % list.length;
+		this._take[ key ] = k;
+		return list[ k ];
+
+	}
+
+	_makeTex( g ) {
 
 		const i = this._toMake.indexOf( g );
 		if ( i >= 0 ) this._toMake.splice( i, 1 );
-		( this.steps[ g ] ??= [] ).push( buildTake( this.ctx, g ) );
+		( this.tex[ g ] ??= [] ).push( buildTexture( this.ctx, g ) );
 
 	}
 
@@ -328,6 +375,39 @@ export class StorySound {
 		const f = 900 + Math.random() * 1400;
 		this.a._tone( dest, t, 0.05 + Math.random() * 0.04, f, f * 1.6, gain * 0.5 );
 		this._noise( dest, t, 0.03, 'bandpass', 3500, 2, gain * 0.2, 0.001 );
+
+	}
+
+	// water running from a pipe into a trough: a steady trickle, its level burbling
+	trickle( p, gain = 0.22 ) {
+
+		const ctx = this.ctx, dest = this._at( p, 2.5 );
+		const src = ctx.createBufferSource();
+		src.buffer = this.a.noise;
+		src.loop = true;
+		const hp = ctx.createBiquadFilter();
+		hp.type = 'highpass';
+		hp.frequency.value = 900;
+		const bp = ctx.createBiquadFilter();
+		bp.type = 'bandpass';
+		bp.frequency.value = 2400;
+		bp.Q.value = 0.8;
+		const g = ctx.createGain();
+		g.gain.value = gain;
+		for ( const [ fq, k ] of [ [ 5.3, 0.3 ], [ 1.7, 0.2 ] ] ) {
+
+			const lfo = ctx.createOscillator();
+			lfo.frequency.value = fq;
+			const lg = ctx.createGain();
+			lg.gain.value = gain * k;
+			lfo.connect( lg ).connect( g.gain );
+			lfo.start();
+
+		}
+
+		src.connect( hp ).connect( bp ).connect( g ).connect( dest );
+		src.start();
+		return g;
 
 	}
 
@@ -653,7 +733,7 @@ export class StorySound {
 		if ( ! this.on ) return;
 		this._build();
 		// (a footstep take a frame, until there are all of them)
-		if ( this._toMake.length ) this._makeTake( this._toMake[ 0 ] );
+		if ( this._toMake.length ) this._makeTex( this._toMake[ 0 ] );
 		const now = this.ctx.currentTime;
 		this.droneGain.gain.setTargetAtTime( 0.1 * this.drone, now, 0.8 );
 		this.roofGain.gain.setTargetAtTime( 0.5 * this.porch * env.rain, now, 0.4 );

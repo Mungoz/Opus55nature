@@ -1,25 +1,33 @@
-// Footsteps, made once at load: for each kind of ground, a handful of takes of one step (the heel
-// coming down, the roll, the toe pushing off), each built from what that sound is made of rather
-// than a filtered burst:
-//   gravel   a few hundred small stones grinding, each its own tiny click, thickest as the
-//            weight comes on; the grit hissing under them; the heel's thud
-//   shingle  fewer, bigger stones knocking together (each rings in two partials), and sliding
-//   grass    stems brushing the boot and springing back, a few dry ones snapping, the heel's
-//            dull pad in the turf
-//   earth    the forest floor: a soft thud, needles crackling, now and then a twig
-//   wood     planks: a knock that rings in the board's own few modes, hollow over the water
-//   stone    flags: a hard heel click and the grit scuffed under the sole
-//   wet      soaked grass: heavier stems, the water squeezed out of the turf, drops
-//   mud      the squelch as it takes the weight, and the suck of the heel coming out
-// Played back a take at a time (never the same one twice running), a little faster or slower
-// and louder or softer, the feet a touch to the left and to the right.
+// Footsteps. Each is a recorded step (Kenney's CC0 "Impact Sounds": grass, wood, concrete, snow,
+// carpet - public/sounds/steps) with, for the grounds no recording covers, a short texture made
+// here laid over it:
+//   grass    grass                      wood     wood (the jetty, the bridge, the boardwalk)
+//   stone    concrete (the hut's flags)  earth    carpet, and needles crackling (forest floor)
+//   gravel   snow, a little quicker, and the stones' crunch (the trail - most of the walk)
+//   shingle  concrete, and stones knocking together
+//   wet      grass, a little slower, and water squeezed out and dripping
+//   mud      carpet, slower, and the squelch
+// The first try at footsteps was made from nothing: long swelling swishes and thuds, a heel and
+// a toe a fifth of a second apart - at four steps a second, "tiny steps into squelching mud".
+// Measured against recordings (tools/stepref.mjs), a real step is short (15-60 ms, 160 for
+// snow), rises at once, is one impact, and most of it is the thump. So the thump is recorded,
+// and anything made here is short, sudden and quiet under it.
 
-const DUR = 0.46;
+// what each ground is made of: the recording, its speed, the texture over it (and how loud)
+export const GROUND = {
+	grass: { rec: 'grass', vol: 0.85 },
+	wet: { rec: 'grass', rate: 0.9, tex: 'splash', mix: 0.5, vol: 0.9 },
+	earth: { rec: 'carpet', rate: 0.95, tex: 'needles', mix: 0.35, vol: 0.8 },
+	gravel: { rec: 'snow', rate: 1.22, tex: 'crunch', mix: 0.55 },
+	shingle: { rec: 'concrete', rate: 0.92, tex: 'clack', mix: 0.6 },
+	wood: { rec: 'wood' },
+	stone: { rec: 'concrete', vol: 0.9 },
+	mud: { rec: 'carpet', rate: 0.82, tex: 'squelch', mix: 0.6, vol: 0.9 },
+};
+export const RECORDINGS = [ 'grass', 'wood', 'concrete', 'snow', 'carpet' ].flatMap( ( k ) => [ 0, 1, 2, 3, 4 ].map( ( i ) => `footstep_${ k }_00${ i }` ) );
 
-// how loud each kind of ground is, on average over a take and as heard (the lowest octaves,
-// felt more than heard and lost on small speakers, left out of the measure)
-const LEVEL = { grass: 0.0085, wet: 0.0095, earth: 0.009, gravel: 0.0125, shingle: 0.0125, wood: 0.014, stone: 0.0105, mud: 0.012 };
-const TAKES = 8;
+const DUR = 0.2;
+const TAKES = 6;
 
 // ------------------------------------------------------------------ building blocks
 function biquad( type, f, q, sr ) {
@@ -123,21 +131,6 @@ function mode( d, sr, t, amp, f, decay, attack = 0.0015, glide = 0 ) {
 
 }
 
-// the weight on the foot over the step: the heel strike (sharp, dying over heel s), then the toe
-// pushing off at toeAt (softer)
-function weight( heel, toeAt, toe, toeK = 0.55 ) {
-
-	return ( t ) => {
-
-		const h = t < 0 ? 0 : ( 1 - Math.exp( - t / 0.004 ) ) * Math.exp( - t / heel );
-		const u = t - toeAt;
-		const o = u < 0 ? 0 : ( 1 - Math.exp( - u / 0.014 ) ) * Math.exp( - u / toe );
-		return h + o * toeK;
-
-	};
-
-}
-
 // times for n events, thickest where density( t ) is
 function scatter( n, density, t1 = DUR * 0.85 ) {
 
@@ -158,187 +151,103 @@ function scatter( n, density, t1 = DUR * 0.85 ) {
 
 const R = Math.random;
 const exp = ( a, d ) => ( t ) => t < 0 ? 0 : ( 1 - Math.exp( - t / a ) ) * Math.exp( - t / d );
-const at = ( t0, e ) => ( t ) => e( t - t0 );
 
-// ------------------------------------------------------------------ the grounds
+// ------------------------------------------------------------------ the textures
+// (all within a fifth of a second, all starting at once)
 const MAKE = {
 
-	gravel( d, sr ) {
+	// the trail's small stones grinding and clicking as the weight comes on, and again smaller
+	// as it rolls to the ball of the foot
+	crunch( d, sr ) {
 
-		const toeAt = 0.15 + R() * 0.05, W = weight( 0.05 + R() * 0.02, toeAt, 0.045 );
-		// the crunch: stones shifting under the load, many small, a few bigger and lower
-		for ( const t of scatter( 380 + R() * 220, W ) ) {
+		const ball = 0.05 + R() * 0.03;
+		const dens = ( t ) => Math.exp( - t / 0.03 ) + 0.45 * ( t > ball ? Math.exp( - ( t - ball ) / 0.025 ) : 0 );
+		for ( const t of scatter( 160 + R() * 90, dens, 0.16 ) ) {
 
 			const big = Math.pow( R(), 3 );
-			ping( d, sr, t, 0.15 + big * 1.6, 1700 + Math.pow( R(), 1.4 ) * 7500 - big * 900, 0.0005 + R() * 0.0016 + big * 0.002 );
+			ping( d, sr, t, 0.2 + big * 1.4, 2000 + Math.pow( R(), 1.3 ) * 6500 - big * 800, 0.0003 + R() * 0.0009 + big * 0.0012 );
 
 		}
 
-		// the grit and sand under them
-		hiss( d, sr, W, 'bp', 3200, 0.6, 0.05 );
-		// the heel's weight
-		mode( d, sr, 0.002, 0.08, 75 + R() * 25, 0.025, 0.003 );
-		hiss( d, sr, exp( 0.003, 0.03 ), 'lp', 260, 0.8, 0.5 );
-
 	},
 
-	shingle( d, sr ) {
+	// stones on the lake shore knocking together
+	clack( d, sr ) {
 
-		const toeAt = 0.16 + R() * 0.05, W = weight( 0.06, toeAt, 0.05, 0.7 );
-		// stones knocking together as they give: each rings in two partials, a clack
-		for ( const t of scatter( 34 + R() * 26, W ) ) {
+		const n = 3 + Math.floor( R() * 4 );
+		for ( let i = 0; i < n; i ++ ) {
 
-			const f = 950 + Math.pow( R(), 1.3 ) * 3300, a = 0.25 + Math.pow( R(), 2 ) * 1.1, dec = 0.003 + R() * 0.008;
+			const t = Math.pow( R(), 1.8 ) * 0.07, f = 1100 + Math.pow( R(), 1.3 ) * 2600, a = 0.4 + R() * 0.8, dec = 0.003 + R() * 0.006;
 			ping( d, sr, t, a, f, dec );
-			ping( d, sr, t, a * 0.5, f * ( 2.2 + R() * 0.7 ), dec * 0.6 );
-
-		}
-
-		// and the fine gravel between them sliding
-		for ( const t of scatter( 120, W ) ) ping( d, sr, t, 0.12, 2500 + R() * 5000, 0.0006 );
-		hiss( d, sr, W, 'bp', 1900, 0.9, 0.035 );
-		mode( d, sr, 0.002, 0.07, 70 + R() * 20, 0.03, 0.003 );
-
-	},
-
-	grass( d, sr ) {
-
-		const toeAt = 0.17 + R() * 0.05;
-		// the stems brushing the boot, bending and springing back: a soft hiss that swells and
-		// fades, and again smaller as the toe leaves
-		const brush = ( t ) => exp( 0.022, 0.11 )( t ) + 0.55 * exp( 0.02, 0.08 )( t - toeAt );
-		hiss( d, sr, brush, 'bp', 3600 + R() * 1400, 0.55, 0.11 );
-		hiss( d, sr, brush, 'bp', 1500 + R() * 400, 0.7, 0.04 );
-		// dry stems snapping, faintly
-		for ( const t of scatter( 18 + R() * 20, brush ) ) ping( d, sr, t, Math.pow( R(), 2.5 ) * 0.6, 3000 + R() * 5000, 0.0004 + R() * 0.0006 );
-		// the heel's dull pad in the turf
-		hiss( d, sr, exp( 0.005, 0.04 ), 'lp', 380, 0.7, 0.45 );
-
-	},
-
-	wet( d, sr ) {
-
-		const toeAt = 0.17 + R() * 0.05;
-		// soaked stems: heavier, lower, the water squeezed out of the turf
-		const brush = ( t ) => exp( 0.02, 0.1 )( t ) + 0.6 * exp( 0.02, 0.09 )( t - toeAt );
-		hiss( d, sr, brush, 'bp', 2600 + R() * 800, 0.6, 0.085 );
-		sweepFilter( d, sr, exp( 0.012, 0.09 ), 'bp', ( t ) => 1100 * Math.exp( - t * 9 ) + 280, 2.2, 0.14 );
-		// drops, flicked off the grass and splashing
-		for ( const t of scatter( 22 + R() * 18, brush ) ) ping( d, sr, t, Math.pow( R(), 2 ) * 0.5, 1800 + R() * 3200, 0.001 + R() * 0.002 );
-		hiss( d, sr, exp( 0.005, 0.04 ), 'lp', 380, 0.7, 0.45 );
-
-	},
-
-	earth( d, sr ) {
-
-		const toeAt = 0.16 + R() * 0.05, W = weight( 0.05, toeAt, 0.05, 0.5 );
-		// soft ground taking the weight
-		hiss( d, sr, exp( 0.006, 0.05 ), 'lp', 300, 0.8, 0.6 );
-		hiss( d, sr, W, 'bp', 850, 0.8, 0.05 );
-		// needles and dry leaves crackling
-		for ( const t of scatter( 90 + R() * 70, W ) ) ping( d, sr, t, Math.pow( R(), 3.5 ) * 0.7, 2400 + R() * 4800, 0.0003 + R() * 0.0006 );
-		// now and then a twig
-		if ( R() < 0.16 ) {
-
-			const t = 0.03 + R() * 0.12;
-			for ( let i = 0; i < 3; i ++ ) ping( d, sr, t + i * ( 0.002 + R() * 0.004 ), 1.4 - i * 0.35, 1400 + R() * 2200, 0.003 + R() * 0.004 );
-			hiss( d, sr, at( t, exp( 0.0005, 0.006 ) ), 'hp', 1800, 0.7, 0.35 );
+			ping( d, sr, t, a * 0.45, f * ( 2.2 + R() * 0.7 ), dec * 0.6 );
 
 		}
 
 	},
 
-	wood( d, sr ) {
+	// soaked turf: water squeezed out, drops flicked up
+	splash( d, sr ) {
 
-		const toeAt = 0.15 + R() * 0.05;
-		// a plank knocked: its few modes, the lowest the hollow under the deck
-		const knock = ( t, a, f1 ) => {
-
-			for ( const [ r, g, dec ] of [ [ 1, 0.55, 0.055 ], [ 2.32, 0.6, 0.038 ], [ 3.87, 0.55, 0.024 ], [ 6.05, 0.45, 0.014 ], [ 8.7, 0.32, 0.009 ], [ 12.4, 0.2, 0.006 ] ] ) mode( d, sr, t, a * g * 0.12, f1 * r * ( 1 + ( R() - 0.5 ) * 0.05 ), dec * ( 0.8 + R() * 0.4 ) );
-			// the sole's contact: a dry tick
-			hiss( d, sr, at( t, exp( 0.0005, 0.007 ) ), 'bp', 1900, 0.7, a * 1.3 );
-
-		};
-
-		const f1 = 92 + R() * 55;
-		knock( 0, 1, f1 );
-		knock( toeAt, 0.35 + R() * 0.15, f1 * ( 1.1 + R() * 0.25 ) );
-		// grit on the boards under the sole
-		hiss( d, sr, ( t ) => exp( 0.02, 0.06 )( t - 0.01 ) * 0.5 + exp( 0.02, 0.05 )( t - toeAt ), 'bp', 3200, 0.8, 0.03 );
+		sweepFilter( d, sr, exp( 0.002, 0.025 ), 'bp', ( t ) => 1400 * Math.exp( - t * 20 ) + 500, 1.6, 0.25 );
+		for ( const t of scatter( 8 + R() * 8, exp( 0.004, 0.035 ), 0.12 ) ) ping( d, sr, t, Math.pow( R(), 1.5 ) * 0.5, 1600 + R() * 2600, 0.0015 + R() * 0.0025 );
 
 	},
 
-	stone( d, sr ) {
+	// needles and dry leaves, and now and then a twig
+	needles( d, sr ) {
 
-		const toeAt = 0.15 + R() * 0.05;
-		// the heel's hard click on the flag, and the weight behind it
-		for ( let i = 0; i < 5; i ++ ) ping( d, sr, 0.001 + R() * 0.004, 1.2 + R() * 0.8, 1600 + R() * 2800, 0.0015 + R() * 0.0025 );
-		hiss( d, sr, exp( 0.0004, 0.006 ), 'hp', 1300, 0.7, 0.7 );
-		mode( d, sr, 0.001, 0.035, 68 + R() * 15, 0.02, 0.002 );
-		mode( d, sr, 0.001, 0.03, 420 + R() * 200, 0.008, 0.0008 );
-		hiss( d, sr, exp( 0.003, 0.022 ), 'lp', 220, 0.8, 0.25 );
-		// grit scuffed under the sole, and the toe
-		hiss( d, sr, ( t ) => exp( 0.015, 0.05 )( t - 0.012 ) * 0.4 + exp( 0.02, 0.06 )( t - toeAt ), 'bp', 3600, 0.9, 0.045 );
-		for ( let i = 0; i < 2; i ++ ) ping( d, sr, toeAt + R() * 0.004, 0.35, 2200 + R() * 2000, 0.0015 );
+		for ( const t of scatter( 30 + R() * 30, exp( 0.003, 0.04 ), 0.12 ) ) ping( d, sr, t, Math.pow( R(), 3 ) * 0.6, 2400 + R() * 4500, 0.0003 + R() * 0.0006 );
+		if ( R() < 0.2 ) {
+
+			const t = 0.01 + R() * 0.05;
+			for ( let i = 0; i < 3; i ++ ) ping( d, sr, t + i * ( 0.002 + R() * 0.003 ), 1.3 - i * 0.35, 1400 + R() * 2200, 0.003 + R() * 0.004 );
+
+		}
 
 	},
 
-	mud( d, sr ) {
+	// the squelch as it takes the weight, and a little suck as it comes out
+	squelch( d, sr ) {
 
-		const toeAt = 0.2 + R() * 0.05;
-		// the squelch as it takes the weight
-		sweepFilter( d, sr, exp( 0.014, 0.12 ), 'bp', ( t ) => 1300 * Math.exp( - t * 12 ) + 260, 2.8, 0.3 );
-		hiss( d, sr, exp( 0.006, 0.05 ), 'lp', 260, 0.8, 0.8 );
-		// the suck of the heel coming out, and the drip after
-		mode( d, sr, toeAt + 0.03, 0.05, 320 + R() * 120, 0.018, 0.004, 0.5 );
-		sweepFilter( d, sr, at( toeAt + 0.02, exp( 0.004, 0.03 ) ), 'bp', ( t ) => 500 + t * 3000, 2, 0.25 );
-		for ( const t of scatter( 10 + R() * 10, at( toeAt, exp( 0.01, 0.06 ) ) ) ) ping( d, sr, t, Math.pow( R(), 2 ) * 0.45, 1400 + R() * 2400, 0.0015 + R() * 0.002 );
+		sweepFilter( d, sr, exp( 0.003, 0.035 ), 'bp', ( t ) => 1000 * Math.exp( - t * 22 ) + 260, 2.4, 0.45 );
+		const t = 0.1 + R() * 0.03;
+		mode( d, sr, t, 0.035, 360 + R() * 120, 0.012, 0.002, 0.5 );
 
 	},
 
 };
 
-// every take of every ground, as AudioBuffers
-// the grounds there are takes of
-export const GROUNDS = Object.keys( MAKE );
-export { TAKES };
-
-// one take of one ground, as an AudioBuffer (a few milliseconds' work)
-export function buildTake( ctx, name ) {
+// one take of one texture, as an AudioBuffer (a millisecond or two's work), peaking at 1
+export function buildTexture( ctx, name ) {
 
 	const sr = ctx.sampleRate, n = Math.floor( DUR * sr );
 	const d = new Float32Array( n );
 	MAKE[ name ]( d, sr );
-	// no rumble below the ground's own thud, no fizz above hearing's comfort
-	filter( d, 'hp', 45, 0.7, sr );
-	filter( d, 'lp', 12000, 0.7, sr );
-	// the tail faded, and the take brought to its ground's level
-	let e = 0;
-	const heard = biquad( 'hp', 400, 0.5, sr );
+	filter( d, 'hp', 250, 0.7, sr );
+	filter( d, 'lp', 11000, 0.7, sr );
+	let peak = 0;
 	for ( let i = 0; i < n; i ++ ) {
 
-		d[ i ] *= Math.min( 1, ( n - i ) / ( sr * 0.04 ) );
-		const h = heard( d[ i ] );
-		e += h * h;
+		d[ i ] *= Math.min( 1, ( n - i ) / ( sr * 0.02 ) );
+		peak = Math.max( peak, Math.abs( d[ i ] ) );
 
 	}
 
-	const g = LEVEL[ name ] / Math.max( 1e-6, Math.sqrt( e / n ) );
-	let peak = 0;
-	for ( let i = 0; i < n; i ++ ) peak = Math.max( peak, Math.abs( d[ i ] * g ) );
-	const k2 = g * Math.min( 1, 0.9 / Math.max( 1e-6, peak ) );
 	const buf = ctx.createBuffer( 1, n, sr );
 	const ch = buf.getChannelData( 0 );
-	for ( let i = 0; i < n; i ++ ) ch[ i ] = d[ i ] * k2;
+	for ( let i = 0; i < n; i ++ ) ch[ i ] = d[ i ] / Math.max( 1e-6, peak );
 	return buf;
 
 }
 
-// every take of every ground at once (tools/stepsrender.mjs; the game makes them a frame at a time)
+export const TEXTURES = Object.keys( MAKE );
+export { TAKES };
+
+// every take of every texture (tools/stepsrender.mjs)
 export function buildSteps( ctx ) {
 
 	const out = {};
-	for ( const name of GROUNDS ) out[ name ] = Array.from( { length: TAKES }, () => buildTake( ctx, name ) );
+	for ( const name of TEXTURES ) out[ name ] = Array.from( { length: TAKES }, () => buildTexture( ctx, name ) );
 	return out;
 
 }

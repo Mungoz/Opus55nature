@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { propMaterial, LAMP, INSIDE, M, col } from './kit.js';
+import { propMaterial, streamMaterial, LAMP, INSIDE, ROOM, ROOM_SIZE, ROOM_PITCH, M, col } from './kit.js';
 
-const INSIDE_LAMP = 0.07; // how bright the hut's inside glows with its lamp lit
+const LAMP_INSIDE = 2.2; // the hut's storm lantern
 import { buildHut, HUT } from './hut.js';
-import { buildJetty, buildBoat, boatWaterline, mooring, JETTY, BOAT, rope as ropeTo } from './jetty.js';
+import { buildJetty, buildBoat, boatWaterline, mooring, ring, JETTY, BOAT, rope as ropeTo } from './jetty.js';
 import { buildBridge } from './bridge.js';
 import { buildFence, buildSignpost, buildCross, cairn, buildBlazes, paintedMaterial } from './extra.js';
 import { buildBoots } from './boots.js';
@@ -63,6 +63,7 @@ export class StoryProps {
 		this._jetty();
 		this._bridge();
 		this._hut();
+		this._topGate();
 		this._boats();
 		this._fence();
 		this._junction();
@@ -242,7 +243,12 @@ export class StoryProps {
 		const shutShut = this._mesh( parts.shutter.shut, this.material, 'hut-shutter-shut' );
 		shutShut.visible = false;
 		const cover = this._mesh( parts.cover, this.material, 'hut-trough-cover' );
-		g.add( shutOpen, shutShut, cover );
+		const coverOff = this._mesh( parts.coverOff, this.material, 'hut-trough-boards-off' );
+		coverOff.visible = false;
+		const lamp = this._mesh( parts.lamp, this.material, 'hut-lantern' );
+		lamp.castShadow = false;
+		const key = this._mesh( parts.key, this.material, 'hut-key' );
+		g.add( shutOpen, shutShut, cover, coverOff, lamp, key );
 		// J. nailed a sack over the front window, on the inside of the open shutter
 		{
 
@@ -290,7 +296,15 @@ export class StoryProps {
 
 		}
 		this.group.add( g );
-		this.hut = { group: g, hinge, shutOpen, shutShut, cover, parts, frame: f };
+		this.hut = { group: g, hinge, shutOpen, shutShut, cover, coverOff, lamp, key, parts, frame: f };
+		this.keyPos = f.toWorld( HUT.key.x, HUT.key.y, HUT.key.z );
+		this.lampPos = f.toWorld( HUT.lamp.x, HUT.lamp.y, HUT.lamp.z );
+		// the room, for the shader: sun and sky kept out of it
+		ROOM.value.set( f.x, f.z, f.c, f.s );
+		// (out to the middle of the walls, where the chinking is: the logs' faces in the gaps between
+		// them, seen from inside, are inside)
+		ROOM_SIZE.value.set( HUT.room.x1 + 0.075, HUT.room.z1 + 0.075, f.y - 0.3, f.y + HUT.RIDGE + 0.085 );
+		ROOM_PITCH.value = HUT.pitch;
 		// the trough's water: a small mirror, drawn only when it is near and in view
 		const tw = f.toWorld( HUT.trough.x, HUT.troughWater, HUT.trough.z );
 		const geo = new THREE.PlaneGeometry( 0.52, 2.42 );
@@ -306,6 +320,35 @@ export class StoryProps {
 		this.troughPos = tw;
 		this.troughLocal = HUT.trough;
 		this.troughWaterOn = true;
+		// the feed pipe running: a thin stream from its mouth, curving a little as it falls, into
+		// the trough; rings where it lands
+		{
+
+			const mouth = f.toWorld( HUT.troughPipe.x, HUT.troughPipe.y, HUT.troughPipe.z );
+			const back = f.toWorld( HUT.troughPipe.x - 0.3, HUT.troughPipe.y, HUT.troughPipe.z + 0.13 );
+			const dx = mouth.x - back.x, dz = mouth.z - back.z, dl = Math.hypot( dx, dz );
+			const h = mouth.y - tw.y;
+			const geo = new THREE.CylinderGeometry( 0.009, 0.013, h, 6, 10, true );
+			geo.translate( 0, - h / 2, 0 );
+			const p = geo.getAttribute( 'position' );
+			for ( let i = 0; i < p.count; i ++ ) {
+
+				// thrown out of the pipe at half a metre a second, falling
+				const off = 0.5 * Math.sqrt( 2 * Math.max( 0, - p.getY( i ) ) / 9.8 );
+				p.setX( i, p.getX( i ) + dx / dl * off );
+				p.setZ( i, p.getZ( i ) + dz / dl * off );
+
+			}
+
+			geo.computeVertexNormals();
+			const m = new THREE.Mesh( geo, streamMaterial() );
+			m.position.copy( mouth );
+			m.name = 'spout';
+			this.group.add( m );
+			const land = 0.5 * Math.sqrt( 2 * h / 9.8 );
+			this.spout = { pos: new THREE.Vector3( mouth.x + dx / dl * land, tw.y, mouth.z + dz / dl * land ), next: 0 };
+
+		}
 		// a second door, swung open, that only the water shows (layer 7: reflections only)
 		const ghostHinge = new THREE.Group();
 		ghostHinge.position.fromArray( parts.door.pivot );
@@ -326,7 +369,28 @@ export class StoryProps {
 
 		};
 
-		box( 0, 0, HUT.W / 2 + 0.08, HUT.L / 2 + 0.08 );
+		// the walls, with the doorway open (you can go in: "you can't see inside the hut")
+		{
+
+			const hw = HUT.W / 2 - 0.075, hl = HUT.L / 2 - 0.075;
+			const seg = ( ax, az, bx, bz, r = 0.1 ) => {
+
+				const a = f.toWorld( ax, 0, az ), b = f.toWorld( bx, 0, bz );
+				C.capsule( a.x, a.z, b.x, b.z, r, 'hut' );
+
+			};
+
+			seg( - hw, - hl, hw, - hl );
+			seg( - hw, - hl, - hw, hl );
+			seg( hw, - hl, hw, hl );
+			seg( - hw, hl, - 1.31, hl, 0.06 );
+			seg( - 0.29, hl, hw, hl, 0.06 );
+			// the floor, a step up from the porch; the furniture
+			const fc = f.toWorld( 0, 0, 0 );
+			C.deck( fc.x, fc.z, hw - 0.05, hl - 0.05, f.yaw, f.y, 'hutfloor' );
+			for ( const [ lx, lz, hx, hz ] of HUT.furniture ) box( lx, lz, hx, hz );
+
+		}
 		// the crossed log ends standing out at the corners
 		for ( const [ sx, sz ] of [ [ - 1, - 1 ], [ 1, - 1 ], [ - 1, 1 ], [ 1, 1 ] ] ) {
 
@@ -417,6 +481,62 @@ export class StoryProps {
 		hinge.add( this._mesh( gate.geometry, this.material, 'gate' ) );
 		this.group.add( hinge );
 		this.gate = { hinge, yaw: gate.yaw, open: 0, pos: new THREE.Vector3( ( ax + bx ) / 2, gate.hinge.y + 1, ( az + bz ) / 2 ), latch: gate.latch };
+
+	}
+
+	// The top gate. J. chained it ("Nothing comes down from the tarn now. Key on the table"): a
+	// pasture fence across the valley floor behind the hut, from a few metres into the tarn to
+	// the stream, the trail through a gate in it. Its key is on the hut's table.
+	_topGate() {
+
+		const td = this.app.terrainData, f = this.hutFrame;
+		const ground = ( x, z ) => td.heightAt( x, z );
+		// along the hut's frame at z = -28: north end in the tarn, the gate where the trail
+		// crosses, the south end at the stream
+		const lxs = [ 21.5, 17.5, 13.3, 9.9, 6, 0.5, - 6, - 13, - 20.5, - 28, - 35.5, - 43, - 50.5, - 57.5, - 63.5 ];
+		const pts = lxs.map( ( lx, i ) => {
+
+			const w = f.toWorld( lx, 0, - 28 + Math.sin( i * 2.3 ) * 0.5 );
+			return [ w.x, w.z ];
+
+		} );
+		const gi = 2;
+		const { geometry, gate } = buildFence( ground, pts, gi, 11 );
+		this.group.add( this._mesh( geometry, this.material, 'top-fence' ) );
+		const C = this.story.collision;
+		C.polyline( pts.slice( 0, gi + 1 ), 0.09, 'fence' );
+		C.polyline( pts.slice( gi + 1 ), 0.09, 'fence' );
+		const [ ax, az ] = pts[ gi ], [ bx, bz ] = pts[ gi + 1 ];
+		C.capsule( ax, az, bx, bz, 0.1, 'tgate' );
+		const hinge = new THREE.Group();
+		hinge.position.copy( gate.hinge );
+		hinge.rotation.y = gate.yaw;
+		hinge.add( this._mesh( gate.geometry, this.material, 'top-gate' ) );
+		this.group.add( hinge );
+		// it swings away from the hut (toward the tarn side)
+		const lx = gate.latch.x - gate.hinge.x, lz = gate.latch.z - gate.hinge.z, a = 1.75;
+		const ox = lx * Math.cos( a ) + lz * Math.sin( a ), oz = - lx * Math.sin( a ) + lz * Math.cos( a );
+		const away = f.toWorld( 0, 0, - 1 ).sub( f.toWorld( 0, 0, 0 ) );
+		const dir = ox * away.x + oz * away.z > 0 ? 1 : - 1;
+		this.topGate = { hinge, yaw: gate.yaw, open: 0, dir, pos: new THREE.Vector3( ( ax + bx ) / 2, gate.hinge.y + 1, ( az + bz ) / 2 ), latch: gate.latch, tag: 'tgate' };
+		// the chain round the gate's end and the post, and the padlock hanging from it
+		const k = new Kit( ( x, z ) => ground( x, z ) );
+		const L = gate.latch, ux = ( gate.hinge.x - L.x ), uz = ( gate.hinge.z - L.z ), ul = Math.hypot( ux, uz );
+		const nx = uz / ul, nz = - ux / ul;
+		for ( let i = 0; i < 9; i ++ ) {
+
+			// links looped round, a little below the latch, alternating their plane
+			const a2 = i / 9 * Math.PI * 2, rr = 0.09;
+			const p = new THREE.Vector3( L.x + ux / ul * 0.06 + nx * Math.cos( a2 ) * rr + ux / ul * Math.sin( a2 ) * rr * 0.6, L.y - 0.08 - Math.abs( Math.sin( a2 ) ) * 0.02, L.z + uz / ul * 0.06 + nz * Math.cos( a2 ) * rr + uz / ul * Math.sin( a2 ) * rr * 0.6 );
+			ring( k, p, i % 2 ? new THREE.Vector3( 0, 1, 0 ) : new THREE.Vector3( nx, 0, nz ), 0.018, 0.005 );
+
+		}
+
+		const lp = new THREE.Vector3( L.x + nx * 0.1, L.y - 0.2, L.z + nz * 0.1 );
+		k.box( lp.x, lp.y, lp.z, 0.06, 0.07, 0.025, M.IRON, '#5a4a30', { round: 0.006 } );
+		ring( k, new THREE.Vector3( lp.x, lp.y + 0.045, lp.z ), new THREE.Vector3( nx, 0, nz ), 0.022, 0.005 );
+		this.topChain = this._mesh( k.build(), this.material, 'top-gate-chain' );
+		this.group.add( this.topChain );
 
 	}
 
@@ -603,16 +723,30 @@ export class StoryProps {
 
 	}
 
-	setDoor( open ) { this.hut.hinge.rotation.y = open ? 1.65 : 0; }
+	setDoor( open ) {
+
+		this.hut.hinge.rotation.y = open ? 1.65 : 0;
+		// (swung open, it stands out into the room from its hinge)
+		const C = this.story.collision, f = this.hutFrame;
+		C.remove( 'hutdoor' );
+		if ( open ) {
+
+			const a = f.toWorld( - 1.24, 0, HUT.L / 2 - 0.05 ), b = f.toWorld( - 1.31, 0, HUT.L / 2 - 0.92 );
+			C.capsule( a.x, a.z, b.x, b.z, 0.05, 'hutdoor' );
+
+		}
+
+	}
 
 	// a lamp lit inside the hut: the inside glows through the door, and its light falls out over
 	// the porch (the lantern light is free until the jetty's is lit, at the strand)
 	lightInside( on ) {
 
-		const f = this.hutFrame, c = f.toWorld( - 0.2, 0, 0 ), door = f.toWorld( - 0.8, 1.0, HUT.L / 2 - 0.4 );
-		this._inside = on ? { c, door } : null;
-		INSIDE.value.set( c.x, f.y, c.z, on ? INSIDE_LAMP : 0 );
-		if ( on ) LAMP.value.set( door.x, door.y, door.z, 0.9 );
+		// (the lantern on the table: its light fills the room and falls out of the door)
+		const door = this.lampPos;
+		this._inside = on ? { door } : null;
+		INSIDE.value.w = 0;
+		if ( on ) LAMP.value.set( door.x, door.y, door.z, LAMP_INSIDE );
 		else if ( LAMP.value.distanceTo?.( new THREE.Vector4( door.x, door.y, door.z, LAMP.value.w ) ) < 0.1 ) LAMP.value.w = 0;
 
 	}
@@ -638,6 +772,7 @@ export class StoryProps {
 	setTroughCover( on ) {
 
 		this.hut.cover.visible = on;
+		this.hut.coverOff.visible = ! on;
 		this.troughWater.mesh.visible = ! on;
 		this.troughWaterOn = ! on;
 
@@ -742,12 +877,18 @@ export class StoryProps {
 	update( dt, time ) {
 
 		this.glow?.update( dt, time );
+		// the spout's rings, small and often
+		if ( this.spout && time > this.spout.next && this.troughWaterOn ) {
+
+			this.spout.next = time + 0.35 + Math.random() * 0.2;
+			this.troughWater.addRipple( this.spout.pos.x, this.spout.pos.z, 0.035 + Math.random() * 0.025 );
+
+		}
 		// the lamp inside the hut: a wick's breathing
 		if ( this._inside ) {
 
 			const k = 0.88 + 0.08 * Math.sin( time * 2.3 ) + 0.05 * Math.sin( time * 7.9 + Math.sin( time * 1.7 ) * 2 );
-			INSIDE.value.w = INSIDE_LAMP * k;
-			if ( ! this.lampLit ) LAMP.value.w = 0.9 * k;
+			if ( ! this.lampLit ) LAMP.value.w = LAMP_INSIDE * k;
 
 		}
 

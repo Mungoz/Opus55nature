@@ -148,9 +148,8 @@ export const BEATS = [
 				if ( dist2( d.pos, W.x, W.z ) > 12 ) teleport( d, W.x - 4 - k * 2.2, W.z + ( k - 2 ) * 2.5, Math.atan2( E.x - W.x, E.z - W.z ) );
 
 			} );
-			S.figure.place( F1.x, F1.z, Math.atan2( D.x - F1.x, D.z - F1.z ) );
-			S.figure.setMode( 'direct' );
-			S.figure.tilt = 0.42;
+			// (nothing is there: the herd stares at an empty larch edge. The figure was stood there
+			// once - too soon: "it gives away the enemy way too early". It comes in the wood, later.)
 			// the herd lifts its heads and looks back west; then, one by one, into the water
 			await S.until( () => S.progress > S.path.ids.mouth + 18 );
 			const splash = S.every( ( dt ) => {
@@ -222,9 +221,6 @@ export const BEATS = [
 
 			await S.wait( 14 );
 			for ( const d of deer ) { d.cmd = null; d.home.set( away.x, away.z ); d.state = 'graze'; d.timer = 20; }
-			// F1 goes when you are not looking
-			await S.untilUnseen( 1.5 );
-			S.figure.setMode( 'hidden' );
 
 		},
 		skip: ( S ) => {
@@ -440,6 +436,15 @@ export const BEATS = [
 			const app = S.app, P = S.props, f = P.hutFrame;
 			S.skyOverride = { ...STORM };
 			S.hint( 'hutbook', 30 );
+			// the door: shut fast (swollen with the wet, or held) until the storm has gone
+			const dp = V( P.door.x, P.door.y + 1.1, P.door.z );
+			S.doorIt = S.addInteractable( { id: 'hutdoor', x: dp.x, y: dp.y, z: dp.z, r: 1.9, prompt: 'try the door', use: () => {
+
+				S.sound.latch( dp );
+				setTimeout( () => S.sound.knock( dp, 0.45 ), 180 );
+				S.ui.caption( '[ the door is shut fast ]', 3 );
+
+			} } );
 			const t0 = S.time, h0 = app.hours;
 			S.clockOverride = h0;
 			// the clock: 17:00 to 17:26 over the storm
@@ -483,7 +488,9 @@ export const BEATS = [
 			await S.wait( 6 );
 			// it clears a little after the book has been read and put back, or after two and a half
 			// minutes - or as you walk on from the hut, the storm going off down the valley
-			const over = () => S.time - t0 > 150 || ( S.time - t0 > 35 && S.flags.hutbookRead && S.time - S.flags.hutbookAt > 12 ) || S.progress > S.path.ids.troughEnd + 18;
+			// (it was over in half a minute once the book was read: "the storm doesn't last anywhere
+			// near long enough". Two and a half minutes at the least, four at the most.)
+			const over = () => S.time - t0 > 240 || ( S.time - t0 > 150 && S.flags.hutbookRead && S.time - S.flags.hutbookAt > 20 );
 			while ( ! over() ) {
 
 				// the next flash, and in it, the next place (unless you are out there yourself)
@@ -509,12 +516,18 @@ export const BEATS = [
 					S.ui.caption( '[ a cowbell, in the empty pen ]', 4 );
 
 				}, 4000 );
-				// the trough's boards go while no one sees: while the page of the book covers the
-				// view, or while the trough is out of it
-				if ( ! S.flags.troughOpen && ( S.reading || S.offscreen( P.troughPos, 2 ) ) ) {
+				// the boards J. nailed over the trough are wrenched off while no one sees - while the
+				// page of the book covers the view, or while the trough is out of it - with a sound
+				// you hear through the rain, and they lie flung down beside it
+				if ( ! S.flags.troughOpen && flash >= 2 && ( S.reading || S.offscreen( P.troughPos, 2 ) ) ) {
 
 					P.setTroughCover( false );
 					S.flags.troughOpen = true;
+					const tp = V( P.troughPos.x, P.troughPos.y, P.troughPos.z );
+					S.sound.creak( tp, 0.45, 0.7, 120, 70 );
+					setTimeout( () => { S.sound.knock( tp, 0.7 ); S.sound.creak( tp, 0.3, 0.5, 150, 90 ); }, 450 );
+					setTimeout( () => S.sound.knock( tp, 0.55 ), 1100 );
+					S.ui.caption( '[ wood wrenched loose, out by the trough ]', 4 );
 
 				}
 
@@ -563,9 +576,75 @@ export const BEATS = [
 			S.props.setTroughCover( false );
 			S.flags.troughOpen = true;
 			S.flags.stormOver = true;
+			if ( S.doorIt ) S.doorIt.enabled = false;
 			// the ground as the storm leaves it: soaked, the puddles full
 			S.app.weather.wetness = 1;
 			S.app.weather.puddle = 1;
+
+		},
+	},
+
+	// The key and the top gate. The hut book: "Chained the top gate. Nothing comes down from the
+	// tarn now. Key on the table." The gate is in a pasture fence from the tarn to the stream,
+	// behind the hut; the key is on the table in the hut, and the hut's door is shut fast until
+	// the storm has gone (F4 opens it). Unlocked, the gate swings open; well past it, it swings
+	// shut behind you.
+	{
+		id: 'topgate', at: 'hut', lead: - 10, keep: true,
+		run: async ( S ) => {
+
+			const P = S.props, G = P.topGate;
+			// the key, on the table in the lamplight (to be had once the door has opened)
+			const kp = P.keyPos;
+			S.keyIt = S.addInteractable( { id: 'key', x: kp.x, y: kp.y, z: kp.z, r: 1.5, enabled: P.hut.hinge.rotation.y > 0.5 || S.flags.doorDone, prompt: 'take the key', use: () => {
+
+				S.keyIt.enabled = false;
+				S.flags.hasKey = true;
+				P.hut.key.visible = false;
+				S.sound.knock( kp, 0.15 );
+				S.ui.caption( '[ an iron key, cold in your hand ]', 3.5 );
+				gateIt.prompt = 'unlock the gate';
+
+			} } );
+			let nudged = - 1e3;
+			const gateIt = S.addInteractable( { id: 'topgate', x: G.pos.x, y: G.pos.y, z: G.pos.z, r: 2.6, prompt: 'try the gate', use: async () => {
+
+				if ( ! S.flags.hasKey ) {
+
+					gateIt.used = false;
+					S.sound.latch( G.pos );
+					setTimeout( () => S.sound.knock( G.pos, 0.3 ), 200 );
+					S.ui.caption( '[ chained, and padlocked ]', 3 );
+					if ( S.time - nudged > 20 ) {
+
+						nudged = S.time;
+						S.ui.hint( S.flags.hutbookRead ? 'The key is on the table in the hut.' : 'The hut book, in the tin by the door, might say where the key is.', 6 );
+
+					}
+
+					return;
+
+				}
+
+				gateIt.enabled = false;
+				S.sound.latch( G.pos );
+				setTimeout( () => S.sound.knock( G.pos, 0.25 ), 300 );
+				P.topChain.visible = false;
+				S.ui.caption( '[ the padlock opens; the chain slides off ]', 3.5 );
+				await S.wait( 0.9 );
+				S.sound.creak( G.pos, 1.5, 0.4, 140, 230 );
+				await P.swingGate( true, G );
+				S.flags.topGateOpen = true;
+
+			} } );
+			S.topGateIt = gateIt;
+			// through it and well on: it swings shut behind you
+			await S.until( () => S.flags.topGateOpen && S.progress > S.path.ids.troughEnd + 90 && dist2( G.pos, S.cam.x, S.cam.z ) > 22 );
+			await S.untilOffscreen( G.pos, 3 );
+			await P.swingGate( false, G );
+			S.sound.latch( G.pos );
+			S.sound.knock( G.pos, 0.35 );
+			S.ui.caption( '[ a gate, behind you ]', 3.5 );
 
 		},
 	},
@@ -601,6 +680,10 @@ export const BEATS = [
 			const behind = S.offscreen( doorAt, 1.2 );
 			// the door swings in, slowly, on the lamplight
 			P.lightInside( true );
+			if ( S.doorIt ) S.doorIt.enabled = false;
+			if ( S.keyIt ) S.keyIt.enabled = true;
+			P.setDoor( true );
+			P.hut.hinge.rotation.y = 0;
 			const ts = S.time;
 			S.every( () => {
 
@@ -668,7 +751,15 @@ export const BEATS = [
 			S.hint( 'wayon', 30 );
 
 		},
-		skip: ( S ) => { S.props.setDoor( true ); S.props.lightInside( true ); S.flags.doorDone = true; },
+		skip: ( S ) => {
+
+			S.props.setDoor( true );
+			S.props.lightInside( true );
+			S.flags.doorDone = true;
+			if ( S.doorIt ) S.doorIt.enabled = false;
+			if ( S.keyIt ) S.keyIt.enabled = true;
+
+		},
 	},
 
 	// E9 and F5: the heron on the far shore of the tarn. In the water, someone is standing in
@@ -768,14 +859,53 @@ export const BEATS = [
 
 			} );
 
+			// what they stare at: the path behind you - where, once the wood has closed round, it
+			// stands. Look round and it backs away into the trees, facing you, and is gone.
+			const F = S.figure;
+			let shown = false, going = false;
 			const watch = S.every( () => {
 
-				const b = S.behind( 30 );
+				const b = shown ? F.pos : S.behind( 30 );
 				for ( const d of hinds ) if ( d.cmd?.do === 'stare' ) d.cmd.watch.set( b.x, 0, b.z );
 				return ! hinds.some( ( d ) => d.cmd?.do === 'stare' );
 
 			} );
 			void watch;
+			( async () => {
+
+				await S.until( () => S.progress > base - 8 );
+				// placed while that stretch of path is out of your view
+				let spot = null;
+				await S.until( () => {
+
+					const b = S.behind( 30 );
+					const p = V( b.x, S.app.terrainData.heightAt( b.x, b.z ), b.z );
+					if ( S.hidden( p, 1 ) ) spot = { p, tx: b.tx, tz: b.tz };
+					return spot || S.progress > S.path.ids.wood + 60;
+
+				} );
+				if ( ! spot ) return;
+				F.place( spot.p.x, spot.p.z, Math.atan2( S.cam.x - spot.p.x, S.cam.z - spot.p.z ) );
+				F.tilt = 0.45;
+				F.setMode( 'direct' );
+				shown = true;
+				const t0 = S.time;
+				await S.until( () => S.seenFor > 1.1 || S.time - t0 > 25 );
+				if ( S.seenFor <= 1.1 ) { F.setMode( 'hidden' ); shown = false; return; }
+				// it backs away off the path into the trees, facing you
+				going = true;
+				const side = Math.random() < 0.5 ? 1 : - 1, nx = spot.tz * side, nz = - spot.tx * side;
+				const pts = [ 2.5, 5.5, 8.5, 12, 16 ].map( ( k, i ) => V( spot.p.x + nx * k - spot.tx * i * 0.8, 0, spot.p.z + nz * k - spot.tz * i * 0.8 ) );
+				let gone = false;
+				F.walk( pts, 0.6, S, true ).then( () => ( gone = true ) );
+				const tb = S.time;
+				await S.until( () => gone || ( S.time - tb > 3 && S.hidden( V( F.pos.x, F.pos.y + 1, F.pos.z ), 0.5 ) ) );
+				F.setMode( 'hidden' );
+				F.pose = 'stand';
+				shown = false;
+
+			} )();
+			void going;
 			await S.until( () => hinds.some( ( d ) => d.cmd && dist2( d.pos, S.cam.x, S.cam.z ) < 9 ) || S.progress > S.path.ids.wood + 70 );
 			for ( const d of hinds ) {
 
@@ -839,9 +969,10 @@ export const BEATS = [
 			S.sound.snuffle( b.pos.clone().setY( 0.6 ), 3.5 );
 			S.ui.caption( '[ snuffling, off the path ]', 3.5 );
 			await S.until( () => dist2( b.pos, S.cam.x, S.cam.z ) < 38 || S.seenFor > 0.8 );
-			// it stands to scent the air - not toward you: back up the path, behind you
+			// it lifts its head to scent the air - not toward you: back up the path, behind you
+			// (on all fours: standing up on its hind legs, it looked like a man in a bear suit)
 			const up = S.behind( 20 );
-			b.cmd = { do: 'rear', watch: V( up.x, 0, up.z ) };
+			b.cmd = { do: 'scent', watch: V( up.x, 0, up.z ) };
 			await S.wait( 1.5 );
 			await S.until( () => S.seenFor > 3.5 || dist2( b.pos, S.cam.x, S.cam.z ) < 20 );
 			await S.wait( 1.5 );

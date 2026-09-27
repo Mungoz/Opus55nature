@@ -43,6 +43,7 @@ export const READS = {
 		}, {
 			head: '',
 			entries: [
+				{ text: '8.10. Chained the top gate. Nothing comes down from the tarn now. Key on the table.', hand: 'hand1' },
 				{ text: '9.10. Boarded the trough. Covered the window.', hand: 'hand1' },
 				{ text: 'It stands where I stand now.', hand: 'hand1', scrawl: true },
 				{ text: 'Going down to the boat.', hand: 'hand1', scrawl: true },

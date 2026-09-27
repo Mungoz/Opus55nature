@@ -17,7 +17,7 @@ const _n = { dist: 0, d: 0, side: 0 };
 const HINTS = {
 	boatlog: { text: 'The box on the jetty\'s end holds the boat log.', done: ( S ) => S.flags.boatlogRead || S.progress > S.path.ids.jettyLand + 30 },
 	hutbook: { text: 'The hut book is in the tin, beside the door.', done: ( S ) => S.flags.hutbookRead },
-	wayon: { text: 'The way goes on round behind the hut, up to the tarn. Follow the red and white marks.', sec: 9, done: ( S ) => S.progress > S.path.ids.troughEnd + 22 },
+	wayon: { text: ( S ) => S.flags.hasKey ? 'The top gate is behind the hut, on the way up to the tarn. Follow the red and white marks.' : 'The key for the top gate is on the table, inside the hut.', sec: 9, done: ( S ) => S.flags.topGateOpen },
 	lost: { text: 'The path is back the way you came.', sec: 6, done: ( S ) => S.lost < 1 },
 };
 const _f = { dist: 0, d: 0, side: 0 }, _g = { dist: 0, d: 0, side: 0 };
@@ -73,7 +73,9 @@ export class Story {
 		c.canFly = false;
 		c.walkSpeed = 2.9;
 		c.runSpeed = 4.5;
-		c.stride = 0.74;
+		// (a step every 1.3 m at walking pace: a little over two a second; at 0.74 m it was four,
+		// a patter of tiny steps, and the head bobbed with it)
+		c.stride = 1.3;
 		c.eyeHeight = 1.66;
 		// what you can't walk through
 		this.collision = new Collision( td );
@@ -124,6 +126,7 @@ export class Story {
 		} ) } );
 		// sound: the story's own, and the footsteps (with their echo, later)
 		this.sound = new StorySound( app.audio );
+		this.sound.spoutAt = this.props.spout?.pos;
 		app.audio.paper = () => this.sound.paper();
 		app.moreBirds.onCroak = ( p ) => this.sound.croak( p.clone().setY( 1 ) );
 		app.geese.auto = false;
@@ -481,8 +484,9 @@ export class Story {
 		this.until( () => this.time - t0 > sec || H.done( this ) ).then( () => {
 
 			if ( H.done( this ) || this.ended || ! this.begun ) return;
-			if ( this.reading ) return this.until( () => ! this.reading ).then( () => ! H.done( this ) && this.ui.hint( H.text, H.sec ?? 7 ) );
-			this.ui.hint( H.text, H.sec ?? 7 );
+			const text = () => typeof H.text === 'function' ? H.text( this ) : H.text;
+			if ( this.reading ) return this.until( () => ! this.reading ).then( () => ! H.done( this ) && this.ui.hint( text(), H.sec ?? 7 ) );
+			this.ui.hint( text(), H.sec ?? 7 );
 
 		} );
 
@@ -717,6 +721,18 @@ export class Story {
 			target = { x: p.x, z: p.z };
 
 		}
+
+		// the key: in at the door (square on to it first), to the table; and out again
+		{
+
+			const f = this.props.hutFrame, [ lx, lz ] = f.toLocal( this.cam.x, this.cam.z );
+			const inside = lz < 4.1 && Math.abs( lx ) < 2.9;
+			let p = null;
+			if ( this.keyIt?.enabled && ! this.flags.hasKey ) p = ! inside ? ( Math.abs( lx + 0.8 ) > 0.15 || lz > 6.5 ? f.toWorld( - 0.8, 0, 5.3 ) : f.toWorld( - 0.8, 0, 2.5 ) ) : this.props.keyPos;
+			else if ( inside ) p = Math.abs( lx + 0.8 ) > 0.15 && lz < 3.4 ? f.toWorld( - 0.8, 0, 2.6 ) : f.toWorld( - 0.8, 0, 5.4 );
+			if ( p ) target = { x: p.x, z: p.z };
+
+		}
 		let yaw = Math.atan2( - ( target.x - this.cam.x ), - ( target.z - this.cam.z ) );
 		// glance at it if it shows: stop, look for a couple of seconds, then walk on (once a
 		// sighting)
@@ -786,7 +802,7 @@ export class Story {
 			if ( b.state !== 'waiting' || ! this.begun ) continue;
 			if ( this.progress < this._beatAt( b ) ) continue;
 			// (one you have walked well past, as when you have gone on ahead: its moment has gone)
-			if ( this.progress > this._beatAt( b ) + 45 ) {
+			if ( ! b.keep && this.progress > this._beatAt( b ) + 45 ) {
 
 				b.state = 'done';
 				this.log.push( [ b.id, Math.round( this.time ), 'passed' ] );
