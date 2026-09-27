@@ -58,8 +58,8 @@ J.'s notes are the only story text. There are three sources, about ten entries i
 | Walkers' register | A tin on the signpost | Entries thin out and get odder through October. |
 | Hut book | A tin by the hut door | The missing cow's bell heard where it can't be. Someone on the far shore, "not on the shore, in it". "It stands where I stand now." "Going down to the boat." |
 
-- [ ] Write all the entries in J.'s voice. Keep them spare.
-- [ ] Draft the found objects: the boarded trough, the upturned bucket, the cloth nailed over the window, J.'s boots paired neatly on the shore facing the water, and the cut mooring rope at J.'s berth.
+- [x] Write all the entries in J.'s voice. Keep them spare.
+- [x] Draft the found objects: the boarded trough, the upturned bucket, the cloth nailed over the window, J.'s boots paired neatly on the shore facing the water, and the cut mooring rope at J.'s berth.
 
 ## 5. Route, beats and time of day
 
@@ -87,7 +87,7 @@ The route is about 1.7 km of path, 14–16 minutes with the reading, the storm a
 | 13 | Your boat, fetched up on the shingle, its line cut the same way | n/a | 18:05 → 18:10 | Night | The ending (9.11) |
 
 - [x] Agree the route (this table).
-- [ ] Check it on the plan map (`tools/planmap.mjs`) with the path, props and blockers drawn on, and walk it with the bot.
+- [x] Check it on the plan map (`tools/planmap.mjs`) with the path, props and blockers drawn on, and walk it with the bot.
 - [x] The ending is on the west strand, with the jetty's lantern burning across the water.
 
 ### 5.2 Time and atmosphere follow progress
@@ -120,8 +120,8 @@ The valley's existing animals are cast in short scripted scenes along the route.
 | E14 | West strand | Starlings | The evening murmuration comes in low over the water ahead, a dark ribbon against the mist, roaring as it turns; it streams round an empty column standing up out of the lake, again and again; then it wheels over the reedbed and pours down into it in a stream, nearest birds first; the reeds chatter, then fall silent all at once when you come near | Murmurations open round a falcon; flocks pour into reedbed roosts at dusk (refs: West Pier, Brighton) |
 | E15 | West shore | Geese, mallards | A skein goes over low in the dark, calling; the mallards on the water all turn and paddle away from an empty patch | Geese migrate at night in autumn |
 
-- [ ] An encounter system (`src/story/encounters.js`): stage off screen, trigger by progress or sight, play a timeline of animal commands (go to, look at, stare, flee, roar, whistle, fly), release.
-- [ ] Hooks in the animal systems so the director can command individual animals and set a "threat" they react to (9.6).
+- [x] An encounter system (`src/story/encounters.js`): stage off screen, trigger by progress or sight, play a timeline of animal commands (go to, look at, stare, flee, roar, whistle, fly), release.
+- [x] Hooks in the animal systems so the director can command individual animals and set a "threat" they react to (9.6).
 - [ ] Review each encounter in the game against reference footage behaviour (the table's last column), and adjust timing.
 
 ### 5.4 What the water can show (learned staging F7 and E14)
@@ -190,9 +190,9 @@ The horror build only needs the play area in full detail. The rest of the valley
 The layout lives in constants that the terrain generator and every system share: `src/core/world.js`, `src/core/features.js` and `src/shaders/terrainShape.glsl.js`. These need to become per-edition, so the horror build can reshape the valley without touching the nature build.
 
 Tasks:
-- [ ] Block out the new layout on a top-down map before building anything into `src/`: the route, the blockers, the landmarks and the sight lines.
-- [ ] Make the layout constants per-edition.
-- [ ] Walk the blockout in the engine, with collision on, and hunt for escape routes and dead ends.
+- [x] Block out the new layout on a top-down map before building anything into `src/`: the route, the blockers, the landmarks and the sight lines.
+- [x] Make the layout constants per-edition.
+- [x] Walk the blockout in the engine, with collision on, and hunt for escape routes and dead ends.
 - [ ] Set a performance budget for the horror build and cut the far detail until it fits (section 12).
 
 ## 7. Length: about 15 minutes, proven by playtests
@@ -224,108 +224,108 @@ If it runs long or short, the levers are:
 - how long the ending holds.
 
 Tasks:
-- [ ] Build the timing log and overlay.
-- [ ] Build the walk-through bot.
-- [ ] Make a paper estimate as soon as the route is agreed.
+- [x] Build the timing log and overlay.
+- [x] Build the walk-through bot.
+- [x] Make a paper estimate as soon as the route is agreed.
 - [ ] Run the first real playtest as soon as the blockout is walkable, before any art.
 - [ ] Playtest with fresh players at every milestone, and tune until typical first plays land at about 15 minutes.
 
 ## 8. Two builds (nature and horror)
 
-- [ ] Add an edition switch at build time, for example `VITE_EDITION=horror|nature` or a Vite mode, so each build only includes its own code.
-- [ ] Add release scripts:
+- [x] Add an edition switch at build time, for example `VITE_EDITION=horror|nature` or a Vite mode, so each build only includes its own code.
+- [x] Add release scripts:
   - `npm run release`: the horror edition, producing `larchmere-horror-itch.zip`.
   - `npm run release:nature`: the current game, producing `larchmere-itch.zip`.
-- [ ] In the horror build, hide the toolbar, flying, the tour, the time slider, the weather controls and photo mode. Keep volume, look sensitivity, quality and fullscreen.
-- [ ] Give the horror build its own loading screen, title and intro (the first minutes still feel like the nature sim).
+- [x] In the horror build, hide the toolbar, flying, the tour, the time slider, the weather controls and photo mode. Keep volume, look sensitivity, quality and fullscreen.
+- [x] Give the horror build its own loading screen, title and intro (the first minutes still feel like the nature sim).
 - [ ] Keep both builds working in CI or tests (`tools/uitest.mjs`, `tools/mobiletest.mjs`).
 
 ## 9. Systems to build
 
 ### 9.1 Story director (`src/story/`)
-- [ ] A beat list: each beat has a trigger (position, gaze or progress), actions, and the state of props.
-- [ ] Progress along the path, time of day, weather targets and the audio mix, all driven from one progress value.
-- [ ] Run alongside normal movement. The existing `app.director` hook takes over the camera and makes the animals ignore you, so it can't be reused as it is.
-- [ ] A way to save and resume progress, and a debug jump to any beat (for example `?beat=hut`).
+- [x] A beat list: each beat has a trigger (position, gaze or progress), actions, and the state of props.
+- [x] Progress along the path, time of day, weather targets and the audio mix, all driven from one progress value.
+- [x] Run alongside normal movement. The existing `app.director` hook takes over the camera and makes the animals ignore you, so it can't be reused as it is.
+- [x] A way to save and resume progress (checkpoints between the beats; "Continue from the tarn" on the loader), and a debug jump to any waypoint or beat (for example `?beat=hut`, `?beat=F5-tarn`).
 
 ### 9.2 Path and guidance
-- [ ] Define the path as a curve with evenly spaced samples: distance to the path, and progress along it.
-- [ ] A worn earth and pale-stone trail pressed slightly into the terrain, with no grass on it. Trees, rocks and props stay about 1.5 m clear of it.
-- [ ] Red-white-red paint marks every 50–80 m on nearby rocks or posts, plus signposts at forks.
-- [ ] Something visible to walk toward at every stage: the waterfall, the hut roof, the glint of the tarn, the lantern across the water.
-- [ ] Sound as a lure: the cowbell ahead, and the waterfall's roar.
-- [ ] The main control is physical: the blocking terrain, water, forest and fences of section 6.1. Behind that, a soft boundary as a backstop:
+- [x] Define the path as a curve with evenly spaced samples: distance to the path, and progress along it.
+- [x] A worn earth and pale-stone trail pressed slightly into the terrain, with no grass on it. Trees, rocks and props stay about 1.5 m clear of it.
+- [x] Red-white-red paint marks every 50–80 m on nearby rocks or posts, plus signposts at forks.
+- [x] Something visible to walk toward at every stage: the waterfall, the hut roof, the glint of the tarn, the lantern across the water.
+- [x] Sound as a lure: the cowbell ahead, and the waterfall's roar.
+- [x] The main control is physical: the blocking terrain, water, forest and fences of section 6.1. Behind that, a soft boundary as a backstop:
   - within about 25 m of the path you are free;
   - beyond that, denser undergrowth and slower walking;
   - after dark, leaving the path brings thicker mist, a low drone and staring animals;
   - at about 150 m you ease to a stop in a thicket.
-- [ ] If you have been lost for about 90 seconds, the cowbell rings from the direction of the path.
+- [x] If you have been lost for about 90 seconds, the cowbell rings from the direction of the path.
 
 ### 9.3 Collision
-- [ ] A 2D collision grid of 4 m cells, built at load, pushing out a player circle of about 0.3 m. You slide along obstacles rather than sticking to them.
-- [ ] Obstacle shapes:
+- [x] A 2D collision grid of 4 m cells, built at load, pushing out a player circle of about 0.3 m. You slide along obstacles rather than sticking to them.
+- [x] Obstacle shapes:
   - tree trunks as circles (`treeGen.js` needs to return the trunk radius);
   - boulders as circles;
   - fallen logs as capsules;
   - stumps as circles;
   - walls, fences, boats and railings as boxes or segments.
-- [ ] Walkable decks (jetty, footbridge, porch): the floor height is the higher of the terrain and the deck.
-- [ ] Deep water stops you at about knee depth. The stream can only be crossed at the bridge.
-- [ ] A slope limit of about 32°.
-- [ ] Shift slows from 9 m/s to about 4.5 m/s in the horror build.
-- [ ] Optionally, trunk collision in the nature build too.
+- [x] Walkable decks (jetty, footbridge, porch): the floor height is the higher of the terrain and the deck.
+- [x] Deep water stops you at about knee depth. The stream can only be crossed at the bridge.
+- [x] A slope limit of about 32°.
+- [x] Shift slows from 9 m/s to about 4.5 m/s in the horror build.
+- [x] Optionally, trunk collision in the nature build too. (Decided: no - section 15.)
 
 ### 9.4 The figure
-- [ ] Put the herder sculpt into `src/`, starting from `mockups/figures.js` `buildHerder`.
-- [ ] Refine it:
+- [x] Put the herder sculpt into `src/`, starting from `mockups/figures.js` `buildHerder`.
+- [x] Refine it:
   - the face either shadowed or pale and blank;
   - a slightly lighter weathered coat, so the arms and stick read;
   - a stronger head tilt.
-- [ ] Animation, all slow:
+- [x] Animation, all slow:
   - stand dead still, with only the coat hem moving in the wind;
   - a slow head turn or tilt;
   - a walk that's too even (no bob, the stick planted every other step), used only while out of sight or in a reflection;
   - turn to face you without taking a step;
   - sit;
   - stand in the boat.
-- [ ] A reflection-only version. The figure goes on each water surface's reflection-only list; the stream's mirror needs its own hook.
-- [ ] A visibility test: is it on screen directly, or on screen reflected (mirrored in the water plane, then checked for calm water under that point)? This drives when it moves, the drone, and the look counter.
-- [ ] Hiding places: spots with a broken direct view from where you stand (ridges, trees, mist, darkness), chosen before each move.
-- [ ] Count how often you look at it, for the ending variant.
+- [x] A reflection-only version. The figure goes on each water surface's reflection-only list; the stream's mirror needs its own hook.
+- [x] A visibility test: is it on screen directly, or on screen reflected (mirrored in the water plane, then checked for calm water under that point)? This drives when it moves, the drone, and the look counter.
+- [x] Hiding places: spots with a broken direct view from where you stand (ridges, trees, mist, darkness), chosen before each move.
+- [x] Count how often you look at it, for the ending variant.
 
 ### 9.5 The player's reflection
 - [x] A simple body, drawn in reflections only, so you see yourself in puddles and in the boat (`story/player.js`); it leans out with you over the gunwale.
 
 ### 9.6 The valley reacts
-- [ ] Birdsong suppressed around the figure, with a gap that follows it (`audio.js` places songs at random around you).
-- [ ] A "threat" position the animals react to (`mammals.js`): deer freeze and stare, marmots whistle in a chain, then bolt.
-- [ ] A keep-away zone for the figure in the starlings' flocking.
-- [ ] Slow ripple rings from an empty patch of water (the ripple system already exists).
+- [x] Birdsong suppressed around the figure, with a gap that follows it (`audio.js` places songs at random around you).
+- [x] A "threat" position the animals react to (`mammals.js`): deer freeze and stare, marmots whistle in a chain, then bolt.
+- [x] A keep-away zone for the figure in the starlings' flocking.
+- [x] Slow ripple rings from an empty patch of water (the ripple system already exists).
 
 ### 9.7 Changes while you're not looking
-- [ ] A system that swaps prop states only when they are off screen (the same check `app.js` already uses): the shutter, the door, the trough cover, cairns, boots, the boat.
+- [x] A system that swaps prop states only when they are off screen (the same check `app.js` already uses): the shutter, the door, the trough cover, cairns, boots, the boat.
 
 ### 9.8 Reading and interaction
-- [ ] A small dot when something can be read, E to read (E currently rises in fly mode, which the horror build disables), and a paper page in a handwriting font.
-- [ ] Clicking still skims stones. A stone breaking the reflection is one of the beats.
+- [x] A small dot when something can be read, E to read (E currently rises in fly mode, which the horror build disables), and a paper page in a handwriting font.
+- [x] Clicking still skims stones. A stone breaking the reflection is one of the beats.
 
 ### 9.9 Weather
-- [ ] The storm builds over several minutes (the presets currently ease in about 30 s).
-- [ ] The director aims lightning (`weather.strike( camera, aim, dist )` already exists). Keep strikes distant, and never put a close crack on a reveal.
-- [ ] Rain stops under roofs: the porch, and any shelter.
-- [ ] Puddles that fill along the path and stay afterwards. They need a mirror near the player at puddle height, like the stream's. Watch the cost on mobile.
-- [ ] Valley mist rises as the storm clears.
+- [x] The storm builds over several minutes (the presets currently ease in about 30 s).
+- [x] The director aims lightning (`weather.strike( camera, aim, dist )` already exists). Keep strikes distant, and never put a close crack on a reveal.
+- [x] Rain stops under roofs: the porch, and any shelter.
+- [x] Puddles that fill along the path and stay afterwards. They need a mirror near the player at puddle height, like the stream's. Watch the cost on mobile.
+- [x] Valley mist rises as the storm clears.
 
 ### 9.10 Sound (all synthesised)
-- [ ] Footsteps that change with the ground: grass, shingle, wood, forest floor.
-- [ ] Rain drumming on shingles while under the porch, and drips afterwards.
-- [ ] The cowbell, placed in 3D.
-- [ ] Echoed footsteps: yours, about 0.4 s late, from behind.
-- [ ] A loon call answered by the same call played backwards.
-- [ ] A low drone while the figure is visible.
-- [ ] Oars, creaking wood, rope, and the boat knocking against the jetty.
-- [ ] Silence in stages: birds, then wind, then the lake lapping, leaving only running water.
-- [ ] Captions for key sounds (the bell, footsteps behind you).
+- [x] Footsteps that change with the ground: grass, shingle, wood, forest floor.
+- [x] Rain drumming on shingles while under the porch, and drips afterwards.
+- [x] The cowbell, placed in 3D.
+- [x] Echoed footsteps: yours, about 0.4 s late, from behind.
+- [x] A loon call answered by the same call played backwards.
+- [x] A low drone while the figure is visible.
+- [x] Oars, creaking wood, rope, and the boat knocking against the jetty.
+- [x] Silence in stages: birds, then wind, then the lake lapping, leaving only running water.
+- [x] Captions for key sounds (the bell, footsteps behind you).
 
 ### 9.11 Opening and ending
 - [x] The row-in cutscene.
@@ -355,11 +355,11 @@ Tasks:
 | Marmot bank (extended route) | Not started | A second colony of burrows on the east bank for E6. |
 
 Environment changes:
-- [ ] Clear lily pads from the viewing side of each encounter pond, and around the jetty and berths.
-- [ ] Keep trees out of a corridor behind each encounter's far bank, so the figure stands against sky.
-- [ ] A deep, slow pool on the stream at the footbridge. Widen the stream there if needed.
-- [ ] Give small waters a dark body, so reflections read.
-- [ ] Undergrowth and fallen logs off the path, to shape where you can go.
+- [x] Clear lily pads from the viewing side of each encounter pond, and around the jetty and berths.
+- [x] Keep trees out of a corridor behind each encounter's far bank, so the figure stands against sky.
+- [x] A deep, slow pool on the stream at the footbridge. Widen the stream there if needed.
+- [x] Give small waters a dark body, so reflections read.
+- [x] Undergrowth and fallen logs off the path, to shape where you can go.
 
 ## 11. Mockups: what's left
 
@@ -370,36 +370,36 @@ This is everything still open in `mockups/`, item by item, including known bugs 
 `mockups/jetty.js` was rewritten in full with the detailed jetty and boat, but the rewrite has **never been run**. It may have runtime errors. The last renders in `mockups/out/jetty-*.png` show the old, simple version.
 
 Make the rewrite work:
-- [ ] Render `jetty-plan`, `jetty-shore` and `jetty-boat`, and fix any errors.
-- [ ] Check that the solid lapped planks render the right way round. `slab()` builds each plank's outer face, inner face and edges, and turns them by a reference direction.
+- [x] Render `jetty-plan`, `jetty-shore` and `jetty-boat`, and fix any errors.
+- [x] Check that the solid lapped planks render the right way round. `slab()` builds each plank's outer face, inner face and edges, and turns them by a reference direction.
 - [ ] The boat still uses a double-sided material. Now that the planks are solid, switch it to front-side if that looks right, which avoids shading artefacts.
 - [ ] Tidy the `edge()` helper inside `slab()` (it is convoluted) and the unused first nail line in the DECK shader in `hut.js`.
 
 Known bugs from the last render:
-- [ ] **Lake water and lily pads show inside the boat.**
+- [x] **Lake water and lily pads show inside the boat.**
   - The depth-only lid at the waterline faces down and gets culled. Its material (`lidMat` in `figures.js`) needs `side: THREE.DoubleSide`.
   - The lily pads float above the floorboards, so the lid can't hide them. They need removing around the berth (next group).
-- [ ] **The deck was far too dark.** The plank colours are now brighter (`weathered()`). Confirm under a low sun.
-- [ ] **Pale blotches on the hull tar** read as paint splashes. The hull now uses the new HULL shading; the rails still use PAINT, so check them.
-- [ ] **The first jetty ran 14 m over flat shingle.** The strand at the chosen site is very flat. The rewrite caps the land run at 4 m and adds a stone abutment with steps.
+- [x] **The deck was far too dark.** The plank colours are now brighter (`weathered()`). Confirm under a low sun.
+- [x] **Pale blotches on the hull tar** read as paint splashes. The hull now uses the new HULL shading; the rails still use PAINT, so check them.
+- [x] **The first jetty ran 14 m over flat shingle.** The strand at the chosen site is very flat. The rewrite caps the land run at 4 m and adds a stone abutment with steps.
   - `jettySite()` in `figures.js` still searches up to 14 m inland and scores on that; update it for the new deck height of 0.62.
   - Confirm the site at about (7, 461) looks right, or pick another.
 
 Clear the water plants around the jetty:
-- [ ] Hide lily pads and flowers near the jetty and berths by zeroing their instance matrices. They live in `app.waterPlants.group`: meshes named `lilypads`, plus the flower mesh.
-- [ ] Hide reeds there the same way, through `waterPlants.sets[*].matrices`, and force `waterPlants._last` to refresh.
-- [ ] Put all of these back in `clear()`, as the hidden rocks already are.
+- [x] Hide lily pads and flowers near the jetty and berths by zeroing their instance matrices. They live in `app.waterPlants.group`: meshes named `lilypads`, plus the flower mesh.
+- [x] Hide reeds there the same way, through `waterPlants.sets[*].matrices`, and force `waterPlants._last` to refresh.
+- [x] Put all of these back in `clear()`, as the hidden rocks already are.
 
 Staging (`figures.js`), updated for the new T-head:
-- [ ] Moor the boat alongside the head, parallel to the jetty. Its berth is now `HW/2 + 0.74` out from the centreline.
-- [ ] Run the mooring line from the bow ring to the new cleat (`info.cleat`) or the right-hand bollard.
+- [x] Moor the boat alongside the head, parallel to the jetty. Its berth is now `HW/2 + 0.74` out from the centreline.
+- [x] Run the mooring line from the bow ring to the new cleat (`info.cleat`) or the right-hand bollard.
 - [ ] Add a close-up shot of the boat-log box (`info.logBox`).
 
 Render the story shots:
-- [ ] `jetty-approach` (golden hour, rowing in).
-- [ ] `jetty-night` (lantern lit, still water, mist).
-- [ ] `jetty-ending` and `jetty-endingzoom` (the herder standing in the drifting boat, seen only in the water).
-- [ ] Check that the lantern's glow reflects in the lake and that its light falls warmly on the deck and posts (`LAMP`).
+- [x] `jetty-approach` (golden hour, rowing in).
+- [x] `jetty-night` (lantern lit, still water, mist).
+- [x] ~~`jetty-ending` and `jetty-endingzoom`~~ (superseded: the ending is at the west strand, 9.11).
+- [x] Check that the lantern's glow reflects in the lake and that its light falls warmly on the deck and posts (`LAMP`).
 
 Compare against the references:
 - [ ] Build a comparison board, as for the hut: ref23 and ref27 against `jetty-boat` and `jetty-shore`.
@@ -410,30 +410,30 @@ Regression check:
 
 ### 11.2 Hut
 - [ ] Warmer, oranger sunlit logs (refs 14 and 15), a stronger shadow under the eave, and more roof stones set closer together (ref 13).
-- [ ] Move the trough within about 3 m of the door. Re-render the trough beat as a low-angle view along the water showing the open doorway and the herder in it.
-- [ ] Rain stopping under the porch roof, and a storm shot from under the porch.
-- [ ] Props for the story: the cloth nailed over the window, the boarded trough (done) and the uncovered trough (done), the book tin (done), the cowbell (done).
+- [x] Move the trough within about 3 m of the door. Re-render the trough beat as a low-angle view along the water showing the open doorway and the herder in it.
+- [x] Rain stopping under the porch roof, and a storm shot from under the porch.
+- [x] Props for the story: the cloth nailed over the window, the boarded trough (done) and the uncovered trough (done), the book tin (done), the cowbell (done).
 
 ### 11.3 The figure
-- [ ] Herder refinements: a shadowed or blank face, a lighter coat so the arms and stick read, a stronger head tilt.
-- [ ] Rig and animate it. Mock the slow head turn, the too-even walk, the turn to face you, sitting, and standing in the boat.
-- [ ] Test the player's own reflected body: see yourself in the tarn and the bilge water, with the figure behind you.
-- [ ] Mock the reflection keeping pace with you on the west strand at dusk, and the stone breaking the reflection then settling with the figure closer.
+- [x] Herder refinements: a shadowed or blank face, a lighter coat so the arms and stick read, a stronger head tilt.
+- [x] Rig and animate it. Mock the slow head turn, the too-even walk, the turn to face you, sitting, and standing in the boat.
+- [x] Test the player's own reflected body: see yourself in the tarn and the bilge water, with the figure behind you.
+- [x] Mock the reflection keeping pace with you on the west strand at dusk, and the stone breaking the reflection then settling with the figure closer.
 - [ ] Figure A (the stilt figure) is dropped. Its images can be deleted from `mockups/out/`.
 
 ### 11.4 Not started
-- [ ] Footbridge, with a slow, deep, dark pool under it, and a check that the figure reads in its reflection.
-- [ ] Signpost with the walkers' register tin, and red-white-red paint marks on rocks.
-- [ ] Trail: a worn earth strip with pale stones, checked by day and by moonlight.
-- [ ] Puddles after the storm along the path, with reflections.
-- [ ] Cairns, including some in the shallows; J.'s boots on the shingle; an upturned bucket.
-- [ ] The west strand at dusk and the drifted boat, if the ending moves there.
-- [ ] The larch grove beat: frozen deer staring toward the lake.
-- [ ] The route drawn on a top-down map.
+- [x] Footbridge, with a slow, deep, dark pool under it, and a check that the figure reads in its reflection.
+- [x] Signpost with the walkers' register tin, and red-white-red paint marks on rocks.
+- [x] Trail: a worn earth strip with pale stones, checked by day and by moonlight.
+- [x] Puddles after the storm along the path, with reflections.
+- [x] Cairns, including some in the shallows; J.'s boots on the shingle; an upturned bucket.
+- [x] The west strand at dusk and the drifted boat, if the ending moves there.
+- [x] The larch grove beat: frozen deer staring toward the lake.
+- [x] The route drawn on a top-down map.
 
 ## 12. Mobile and performance
 
-- [ ] Decide whether the horror build supports phones. The nature build does.
+- [x] Decide whether the horror build supports phones. The nature build does.
 - [ ] Budget the new mirrors (puddles, trough, the reflection-only figure and body) with `tools/gpuprof.mjs` and `tools/mobiletest.mjs`.
 - [ ] The props are merged single meshes. Check their draw calls and triangle counts once in the game.
 

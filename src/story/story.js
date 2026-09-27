@@ -19,6 +19,11 @@ const lerp = THREE.MathUtils.lerp;
 // The horror edition: everything that turns the valley into the walk. One value drives it:
 // progress, the metres walked along the route (it only ever counts up, a stretch at a time).
 // The clock, the weather, the birds' quiet and the beats all follow it.
+
+// Checkpoints to resume an unfinished walk from: quiet places between the beats (none inside the
+// storm), with the name the loader gives them
+const CHECKPOINTS = [ [ 'gate', 'the pasture gate' ], [ 'signpost', 'the signpost' ], [ 'trough', 'the hut, after the storm' ], [ 'tarn', 'the tarn' ], [ 'pool', 'the falls' ], [ 'wood', 'the larch wood' ], [ 'strand', 'the west strand' ] ];
+const SAVE = 'larchmere.horror.progress.v1';
 export class Story {
 
 	constructor( app ) {
@@ -136,14 +141,65 @@ export class Story {
 
 	}
 
-	// the player pressed Begin
-	async begin() {
+	// the furthest checkpoint passed in an unfinished walk, if any: { id, name, looked }
+	saved() {
+
+		try {
+
+			const s = JSON.parse( localStorage.getItem( SAVE ) );
+			const c = s && CHECKPOINTS.find( ( k ) => k[ 0 ] === s.id );
+			return c && this.path.ids[ c[ 0 ] ] !== undefined ? { id: c[ 0 ], name: c[ 1 ], looked: s.looked || 0 } : null;
+
+		} catch ( e ) {
+
+			return null;
+
+		}
+
+	}
+
+	_save( id ) {
+
+		try {
+
+			localStorage.setItem( SAVE, JSON.stringify( { id, looked: this.looked, at: Date.now() } ) );
+
+		} catch ( e ) { /* storage unavailable */ }
+
+	}
+
+	clearSave() {
+
+		try {
+
+			localStorage.removeItem( SAVE );
+
+		} catch ( e ) { /* storage unavailable */ }
+
+	}
+
+	// the player pressed Begin (or Continue: resume at a saved checkpoint)
+	async begin( resume = null ) {
 
 		const ui = this.ui;
 		// the story's clock starts now (the page has been running behind the loader)
 		this.time = 0;
 		this.begun = true;
 		ui.lock();
+		if ( resume ) {
+
+			this.looked = resume.looked;
+			const d = this.path.ids[ resume.id ];
+			this._checkpoint = CHECKPOINTS.findIndex( ( k ) => k[ 0 ] === resume.id );
+			const g0 = this.skyAt( d );
+			this.app.post.grade.set( g0.key, g0.contrast, g0.cool, g0.desat );
+			this.setProgress( d, true );
+			this.you.enable( true );
+			ui.fade( 0, 2 );
+			return;
+
+		}
+
 		if ( this.jump ) {
 
 			this.you.enable( true );
@@ -167,6 +223,7 @@ export class Story {
 
 	ending() {
 
+		this.clearSave();
 		return this.boatScene.ending();
 
 	}
@@ -547,6 +604,18 @@ export class Story {
 		}
 
 		this.lost = over > 12 ? this.lost + dt : Math.max( 0, this.lost - dt * 2 );
+		// checkpoints: somewhere quiet between the beats, saved as you pass it
+		if ( this.begun && ! this.jump && ! this.ended ) {
+
+			const k = ( this._checkpoint ?? - 1 ) + 1;
+			if ( k < CHECKPOINTS.length && this.progress > this.path.ids[ CHECKPOINTS[ k ][ 0 ] ] ) {
+
+				this._checkpoint = k;
+				this._save( CHECKPOINTS[ k ][ 0 ] );
+
+			}
+
+		}
 
 	}
 

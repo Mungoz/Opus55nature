@@ -102,6 +102,8 @@ body.horror.locked #scene { cursor: none; }
 /* the loader's own words for this edition */
 body.horror #loader h1 { letter-spacing: 0.62em; }
 body.horror #loader .enter { letter-spacing: 0.3em; }
+body.horror #loader .enter-continue { display: block; margin: 14px auto 0; font-size: 0.78em; letter-spacing: 0.18em; opacity: 0.72; }
+body.horror #loader .enter-continue:hover, body.horror #loader .enter-continue:focus { opacity: 1; }
 
 /* debug readout (?debug) */
 #story-debug { position: absolute; left: 10px; top: 10px; font: 11px/1.45 monospace; color: #cfe; background: rgba(0, 0, 0, 0.55); padding: 6px 8px; white-space: pre; pointer-events: none; }
