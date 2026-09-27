@@ -223,7 +223,7 @@ export class App {
 		this.scene.add( this.water.mesh );
 		this.streams = new Streams( td, this.textures, this.water, this.quality, this.terrain.mesh, this.terrain.reflectMesh );
 		this.scene.add( this.streams.group );
-		this.waterPlants = new WaterPlants( td, { keepOut: this.layout?.waterClear } );
+		this.waterPlants = new WaterPlants( td, { keepOut: this.layout?.waterClear, reedbeds: this.layout?.REEDBEDS } );
 		this.scene.add( this.waterPlants.group );
 
 		await step( 0.5, 'Growing the larches' );
@@ -265,7 +265,7 @@ export class App {
 		this.scene.add( this.particles.group );
 
 		await step( 0.8, 'Waking the wildlife' );
-		this.starlings = new Murmuration( Math.round( 900 * Math.max( 0.45, this.quality.particles ) ), td );
+		this.starlings = new Murmuration( Math.round( ( __HORROR__ ? 2000 : 900 ) * Math.max( 0.45, this.quality.particles ) ), td );
 		this.geese = new GeeseFlight( td, ( p, n ) => this.audio.honk( p, n ) );
 		this.eagles = new Eagles( td );
 		// (an edition may place the animals where its story needs them)

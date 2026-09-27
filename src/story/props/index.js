@@ -7,6 +7,7 @@ import { buildFence, buildSignpost, buildCross, cairn, buildBlazes, paintedMater
 import { buildBoots } from './boots.js';
 import { creatureMaterial } from '../../fauna/creature.js';
 import { Kit } from './kit.js';
+import { Glow } from './glow.js';
 import { PLACES } from '../layout.js';
 import { Water } from '../../world/water.js';
 
@@ -632,6 +633,21 @@ export class StoryProps {
 	lightLamp( on ) {
 
 		LAMP.value.set( this.lamp.x, this.lamp.y, this.lamp.z, on ? 1.6 : 0 );
+		if ( ! this.glow ) {
+
+			this.glow = new Glow( this.app.camera );
+			this.glow.mesh.position.copy( this.lamp );
+			this.group.add( this.glow.mesh );
+
+		}
+
+		this.glow.set( on );
+
+	}
+
+	update( dt, time ) {
+
+		this.glow?.update( dt, time );
 
 	}
 

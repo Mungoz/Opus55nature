@@ -280,6 +280,10 @@ function fordWest( td ) {
 // light - sky, the snow of the horn in the haze - or a dark coat on dark water shows nothing.
 // Trees are kept out of a corridor running on from the eye, past the figure, down the valley.
 // ---------------------------------------------------------------------------
+// E14: the reedbed on the west shore the starlings pour down into at dusk, a little north of
+// the boat - straw-gold Phragmites from the bank out into the shallows (u along the shore)
+export const REEDBEDS = [ { x: - 236, z: 244, len: 18, wid: 10, yaw: - 1.23, lean: 0.8 } ];
+
 export const SIGHTS = {
 	// F5: from the tarn's south-east shore, across it to the far shore's shallows, a little west
 	// of north: its reflection out in the middle of the tarn against the misty valley and the horn

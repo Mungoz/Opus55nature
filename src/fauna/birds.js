@@ -45,6 +45,7 @@ const _f = new THREE.Vector3();
 const _up = new THREE.Vector3( 0, 1, 0 );
 const _look = new THREE.Matrix4();
 const _zero = new THREE.Vector3();
+const _q2 = new THREE.Vector3();
 
 function orient( pos, vel, bank, scale, out ) {
 
@@ -83,7 +84,7 @@ export class Murmuration {
 		}
 
 		const geo = birdGeometry( { body: '#1c1a1c', belly: '#2a2624', wing: '#1f1d20', span: 0.62, chord: 0.28 } );
-		this.material = creatureMaterial( { flapSpeed: 20, flapAmp: 0.75 } );
+		this.material = creatureMaterial( { flapSpeed: 20, flapAmp: 0.75, minSize: 0.0045 } );
 		this.mesh = new THREE.InstancedMesh( geo, this.material, count );
 		this.mesh.frustumCulled = false;
 		this.mesh.name = 'starlings';
@@ -92,9 +93,27 @@ export class Murmuration {
 		this.predator = null;
 		this.time = 0;
 		this.rng = rng;
-		// director: centre (Vector3) the flock wheels about; keepAway { p, r } it parts round
+		// director: centre (Vector3) the flock wheels about; keepAway { p, r } it parts round;
+		// floor: how low it will come over the ground or water; sway: how far its middle roams
 		this.centre = null;
 		this.keepAway = null;
+		this.floor = 25;
+		this.sway = new THREE.Vector3( 60, 18, 70 );
+		// how hard the flock as a whole is steered to its roaming middle (a director's flock is
+		// kept on a shorter rein, so it wheels where it is wanted)
+		this.pull = 1;
+		// (and how long, in seconds of its loop, a director's flock strings out, and how close
+		// the birds will fly - squared distance)
+		this.stretch = 0;
+		this.space2 = 4;
+		// whether it comes over on its own at dusk (an edition's director may take that over)
+		this.auto = true;
+		// per bird: 0 flying with the flock, 1 going down to roost, 2 down in the reeds
+		this.state = new Uint8Array( count );
+		this.roost = null;
+		// (for sound: the flying birds' middle, and how hard they are turning, 0..1)
+		this.mid = new THREE.Vector3();
+		this.turning = 0;
 
 	}
 
@@ -104,6 +123,9 @@ export class Murmuration {
 		this.centre = centre.clone();
 		this.phase = 'on';
 		this.cycle = 1e9;
+		this.roost = null;
+		this.state.fill( 0 );
+		this.mesh.visible = true;
 		for ( let i = 0; i < this.n; i ++ ) {
 
 			this.pos[ i * 3 ] = from.x + this.rng.range( - 30, 30 );
@@ -117,12 +139,47 @@ export class Murmuration {
 
 	}
 
-	// send it away (to roost in the reeds at exit, or off down the valley)
-	dismiss( exit = null ) {
+	// send it away: off down the valley, or - given a reedbed { x, z, len, wid, yaw } - to roost.
+	// Over the bed the flock pours down into it in a stream, the birds nearest it first, each to
+	// its own stem, and is gone into the reeds.
+	dismiss( exit = null, bed = null ) {
 
 		this.phase = 'out';
-		this.cycle = 30;
+		this.cycle = bed ? 1e9 : 30;
 		this.exit = exit ?? new THREE.Vector3( this.rng.range( - 1, 1 ) * 1500, 320, 2400 );
+		this.roost = null;
+		if ( ! bed ) return;
+		const T = new Float32Array( this.n * 3 ), ca = Math.cos( bed.yaw ?? 0 ), sa = Math.sin( bed.yaw ?? 0 );
+		for ( let i = 0; i < this.n; i ++ ) {
+
+			const a = this.rng.next() * Math.PI * 2, r = Math.sqrt( this.rng.next() ) * 0.85;
+			const u = Math.cos( a ) * r * bed.len, v = Math.sin( a ) * r * bed.wid;
+			T[ i * 3 ] = bed.x + ca * u + sa * v;
+			T[ i * 3 + 1 ] = ( bed.y ?? 0 ) + this.rng.range( 0.9, 1.8 );
+			T[ i * 3 + 2 ] = bed.z - sa * u + ca * v;
+
+		}
+
+		this.roost = { T, c: new THREE.Vector3( bed.x, ( bed.y ?? 0 ) + 1.5, bed.z ), rate: this.n / ( bed.pour ?? 14 ), order: null, next: 0, released: 0, landed: 0 };
+
+	}
+
+	// A director's flock sweeps fast, long loops about its centre; each bird follows the loop a
+	// moment behind or ahead of the others, so the flock streams out along it in a ribbon that
+	// folds and thickens on the turns, instead of balling up round a point.
+	_loop( t, out ) {
+
+		const W = this.sway, C = this.centre;
+		return out.set( C.x + ( Math.sin( t * 0.21 ) * 0.8 + Math.sin( t * 0.53 ) * 0.2 ) * W.x, C.y + ( Math.sin( t * 0.31 ) * 0.7 + Math.sin( t * 0.71 ) * 0.3 ) * W.y, C.z + ( Math.sin( t * 0.15 + 1.3 ) * 0.85 + Math.sin( t * 0.43 ) * 0.15 ) * W.z );
+
+	}
+
+	// how many are still in the air
+	get flying() {
+
+		let k = 0;
+		for ( let i = 0; i < this.n; i ++ ) if ( this.state[ i ] < 2 ) k ++;
+		return k;
 
 	}
 
@@ -176,8 +233,10 @@ export class Murmuration {
 
 	update( dt, allowed ) {
 
+		// all down in the reeds
+		if ( this.phase === 'roosted' ) { this.mesh.visible = false; return; }
 		// (a director's murmuration flies whatever the light)
-		const visible = this.schedule( dt, allowed || !! this.centre );
+		const visible = this.schedule( dt, ( allowed && this.auto ) || !! this.centre || !! this.roost );
 		this.mesh.visible = visible;
 		if ( ! visible ) return;
 		dt = Math.min( dt, 0.05 );
@@ -185,11 +244,17 @@ export class Murmuration {
 		const t = this.time;
 		const n = this.n, P = this.pos, Vv = this.vel;
 		// wandering attractor over the lake (or away, when leaving)
-		if ( this.phase === 'out' ) this.attractor.copy( this.exit );
-		else if ( this.centre ) this.attractor.set( this.centre.x + Math.sin( t * 0.09 ) * 60 + Math.sin( t * 0.23 ) * 20, this.centre.y + 18 * Math.sin( t * 0.13 ) + 8 * Math.sin( t * 0.37 ), this.centre.z + Math.cos( t * 0.07 ) * 70 );
+		if ( this.phase === 'out' ) {
+
+			this.attractor.copy( this.exit );
+			// over a roost it wheels above the bed a while before it goes down
+			if ( this.roost ) this.attractor.add( _p.set( Math.sin( t * 0.21 ) * 24, Math.sin( t * 0.31 ) * 5, Math.cos( t * 0.17 ) * 18 ) );
+
+		} else if ( this.centre ) this._loop( t, this.attractor );
 		else this.attractor.set( Math.sin( t * 0.045 ) * 170 + Math.sin( t * 0.13 ) * 50, 125 + 35 * Math.sin( t * 0.09 ) + 15 * Math.sin( t * 0.31 ), 120 + Math.cos( t * 0.033 ) * 260 );
 		// occasional falcon strike splits the flock
-		if ( ! this.predator && this.rng.next() < dt * 0.02 ) {
+		// (not for a director's flock: its empty place is its falcon, and it flies too low to scatter)
+		if ( ! this.predator && ! this.centre && ! this.roost && this.rng.next() < dt * 0.02 ) {
 
 			const i = Math.floor( this.rng.next() * n );
 			this.predator = { p: new THREE.Vector3( P[ i * 3 ] + 40, P[ i * 3 + 1 ] + 30, P[ i * 3 + 2 ] ), v: new THREE.Vector3( - 40, - 25, this.rng.range( - 10, 10 ) ), life: 3 };
@@ -218,21 +283,55 @@ export class Murmuration {
 		}
 
 		const ax = this.attractor.x, ay = this.attractor.y, az = this.attractor.z;
-		// flock centroid keeps the murmuration one coherent body
-		let mx = 0, my = 0, mz = 0;
+		// flock centroid keeps the murmuration one coherent body (those still with it)
+		let mx = 0, my = 0, mz = 0, nf = 0;
+		const St = this.state;
 		for ( let i = 0; i < n; i ++ ) {
 
+			if ( St[ i ] ) continue;
 			mx += P[ i * 3 ]; my += P[ i * 3 + 1 ]; mz += P[ i * 3 + 2 ];
+			nf ++;
 
 		}
 
-		mx /= n; my /= n; mz /= n;
+		mx /= Math.max( 1, nf ); my /= Math.max( 1, nf ); mz /= Math.max( 1, nf );
+		this.mid.set( mx, my, mz );
+		let bk = 0;
+		for ( let i = 0; i < n; i += 7 ) bk += Math.abs( this.bank[ i ] );
+		this.turning = Math.min( 1, bk / Math.ceil( n / 7 ) / 0.6 );
+		const R = this.roost;
+		if ( R ) {
+
+			// over the bed: they start to go down, the nearest first
+			if ( ! R.over && Math.hypot( mx - R.c.x, mz - R.c.z ) < 60 ) R.over = t;
+			if ( ! R.order && R.over && t - R.over > ( R.wheel ?? 12 ) ) {
+
+				R.order = [ ...Array( n ).keys() ].sort( ( a, b ) => ( ( P[ a * 3 ] - R.c.x ) ** 2 + ( P[ a * 3 + 2 ] - R.c.z ) ** 2 ) - ( ( P[ b * 3 ] - R.c.x ) ** 2 + ( P[ b * 3 + 2 ] - R.c.z ) ** 2 ) );
+
+			}
+
+			if ( R.order ) {
+
+				R.next += R.rate * dt * ( 0.4 + Math.min( 1.6, R.released / n * 3 ) );
+				while ( R.released < n && R.released < R.next ) St[ R.order[ R.released ++ ] ] = 1;
+
+			}
+
+		}
 		// uniform steering of the flock's centre toward the attractor
 		const gtx = ax - mx, gty = ay - my, gtz = az - mz;
 		const gtd = Math.sqrt( gtx * gtx + gty * gty + gtz * gtz ) + 1e-3;
-		const gpull = 1.5 + Math.min( gtd / 40, 6 );
+		const gpull = ( 1.5 + Math.min( gtd / 40, 6 ) ) * this.pull;
 		const gux = gtx / gtd * gpull, guy = gty / gtd * gpull, guz = gtz / gtd * gpull;
 		for ( let i = 0; i < n; i ++ ) {
+
+			if ( St[ i ] === 2 ) continue;
+			if ( St[ i ] === 1 ) {
+
+				this._descend( i, dt );
+				continue;
+
+			}
 
 			const px = P[ i * 3 ], py = P[ i * 3 + 1 ], pz = P[ i * 3 + 2 ];
 			const cx = Math.floor( px / cell ), cy = Math.floor( py / cell ), cz = Math.floor( pz / cell );
@@ -249,9 +348,9 @@ export class Murmuration {
 					const d2 = ox * ox + oy * oy + oz * oz;
 					if ( d2 > 64 ) continue;
 					cnt ++;
-					if ( d2 < 4 ) {
+					if ( d2 < this.space2 ) {
 
-						const inv = 1.6 / ( d2 + 0.15 );
+						const inv = 1.6 * this.space2 / 4 / ( d2 + 0.15 );
 						sx -= ox * inv; sy -= oy * inv; sz -= oz * inv;
 
 					}
@@ -276,10 +375,24 @@ export class Murmuration {
 			// hold together: steer toward the flock centroid
 			const gx = mx - px, gy = my - py, gz = mz - pz;
 			const gd = Math.sqrt( gx * gx + gy * gy + gz * gz ) + 1e-3;
-			const hold = Math.max( 0, gd - 24 ) * 0.1;
+			const ribbon = this.centre && this.phase === 'on' && this.stretch > 0;
+			const hold = Math.max( 0, gd - ( ribbon ? 45 : 24 ) ) * 0.1;
 			fx += gx / gd * hold; fy += gy / gd * hold; fz += gz / gd * hold;
-			// the whole flock is steered toward the roaming centre as one body
-			fx += gux; fy += guy; fz += guz;
+			if ( ribbon ) {
+
+				// each steered, as the whole flock is, from the flock's middle - but toward its own
+				// moment of the loop, so the flock draws out along it (and is never crushed together)
+				this._loop( t - ( ( i * 0.618034 ) % 1 ) * this.stretch, _q2 );
+				const ox = _q2.x - mx, oy = _q2.y - my, oz = _q2.z - mz, od = Math.sqrt( ox * ox + oy * oy + oz * oz ) + 1e-3;
+				const k = ( 1.5 + Math.min( od / 40, 6 ) ) * this.pull;
+				fx += ox / od * k; fy += oy / od * k; fz += oz / od * k;
+
+			} else {
+
+				// the whole flock is steered toward the roaming centre as one body
+				fx += gux; fy += guy; fz += guz;
+
+			}
 			// flee the falcon
 			if ( this.predator ) {
 
@@ -298,7 +411,8 @@ export class Murmuration {
 			if ( this.keepAway ) {
 
 				const K = this.keepAway;
-				const ox = px - K.p.x, oy = py - K.p.y, oz = pz - K.p.z;
+				// (a column: a standing shape of nothing, from the water up through the flock)
+				const ox = px - K.p.x, oy = K.column ? 0 : py - K.p.y, oz = pz - K.p.z;
 				const d2 = ox * ox + oy * oy + oz * oz, r2 = K.r * K.r;
 				if ( d2 < r2 * 2.2 ) {
 
@@ -311,7 +425,7 @@ export class Murmuration {
 
 			// keep off the ground
 			const ground = Math.max( this.terrain.heightAt( px, pz ), 0 );
-			if ( py < ground + 25 ) fy += ( ground + 25 - py ) * 2;
+			if ( py < ground + this.floor ) fy += ( ground + this.floor - py ) * 2;
 
 			let nvx = vx + fx * dt, nvy = vy + fy * dt * 0.8, nvz = vz + fz * dt;
 			const sp = Math.sqrt( nvx * nvx + nvy * nvy + nvz * nvz ) + 1e-4;
@@ -326,9 +440,25 @@ export class Murmuration {
 
 		for ( let i = 0; i < n; i ++ ) {
 
+			if ( St[ i ] === 2 ) {
+
+				_m.makeScale( 0, 0, 0 );
+				this.mesh.setMatrixAt( i, _m );
+				continue;
+
+			}
+
 			P[ i * 3 ] += Vv[ i * 3 ] * dt;
 			P[ i * 3 + 1 ] += Vv[ i * 3 + 1 ] * dt;
 			P[ i * 3 + 2 ] += Vv[ i * 3 + 2 ] * dt;
+			// never into the ground or the water (those going down to roost excepted)
+			if ( ! St[ i ] ) {
+
+				const g = Math.max( this.terrain.heightAt( P[ i * 3 ], P[ i * 3 + 2 ] ), 0 ) + 2;
+				if ( P[ i * 3 + 1 ] < g ) { P[ i * 3 + 1 ] = g; if ( Vv[ i * 3 + 1 ] < 0 ) Vv[ i * 3 + 1 ] *= - 0.3; }
+
+			}
+
 			_p.set( P[ i * 3 ], P[ i * 3 + 1 ], P[ i * 3 + 2 ] );
 			orient( _p, _f.set( Vv[ i * 3 ], Vv[ i * 3 + 1 ], Vv[ i * 3 + 2 ] ), this.bank[ i ], 0.42, _m );
 			this.mesh.setMatrixAt( i, _m );
@@ -336,6 +466,39 @@ export class Murmuration {
 		}
 
 		this.mesh.instanceMatrix.needsUpdate = true;
+		if ( R && R.landed >= n ) this.phase = 'roosted';
+
+	}
+
+	// One bird going down to its stem: out of the flock it streams toward the bed, spiralling a
+	// little as the stream funnels, slowing as it drops, and at the last it is in and gone.
+	_descend( i, dt ) {
+
+		const P = this.pos, Vv = this.vel, R = this.roost, T = R.T;
+		const dx = T[ i * 3 ] - P[ i * 3 ], dy = T[ i * 3 + 1 ] - P[ i * 3 + 1 ], dz = T[ i * 3 + 2 ] - P[ i * 3 + 2 ];
+		const dh = Math.hypot( dx, dz ), d = Math.hypot( dh, dy ) + 1e-4;
+		if ( d < 1.4 ) {
+
+			this.state[ i ] = 2;
+			R.landed ++;
+			return;
+
+		}
+
+		// fast and level toward the bed, then steeply down into it
+		const sp = THREE.MathUtils.clamp( d * 1.1, 2.2, 16 );
+		const steep = THREE.MathUtils.smoothstep( 30 - dh, 0, 30 );
+		let vx = dx / d, vy = dy / d, vz = dz / d;
+		vy = vy * ( 0.35 + 0.65 * steep ) - ( 1 - steep ) * 0.05;
+		// the funnel's twist
+		const tw = 0.35 * ( 1 - steep * 0.6 ) * THREE.MathUtils.smoothstep( d, 3, 12 );
+		vx += - dz / ( dh + 1e-3 ) * tw;
+		vz += dx / ( dh + 1e-3 ) * tw;
+		const k = d < 5 ? 1 : Math.min( 1, dt * 3.5 );
+		Vv[ i * 3 ] += ( vx * sp - Vv[ i * 3 ] ) * k;
+		Vv[ i * 3 + 1 ] += ( vy * sp - Vv[ i * 3 + 1 ] ) * k;
+		Vv[ i * 3 + 2 ] += ( vz * sp - Vv[ i * 3 + 2 ] ) * k;
+		this.bank[ i ] *= 1 - Math.min( 1, dt * 3 );
 
 	}
 

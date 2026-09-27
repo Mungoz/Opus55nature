@@ -513,6 +513,133 @@ export class StorySound {
 
 	}
 
+	// ------------------------------------------------------------------ starlings
+	// A murmuration's roar: the wings of hundreds of birds, a rushing like surf breaking that
+	// swells as the whole flock turns at once, with the flutter of the wingbeats in it. Set
+	// every frame with the flock's middle and a level (0 silences it).
+	flock( p, level ) {
+
+		if ( ! this.on ) return;
+		const ctx = this.ctx, A = this.a, t = ctx.currentTime;
+		if ( ! this._flock ) {
+
+			if ( level <= 0 ) return;
+			const pn = A._panner( p );
+			pn.refDistance = 35;
+			pn.rolloffFactor = 1.2;
+			const g = ctx.createGain();
+			g.gain.value = 0;
+			g.connect( pn );
+			const srcs = [];
+			for ( const [ type, fq, q, k ] of [ [ 'bandpass', 650, 0.6, 1 ], [ 'bandpass', 1900, 0.9, 0.5 ], [ 'highpass', 4200, 0.7, 0.12 ] ] ) {
+
+				const src = ctx.createBufferSource();
+				src.buffer = A.noise;
+				src.loop = true;
+				src.playbackRate.value = 0.85 + Math.random() * 0.3;
+				const bq = ctx.createBiquadFilter();
+				bq.type = type;
+				bq.frequency.value = fq;
+				bq.Q.value = q;
+				// the flutter: many wingbeats, never quite together
+				const fl = ctx.createGain();
+				fl.gain.value = k * 0.75;
+				for ( const hz of [ 11.3, 14.9 ] ) {
+
+					const o = ctx.createOscillator();
+					o.frequency.value = hz + Math.random();
+					const og = ctx.createGain();
+					og.gain.value = k * 0.14;
+					o.connect( og ).connect( fl.gain );
+					o.start();
+					srcs.push( o );
+
+				}
+
+				src.connect( bq ).connect( fl ).connect( g );
+				src.start( 0, Math.random() * 3 );
+				srcs.push( src );
+
+			}
+
+			this._flock = { pn, g, srcs };
+
+		}
+
+		const F = this._flock;
+		F.pn.positionX.setTargetAtTime( p.x, t, 0.15 );
+		F.pn.positionY.setTargetAtTime( p.y, t, 0.15 );
+		F.pn.positionZ.setTargetAtTime( p.z, t, 0.15 );
+		F.g.gain.setTargetAtTime( Math.max( 0, level ) * 0.9, t, 0.35 );
+		if ( level <= 0 ) {
+
+			// let it die away, then free it
+			const dead = F;
+			this._flock = null;
+			setTimeout( () => { for ( const n of dead.srcs ) try { n.stop(); } catch ( e ) { void e; } }, 3000 );
+
+		}
+
+	}
+
+	// The roost: hundreds of starlings settling in the reeds - a restless din of clicks,
+	// whistles, wheezes and squeaks from all over the bed. roost( p ) starts it; roost( null )
+	// stops it dead, all at once.
+	roost( p, spread = 14 ) {
+
+		// (a handful of voices spread over the bed, each a place in it, and every call goes
+		// out from one of them)
+		if ( this._roost ) for ( const d of this._roost.dests ) d.disconnect();
+		this._roost = null;
+		this._chat = 0;
+		if ( ! p || ! this.on ) return;
+		const dests = [];
+		for ( let k = 0; k < 7; k ++ ) dests.push( this._at( new THREE.Vector3( p.x + ( Math.random() * 2 - 1 ) * spread, p.y + 1, p.z + ( Math.random() * 2 - 1 ) * spread * 0.6 ), 10 ) );
+		this._roost = { p: p.clone(), spread, dests, level: 0 };
+
+	}
+
+	_chatter( dt ) {
+
+		const R = this._roost;
+		if ( ! R ) return;
+		// the din builds as they come down
+		R.level = Math.min( 1, R.level + dt / 8 );
+		this._chat -= dt;
+		while ( this._chat <= 0 ) {
+
+			this._chat += ( 0.018 + Math.random() * 0.06 ) / ( 0.3 + R.level );
+			const dest = R.dests[ Math.floor( Math.random() * R.dests.length ) ], t = this.a.now() + 0.01 + Math.random() * 0.03, g = 0.03 * ( 0.5 + Math.random() ) * R.level;
+			const k = Math.random();
+			if ( k < 0.3 ) {
+
+				// a falling whistle
+				const f0 = 2600 + Math.random() * 1800;
+				this.a._tone( dest, t, 0.12 + Math.random() * 0.2, f0, f0 * ( 0.55 + Math.random() * 0.25 ), g );
+
+			} else if ( k < 0.55 ) {
+
+				// a clicking rattle
+				const nk = 3 + Math.floor( Math.random() * 5 );
+				for ( let j = 0; j < nk; j ++ ) this._noise( dest, t + j * 0.028, 0.012, 'bandpass', 3200 + Math.random() * 1500, 2, g * 2.2, 0.001 );
+
+			} else if ( k < 0.75 ) {
+
+				// a wheeze
+				this._noise( dest, t, 0.18 + Math.random() * 0.15, 'bandpass', 4200 + Math.random() * 1600, 4, g * 1.4, 0.03 );
+
+			} else {
+
+				// a rising squeak, a chirp
+				const f0 = 1900 + Math.random() * 1400;
+				this.a._tone( dest, t, 0.05 + Math.random() * 0.06, f0, f0 * 1.5, g * 0.9, 'triangle' );
+
+			}
+
+		}
+
+	}
+
 	// ------------------------------------------------------------------ per frame
 	update( dt, env ) {
 
@@ -521,6 +648,7 @@ export class StorySound {
 		const now = this.ctx.currentTime;
 		this.droneGain.gain.setTargetAtTime( 0.1 * this.drone, now, 0.8 );
 		this.roofGain.gain.setTargetAtTime( 0.5 * this.porch * env.rain, now, 0.4 );
+		this._chatter( Math.min( dt, 0.1 ) );
 		// drips after the rain, off the eaves and the trees
 		const wet = env.wetness * ( 1 - env.rain );
 		if ( wet > 0.1 ) {

@@ -113,6 +113,8 @@ export class Story {
 		app.audio.paper = () => this.sound.paper();
 		app.moreBirds.onCroak = ( p ) => this.sound.croak( p.clone().setY( 1 ) );
 		app.geese.auto = false;
+		// (and the starlings come when they are sent for)
+		app.starlings.auto = false;
 		c.onStep = () => this._step();
 		// a skimmed stone breaking the water
 		app.onStoneSplash = ( p ) => this.onStone?.( p );
@@ -670,6 +672,7 @@ export class Story {
 		if ( this._every ) for ( let i = this._every.length - 1; i >= 0; i -- ) if ( this._every[ i ]( dt ) ) this._every.splice( i, 1 );
 		this.figure?.update( dt );
 		this.you?.update( dt );
+		this.props?.update( dt, this.time );
 		// your boat goes from the jetty (it will be found on the west strand)
 		if ( ! this.flags.boatGone && this.progress > this.path.ids.hut && this.offscreen( this.props.boat.mesh.position, 4 ) ) {
 

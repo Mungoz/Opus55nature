@@ -19,6 +19,7 @@ uniform float uFlapAmp;
 uniform float uGlide;
 uniform float uWag;
 uniform float uWagSpeed;
+uniform float uMinSize;
 attribute vec3 color;
 attribute float aFlap;
 attribute float aMat;
@@ -64,6 +65,12 @@ void main() {
 		float w = sin( uTime * uWagSpeed * ( 0.85 + 0.3 * r ) + r * 6.283 - p.z * 9.0 );
 		p.x += w * amp;
 		n.x -= cos( uTime * uWagSpeed + r * 6.283 - p.z * 9.0 ) * amp * 4.0;
+	}
+	// (small birds far off would fall below a pixel and flicker out: never smaller than
+	// uMinSize of their distance)
+	if ( uMinSize > 0.0 ) {
+		float sc = length( im[ 0 ].xyz );
+		p *= max( 1.0, length( cameraPosition - im[ 3 ].xyz ) * uMinSize / max( sc, 1e-4 ) );
 	}
 	vec4 wp = im * vec4( p, 1.0 );
 	vWorldPos = wp.xyz;
@@ -183,7 +190,7 @@ void main() {
 }
 `;
 
-export function creatureMaterial( { flapSpeed = 0, flapAmp = 0, glide = 0, wag = 0, wagSpeed = 0 } = {} ) {
+export function creatureMaterial( { flapSpeed = 0, flapAmp = 0, glide = 0, wag = 0, wagSpeed = 0, minSize = 0 } = {} ) {
 
 	return new THREE.ShaderMaterial( {
 		vertexShader: vert,
@@ -196,6 +203,7 @@ export function creatureMaterial( { flapSpeed = 0, flapAmp = 0, glide = 0, wag =
 			uGlide: { value: glide },
 			uWag: { value: wag },
 			uWagSpeed: { value: wagSpeed },
+			uMinSize: { value: minSize },
 		},
 		lights: true,
 		side: THREE.DoubleSide,

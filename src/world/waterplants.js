@@ -11,6 +11,9 @@ import { RNG, hash2 } from '../core/rng.js';
 //    arching blades turning golden-straw toward the tips
 //  - soft rush (Juncus effusus) tufts: dense, upright, dark green, with brown flower tufts
 //  - water horsetail (Equisetum fluviatile) stands in the shallows: jointed green stems
+//  - common reed (Phragmites australis) beds where an edition asks for them: tall straw-gold
+//    culms standing out into the shallows, the leaves browning and hanging, a buff plume
+//    nodding from every top (after autumn reedbeds on the Worthersee shore)
 
 const vert = /* glsl */ `
 #define VERTEX_CULL
@@ -43,12 +46,12 @@ void main() {
 	}
 	float kind = aPart.x;
 	float hgt = max( wp.y - origin.y, 0.0 );
-	if ( kind < 1.5 ) {
-		// blades and stems lean with the gusts and nod on their own
+	if ( kind < 1.5 || kind > 3.5 ) {
+		// blades and stems lean with the gusts and nod on their own (tall reeds stiffer)
 		vec2 wdir = normalize( uWind.xy + 1e-4 );
 		float gust = smoothstep( 0.3, 0.85, textureLod( uNoiseTex, origin.xz / 45.0 - wdir * uTime * 0.09, 0.0 ).g );
 		float str = uWind.z * ( 0.25 + 1.1 * gust );
-		float stiff = kind < 0.5 ? 1.0 : 0.45;
+		float stiff = kind < 0.5 ? 1.0 : kind < 1.5 ? 0.45 : 0.2;
 		float sway = ( str * 0.35 + 0.05 * sin( uTime * ( 1.6 + rnd * 0.8 ) + rnd * 6.28 + position.x * 9.0 ) * ( 0.3 + uWind.z ) ) * hgt * hgt * stiff;
 		wp.xz += wdir * sway;
 		wp.y -= sway * sway * 0.3;
@@ -61,7 +64,7 @@ void main() {
 	vColor = color;
 	vPart = aPart;
 	vRnd = rnd;
-	vAO = kind < 1.5 ? mix( 0.35, 1.0, smoothstep( 0.0, 0.45, hgt ) ) : 1.0;
+	vAO = kind < 1.5 ? mix( 0.35, 1.0, smoothstep( 0.0, 0.45, hgt ) ) : kind > 3.5 ? mix( 0.3, 1.0, smoothstep( 0.2, 1.8, hgt ) ) : 1.0;
 	gl_Position = projectionMatrix * viewMatrix * vec4( wp, 1.0 );
 }
 `;
@@ -83,6 +86,11 @@ void main() {
 	float rough = 0.7, f0 = 0.03, trans = 0.0, gloss = 0.0;
 	if ( kind < 0.5 ) {
 		trans = 1.0;
+	} else if ( kind > 3.5 ) {
+		// reed: glossy culms, papery leaves; the plume (vPart.z) a silky fluff that glows against the light
+		trans = mix( 0.7, 1.0, vPart.z );
+		rough = mix( 0.5, 0.9, vPart.z );
+		gloss = 0.04 * ( 1.0 - vPart.z );
 	} else if ( kind < 1.5 ) {
 		// horsetail: dark toothed sheaths at every joint, fine ridges between
 		float j = fract( vPart.y );
@@ -116,10 +124,12 @@ void main() {
 	float sh = sunShadow( vWorldPos, N * 0.1 );
 	vec3 L = uSunDir;
 	float wrap = trans > 0.5 ? saturate( dot( N, L ) * 0.6 + 0.4 ) : saturate( dot( N, L ) );
+	// (a reed's plume is a fluff of fine hairs: it scatters light whichever way it faces)
+	if ( kind > 3.5 ) wrap = mix( wrap, 0.8, vPart.z );
 	float back = pow( saturate( dot( -V, L ) ), 3.0 ) * trans;
 	vec3 direct = uSunColor * sh * ( alb / PI * wrap + alb * saturate( alb * 2.2 ) * back * 0.9 );
 	vec3 amb = alb / PI * skyIrradiance( N ) * vAO;
-	vec3 spec = uSunColor * sh * specGGX( N, V, L, rough, f0 ) * ( kind > 1.5 ? 1.0 : 0.3 );
+	vec3 spec = uSunColor * sh * specGGX( N, V, L, rough, f0 ) * ( kind > 1.5 && kind < 3.5 ? 1.0 : 0.3 );
 	vec3 R = reflect( -V, N );
 	spec += skyRadiance( normalize( vec3( R.x, max( R.y, 0.02 ), R.z ) ) ) * F_Schlick( f0, saturate( dot( N, V ) ) ) * gloss * vAO;
 	vec3 col = ( direct + amb ) * underwaterLight( vWorldPos ) + spec;
@@ -359,6 +369,122 @@ function makeHorsetail( rng ) {
 
 }
 
+// Common reed: a clump of culms from one rhizome, 1.8-2.8 m tall. Each culm is a smooth
+// straw stem, darker and greener low down; its leaves stand off it alternately, long, narrow
+// and tapering, bent over and hanging at the tips, straw-gold going grey-brown; at the top a
+// plume of fine branches nods to one side (all the plumes of a bed lean the same way, with
+// the prevailing wind), brownish-grey and silky. Some culms have lost their plume, a few are
+// broken. far: the same clump for a distance - culms and plumes only, fewer vertices.
+function makeReed( rng, far = false ) {
+
+	const G = new Geo();
+	const n = rng.int( 13, 18 );
+	const culmLo = srgb( '#5f5f3e' ), culmHi = srgb( '#bca06a' ), leafC = srgb( '#b39866' ), leafGrey = srgb( '#8a7a66' ), leafGreen = srgb( '#86814f' );
+	const plumeC = srgb( '#9a8672' ), plumeDark = srgb( '#6c5a4f' ), plumeTip = srgb( '#c3b39c' );
+	for ( let b = 0; b < n; b ++ ) {
+
+		const x0 = rng.range( - 0.34, 0.34 ), z0 = rng.range( - 0.34, 0.34 );
+		const H = rng.range( 1.8, 2.8 ) * ( 0.85 + 0.15 * ( 1 - Math.hypot( x0, z0 ) / 0.48 ) );
+		const broken = rng.next() < 0.07;
+		const Hc = broken ? H * rng.range( 0.4, 0.7 ) : H;
+		// the bed's lean: culms and plumes toward +x in the clump's frame (the instance turns it)
+		const lean = new THREE.Vector3( rng.range( - 0.04, 0.1 ), 1, rng.range( - 0.05, 0.05 ) ).normalize();
+		const bow = rng.range( 0.02, 0.12 );
+		const pts = [], ws = [], cs = [];
+		const N = far ? 3 : 6;
+		for ( let i = 0; i <= N; i ++ ) {
+
+			const s = i / N;
+			const p = new THREE.Vector3( x0, - 0.35, z0 ).addScaledVector( lean, ( Hc + 0.35 ) * s );
+			p.x += bow * s * s;
+			pts.push( p );
+			ws.push( 0.01 * ( 1 - s * 0.55 ) );
+			cs.push( culmLo.clone().lerp( culmHi, Math.min( 1, s * 1.8 ) ) );
+
+		}
+
+		blade( G, pts, ws, cs, 4 );
+		const at = ( s ) => {
+
+			const f = Math.min( 1, s ) * N, i = Math.min( N - 1, Math.floor( f ) );
+			return pts[ i ].clone().lerp( pts[ i + 1 ], f - i );
+
+		};
+
+		// leaves, alternate up the culm; the low ones gone, the rest drying and hanging
+		const nl = far ? 0 : rng.int( 3, 5 );
+		for ( let k = 0; k < nl; k ++ ) {
+
+			const s = 0.35 + 0.55 * ( k + rng.next() * 0.6 ) / nl;
+			if ( broken && s * H > Hc ) break;
+			const base = at( s * H / Hc );
+			const az = k * Math.PI + rng.range( - 0.7, 0.7 ) + b * 2.4;
+			const d = new THREE.Vector3( Math.cos( az ), 0, Math.sin( az ) );
+			const L = rng.range( 0.3, 0.5 );
+			const th0 = rng.range( 0.45, 0.8 ), droop = rng.range( 1.2, 2.3 );
+			const age = rng.next();
+			const c0 = age < 0.2 ? leafGreen.clone().lerp( leafC, 0.5 ) : leafC.clone().lerp( leafGrey, ( age - 0.2 ) * 1.1 );
+			const lp = [], lw = [], lc = [];
+			const p = base.clone();
+			const w0 = rng.range( 0.01, 0.016 );
+			for ( let i = 0; i <= 4; i ++ ) {
+
+				const u = i / 4;
+				lp.push( p.clone() );
+				lw.push( w0 * ( u < 0.2 ? 0.5 + u * 2.5 : 1 - ( u - 0.2 ) * 1.1 ) + 0.0008 );
+				lc.push( c0.clone().lerp( leafGrey, u * u * 0.6 ) );
+				const th = th0 + droop * u * u;
+				p.addScaledVector( d, Math.sin( th ) * L / 4 ).add( new THREE.Vector3( 0, Math.cos( th ) * L / 4, 0 ) );
+
+			}
+
+			blade( G, lp, lw, lc, 4 );
+
+		}
+
+		// the plume: fine branches from the top node, drooping to one side
+		if ( ! broken && rng.next() < 0.88 ) {
+
+			const top = pts[ N ];
+			const L = rng.range( 0.22, 0.34 ), nod = rng.range( 0.55, 1.15 );
+			const cP = plumeC.clone().lerp( plumeDark, rng.next() * 0.6 );
+			const nb = far ? 3 : 9;
+			for ( let k = 0; k < nb; k ++ ) {
+
+				const u0 = k / nb;
+				const base = top.clone().add( new THREE.Vector3( 0, - L * 0.5 * u0, 0 ) );
+				const az = rng.range( - 0.8, 0.8 );
+				const d = new THREE.Vector3( Math.cos( az ), 0, Math.sin( az ) );
+				const bl = L * ( 0.5 + 0.5 * ( 1 - u0 ) ) * rng.range( 0.8, 1.1 );
+				const bp = [], bw = [], bc = [];
+				const p = base.clone();
+				const R = far ? 2 : 3;
+				for ( let i = 0; i <= R; i ++ ) {
+
+					const u = i / R;
+					bp.push( p.clone() );
+					bw.push( ( far ? 0.03 : 0.012 ) * ( 1 - u * 0.6 ) + 0.002 );
+					bc.push( cP.clone().lerp( plumeTip, u * 0.55 ) );
+					const th = 0.3 + nod * ( 0.35 + u * 1.1 );
+					p.addScaledVector( d, Math.sin( th ) * bl / R ).add( new THREE.Vector3( 0, Math.cos( th ) * bl / R, 0 ) );
+
+				}
+
+				// (these vertices marked as plume in aPart.z)
+				const before = G.part.length;
+				blade( G, bp, bw, bc, 4 );
+				for ( let j = before + 2; j < G.part.length; j += 3 ) G.part[ j ] = 1;
+
+			}
+
+		}
+
+	}
+
+	return G.build();
+
+}
+
 // A yellow water-lily pad: broad, ovate, deeply notched where the stalk joins, the rim a
 // little curled. Local coords (for the veins) go in aPart.yz.
 function makePad( rng, round = false ) {
@@ -446,9 +572,10 @@ export class WaterPlants {
 
 	// keepOut( x, z ): an edition's open water (landings, berths, a pond kept clear for its
 	// reflections) where nothing grows
-	constructor( terrain, { keepOut = null } = {} ) {
+	constructor( terrain, { keepOut = null, reedbeds = [] } = {} ) {
 
 		this.keepOut = keepOut;
+		this.reedbeds = reedbeds;
 
 		this.terrain = terrain;
 		this.group = new THREE.Group();
@@ -468,6 +595,13 @@ export class WaterPlants {
 			rush: { variants: [ makeRush( rng ), makeRush( rng ) ], items: [], maxD: 130, shadow: true },
 			horsetail: { variants: [ makeHorsetail( rng ), makeHorsetail( rng ) ], items: [], maxD: 110, shadow: false },
 		};
+		// (reeds come in two sets sharing their clumps: the full ones near, light ones far)
+		if ( reedbeds.length ) {
+
+			this.sets.reed = { variants: [ makeReed( rng ), makeReed( rng ), makeReed( rng ) ], items: [], maxD: 50, shadow: false };
+			this.sets.reedFar = { variants: [ makeReed( rng, true ), makeReed( rng, true ), makeReed( rng, true ) ], items: [], minD: 50, maxD: 260, shadow: false };
+
+		}
 		this.padGeo = [ makePad( rng ), makePad( rng ), makePad( rng, true ) ];
 		this.flowerGeo = makeFlower( rng );
 		this._place( rng );
@@ -649,6 +783,36 @@ export class WaterPlants {
 
 		}
 
+		// ---- reedbeds (an edition's): from the shore out to a metre's depth, thinning and
+		// shortening at the ragged edges, the clumps all turned so the plumes lean one way
+		for ( const bed of this.reedbeds ) {
+
+			const ca = Math.cos( bed.yaw ?? 0 ), sa = Math.sin( bed.yaw ?? 0 );
+			const step = 0.46;
+			for ( let u = - bed.len; u <= bed.len; u += step ) for ( let v = - bed.wid; v <= bed.wid; v += step ) {
+
+				const x = bed.x + ca * u + sa * v + rng.range( - 0.3, 0.3 ), z = bed.z - sa * u + ca * v + rng.range( - 0.3, 0.3 );
+				const e = Math.hypot( u / bed.len, v / bed.wid ) + ( valueNoise( x * 0.25, z * 0.25 ) - 0.5 ) * 0.5;
+				if ( e > 1 ) continue;
+				const h = td.heightAt( x, z );
+				if ( h > 0.45 || h < - 1.5 ) continue;
+				// thinner and shorter out at the edges and up the dry bank
+				const edge = THREE.MathUtils.smoothstep( e, 0.6, 1.0 ) + THREE.MathUtils.smoothstep( h, 0.1, 0.45 );
+				if ( rng.next() < edge * 0.7 ) continue;
+				const k = S.reed.items.length;
+				add( 'reed', x, z, rng.range( 0.85, 1.15 ) * ( 1 - edge * 0.3 ), Math.min( h, 0 ) - 0.03 );
+				if ( S.reed.items.length > k ) {
+
+					const it = S.reed.items[ k ];
+					it.rot = ( bed.lean ?? 0 ) + rng.range( - 0.35, 0.35 );
+					S.reedFar.items.push( { ...it } );
+
+				}
+
+			}
+
+		}
+
 		this.pads = pads;
 		this.flowers = flowers;
 
@@ -712,7 +876,7 @@ export class WaterPlants {
 
 	counts() {
 
-		return { sedge: this.sets.sedge.items.length, rush: this.sets.rush.items.length, horsetail: this.sets.horsetail.items.length, pads: this.pads.length, flowers: this.flowers.length };
+		return { sedge: this.sets.sedge.items.length, rush: this.sets.rush.items.length, horsetail: this.sets.horsetail.items.length, reed: this.sets.reed?.items.length ?? 0, pads: this.pads.length, flowers: this.flowers.length };
 
 	}
 
@@ -723,13 +887,14 @@ export class WaterPlants {
 		this._last.copy( cp );
 		for ( const set of Object.values( this.sets ) ) {
 
-			const md2 = set.maxD * set.maxD;
+			const md2 = set.maxD * set.maxD, mn2 = ( set.minD ?? 0 ) ** 2;
 			const counts = set.meshes.map( () => 0 );
 			for ( let i = 0; i < set.items.length; i ++ ) {
 
 				const t = set.items[ i ];
 				const dx = t.x - cp.x, dz = t.z - cp.z;
-				if ( dx * dx + dz * dz > md2 ) continue;
+				const d2 = dx * dx + dz * dz;
+				if ( d2 > md2 || d2 < mn2 ) continue;
 				const m = set.meshes[ t.variant ];
 				m.instanceMatrix.array.set( set.matrices.subarray( i * 16, i * 16 + 16 ), counts[ t.variant ] * 16 );
 				counts[ t.variant ] ++;

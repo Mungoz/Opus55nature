@@ -686,30 +686,77 @@ export const BEATS = [
 		},
 	},
 
-	// the west strand: the jetty's lantern is burning across the bay. Nobody lit it. The
-	// starlings' last murmuration over the lake parts round an empty point, then pours into
-	// the reeds (E14). From here on, your footsteps have an echo.
+	// E14: the starlings' last murmuration. As you come down out of the wood to the strand the
+	// flock comes in over the lake from the south, low, and wheels over the water ahead of you -
+	// dark against the pale mist on the far shore, roaring as it turns together. There is a
+	// place in the air over the water it will not fly through: it streams round it, again and
+	// again, as round a falcon, but nothing is there. Then it pours down into the reedbed ahead
+	// and the reeds chatter with it - until you come near, when they stop, all at once.
+	{
+		id: 'E14-starlings', at: 'strand', lead: - 110,
+		run: async ( S ) => {
+
+			const app = S.app, M = app.starlings, bed = app.layout.REEDBEDS[ 0 ];
+			// in from down the lake, to wheel low over the water off the shore ahead - where the
+			// view down the shoreline from the path is open all the way along (tools/out/q_flockview.js)
+			M.floor = 7;
+			M.sway.set( 14, 5, 42 );
+			M.pull = 2.4;
+			M.stretch = 6;
+			M.space2 = 7;
+			M.summon( V( - 205, 12, 262 ), V( 120, 60, - 120 ) );
+			// the empty place, a little off the middle of where it wheels: a column standing up out
+			// of the water that the flock parts round and closes behind, every pass
+			M.keepAway = { p: V( - 206, 11, 268 ), r: 7, column: true };
+			const t0 = S.time;
+			let told = false;
+			const roar = S.every( () => {
+
+				const flying = M.flying / M.n;
+				const near = M.mid.distanceTo( S.cam );
+				if ( ! told && near < 260 && flying > 0.9 ) {
+
+					told = true;
+					S.ui.caption( '[ a rushing of wings, over the water ]', 4 );
+
+				}
+
+				S.sound.flock( M.mid, flying < 0.02 ? 0 : ( 0.45 + 0.8 * M.turning ) * Math.sqrt( flying ) );
+				return flying < 0.02;
+
+			} );
+			void roar;
+			// it wheels until you are well along the strand, then goes down into the reeds ahead
+			await S.until( () => S.progress > S.path.ids.strand + 45 || S.time - t0 > 130 );
+			M.keepAway = null;
+			M.dismiss( V( bed.x, 20, bed.z ), bed );
+			await S.until( () => M.roost?.landed > 30 || M.phase === 'roosted' );
+			S.sound.roost( V( bed.x, 0.5, bed.z ), bed.len * 0.6 );
+			await S.until( () => M.phase === 'roosted' );
+			M.centre = null;
+			M.pull = 1;
+			M.stretch = 0;
+			M.space2 = 4;
+			// and when you come close, silence
+			await S.until( () => Math.hypot( S.cam.x - bed.x, S.cam.z - bed.z ) < 44 );
+			S.sound.roost( null );
+			S.ui.caption( '[ the reeds fall silent ]', 3.5 );
+
+		},
+		skip: ( S ) => {
+
+			S.app.starlings.phase = 'roosted';
+
+		},
+	},
+
+	// the west strand: the jetty's lantern is burning across the bay. Nobody lit it. From here
+	// on, your footsteps have an echo.
 	{
 		id: 'strand', at: 'strand', lead: - 45,
 		run: async ( S ) => {
 
-			const app = S.app;
 			S.props.lightLamp( true );
-			app.starlings.summon( V( - 150, 58, 330 ), V( - 700, 140, 900 ) );
-			const K = { p: V( - 150, 55, 330 ), r: 16 };
-			app.starlings.keepAway = K;
-			const move = S.every( () => {
-
-				K.p.set( - 150 + Math.sin( S.time * 0.11 ) * 25, 52 + Math.sin( S.time * 0.23 ) * 6, 330 + Math.cos( S.time * 0.09 ) * 20 );
-				return ! app.starlings.keepAway;
-
-			} );
-			void move;
-			await S.wait( 55 );
-			app.starlings.dismiss( V( - 245, 2, 290 ) );
-			await S.wait( 20 );
-			app.starlings.keepAway = null;
-			app.starlings.centre = null;
 
 		},
 		skip: ( S ) => S.props.lightLamp( true ),
@@ -774,7 +821,7 @@ export const BEATS = [
 	// E15: geese going over low in the dark, calling; then nothing; the loon, and its call
 	// answered by the same call played backwards
 	{
-		id: 'E15-geese', at: 'boatJ', lead: - 70,
+		id: 'E15-geese', at: 'boat', lead: - 36,
 		run: async ( S ) => {
 
 			const app = S.app;
