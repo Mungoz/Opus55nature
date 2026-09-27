@@ -158,7 +158,8 @@ export function buildDeer( stag, material ) {
 	}
 
 	if ( stag ) head.add( antlers( material ) );
-	return { mesh, bones, stag, fur: { density: 170 } };
+	// (and the same animal far off: the sculpt on a grid three times wider, a ninth of the triangles)
+	return { mesh, bones, coarse: S.build( 0.019 * 3 ), stag, fur: { density: 170 } };
 
 }
 

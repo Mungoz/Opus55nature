@@ -340,7 +340,7 @@ export class GroundCover {
 
 			const m = new THREE.Mesh( geo, stoneMat( band ) );
 			m.frustumCulled = false;
-			m.layers.set( 1 );
+			m.layers.set( 5 ); // LAYERS.DETAIL: never in a mirror
 			this.stones.add( m );
 
 		}
@@ -354,7 +354,7 @@ export class GroundCover {
 			side: THREE.DoubleSide,
 		} ) );
 		this.flowers.frustumCulled = false;
-		this.flowers.layers.set( 1 );
+		this.flowers.layers.set( 5 ); // LAYERS.DETAIL: never in a mirror
 		this.group.add( this.stones, this.flowers );
 
 	}

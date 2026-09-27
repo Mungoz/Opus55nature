@@ -152,6 +152,7 @@ export class App {
 		this.camera.layers.enable( LAYERS.MAIN );
 		this.camera.layers.enable( LAYERS.WATER );
 		this.camera.layers.enable( LAYERS.FX );
+		this.camera.layers.enable( LAYERS.DETAIL );
 		this.scene.add( this.camera );
 		this.audio = new Soundscape();
 
@@ -278,6 +279,7 @@ export class App {
 		// (an edition may place the animals where its story needs them)
 		const fauna = this.layout?.faunaAt?.( td ) ?? {};
 		this.waterfowl = new Waterfowl( td, this.water, fauna.fowl );
+		this.waterfowl.camera = this.camera;
 		this.fish = new LeapingFish( td, this.water, this.particles, ( p, s ) => this.audio.splash( p, s ) );
 		this.shallows = new Shallows( td );
 		this.scene.add( this.shallows.group );
@@ -772,7 +774,10 @@ export class App {
 
 		const r = this.renderer;
 		r.info.reset();
-		r.shadowMap.needsUpdate = true;
+		// the shadow maps, only while there is a sun (or a bright enough moon) to cast them: after
+		// sunset, before the moon is up, the direct light is nil and every shadow would be unseen
+		const L = U.uSunColor.value;
+		r.shadowMap.needsUpdate = Math.max( L.x, L.y, L.z ) > 0.004;
 		this.scene.updateMatrixWorld();
 
 		// The mirrors, all before the frame and at the top level: the stream's (three.js

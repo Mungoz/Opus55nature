@@ -308,6 +308,8 @@ export class Meadow {
 		this.near = new GrassLayer( { tile: near * 2, spacing: 0.1 / Math.sqrt( d ), segs: 5, radius: near, heightRange: [ 0.25, 0.7 ], width: 0.05, seed: 3 } );
 		this.far = new GrassLayer( { tile: far * 2, spacing: 0.34 / Math.sqrt( d ), segs: 3, radius: far, fadeIn: near * 0.85, heightRange: [ 0.28, 0.65 ], width: 0.1, seed: 5 } );
 		this.reeds = new GrassLayer( { tile: 90, spacing: 0.3, segs: 4, radius: 45, heightRange: [ 1.1, 2.1 ], width: 0.035, type: 1, seed: 9 } );
+		// (the far grass is for the eye only: no mirror needs it - LAYERS.DETAIL)
+		this.far.mesh.layers.set( 5 );
 		this.group.add( this.near.mesh, this.far.mesh, this.reeds.mesh );
 
 	}

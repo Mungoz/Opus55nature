@@ -48,6 +48,16 @@ function instance( proto ) {
 
 	}
 
+	// near and far meshes (the far one shares the bones and the culling sphere)
+	if ( proto.coarse ) {
+
+		proto.coarse.boundingSphere = geo.boundingSphere.clone();
+		mesh.userData.near = geo;
+		mesh.userData.far = proto.coarse;
+		mesh.userData.lodR = geo.boundingSphere.radius;
+
+	}
+
 	return { mesh, bones, rest, fur, furFar: proto.furFar };
 
 }
@@ -1571,6 +1581,16 @@ export class Mammals {
 		// take out last frame's breath before the poses are set again
 		for ( const a of all ) if ( a.breathOff ) a.bones.get( 'chest' ).rotation.x -= a.breathOff;
 		const cam = camera.position;
+		// far off, the coarse mesh: past about 40 body-radii the animal is a few degrees across
+		for ( const a of all ) {
+
+			const m = a.mesh, u = m.userData;
+			if ( ! u.far ) continue;
+			const g = m.position.distanceTo( cam ) > u.lodR * m.scale.x * 40 ? u.far : u.near;
+			if ( m.geometry !== g ) m.geometry = g;
+
+		}
+
 		for ( const d of this.deer ) this._updateDeer( d, dt, time, cam, dusk );
 		for ( const m of this.marmots ) this._updateMarmot( m, dt, time, cam );
 		for ( const q of this.squirrels ) this._updateSquirrel( q, dt, time, cam );

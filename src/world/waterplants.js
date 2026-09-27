@@ -860,7 +860,8 @@ export class WaterPlants {
 			} );
 			m.count = list.length;
 			m.frustumCulled = false;
-			m.layers.set( 1 );
+			// (LAYERS.DETAIL: the eye's alone - lying on the surface, no mirror can show them)
+			m.layers.set( 5 );
 			m.name = 'lilypads';
 			this.group.add( m );
 
@@ -869,7 +870,7 @@ export class WaterPlants {
 		this.flowers.forEach( ( t, i ) => compose( this.flowers, fm.instanceMatrix.array, i, t ) );
 		fm.count = this.flowers.length;
 		fm.frustumCulled = false;
-		fm.layers.set( 1 );
+		fm.layers.set( 5 );
 		this.group.add( fm );
 
 	}

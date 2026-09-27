@@ -839,6 +839,9 @@ export class Streams {
 		// mirror sees (the scene, the detailed ground and the grass on the banks) but never the
 		// water itself (which would sample the very mirror being drawn) nor the rain
 		this.reflector.getReflectionCamera( cam ).layers.mask = 1 | ( 1 << LAYERS.MAIN );
+		// (the stream far off, a thread of water: the lake mirrors' cheap ground will do for its
+		// banks, and no grass or ground cover - they could not show in it)
+		if ( best > 70 * 70 ) this.reflector.getReflectionCamera( cam ).layers.mask = 1 | ( 1 << LAYERS.MIRROR );
 		// (things that appear only in reflections join the mirror's view for its pass)
 		if ( this.reflectOnly ) for ( const o of this.reflectOnly ) o.layers.enable( 0 );
 		renderer.setClearColor( 0x000000, 1 );

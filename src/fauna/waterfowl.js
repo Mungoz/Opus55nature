@@ -69,10 +69,15 @@ export class Waterfowl {
 		this.group.name = 'waterfowl';
 		const swanGeo = swanGeometry();
 		const drakeGeo = mallardGeometry( true ), henGeo = mallardGeometry( false );
+		// a coarse mesh of each for birds far out on the water (a ninth of the triangles)
+		this.far = new Map( [ [ swanGeo, swanGeometry( true ) ], [ drakeGeo, mallardGeometry( true, true ) ], [ henGeo, mallardGeometry( false, true ) ] ] );
+		this.camera = null;
 		this.birds = [];
 		const mk = ( geo, s ) => {
 
 			const m = new THREE.Mesh( geo, this.material );
+			m.userData.near = geo;
+			m.userData.far = this.far.get( geo );
 			m.scale.setScalar( s );
 			m.castShadow = true;
 			this.group.add( m );
@@ -144,7 +149,17 @@ export class Waterfowl {
 
 	update( dt, time ) {
 
+		const cam = this.camera?.position;
 		for ( const b of this.birds ) {
+
+			// near or far detail
+			if ( cam ) {
+
+				const m = b.mesh, d = Math.hypot( m.position.x - cam.x, m.position.z - cam.z ) / m.scale.x;
+				const g = d > 35 ? m.userData.far : m.userData.near;
+				if ( g && m.geometry !== g ) m.geometry = g;
+
+			}
 
 			let desired;
 			if ( b.leader ) {

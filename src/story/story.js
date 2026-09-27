@@ -126,6 +126,9 @@ export class Story {
 		app.weather.dryRate = 0.003;
 		app.weather.puddleDrain = 0.0006;
 		this.puddles = new PuddleMirror( app, app.puddles );
+		// the far grass and ground cover, drawn less far once it is too dark to see them (base values)
+		this._lod = { far: app.meadow.far.uniforms.uRadius.value, gc: [] };
+		app.groundCover.group.traverse( ( o ) => { if ( o.material?.uniforms?.uRadius ) this._lod.gc.push( [ o.material.uniforms.uRadius, o.material.uniforms.uRadius.value ] ); } );
 		c.onStep = () => this._step();
 		// a skimmed stone breaking the water
 		app.onStoneSplash = ( p ) => this.onStone?.( p );
@@ -751,6 +754,17 @@ export class Story {
 		this.you?.update( dt );
 		this.props?.update( dt, this.time );
 		this.puddles?.update();
+		// night: the far meadow drawn to two thirds of its reach, a little thinner (unseen in the dark)
+		if ( this._lod ) {
+
+			const k = THREE.MathUtils.smoothstep( this.app.hours, 17.2, 17.6 );
+			const M = this.app.meadow;
+			M.far.uniforms.uRadius.value = this._lod.far * ( 1 - 0.35 * k );
+			M.far.uniforms.uDensity.value = 1 - 0.25 * k;
+			M.near.uniforms.uDensity.value = 1 - 0.15 * k;
+			for ( const [ u, v ] of this._lod.gc ) u.value = v * ( 1 - 0.35 * k );
+
+		}
 		// your boat goes from the jetty (it will be found on the west strand)
 		if ( ! this.flags.boatGone && this.progress > this.path.ids.hut && this.offscreen( this.props.boat.mesh.position, 4 ) ) {
 

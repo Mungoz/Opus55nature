@@ -130,7 +130,8 @@ export function buildMarmot( material ) {
 
 	}
 
-	return { mesh, bones, fur: { density: 230 } };
+	// (and the same animal far off: the sculpt on a grid three times wider, a ninth of the triangles)
+	return { mesh, bones, coarse: S.build( 0.0075 * 3 ), fur: { density: 230 } };
 
 }
 
@@ -217,7 +218,8 @@ export function buildSquirrel( material ) {
 
 	}
 
-	return { mesh, bones, fur: { density: 520 } };
+	// (and the same animal far off: the sculpt on a grid three times wider, a ninth of the triangles)
+	return { mesh, bones, coarse: S.build( 0.004 * 3 ), fur: { density: 520 } };
 
 }
 
@@ -309,7 +311,8 @@ export function buildHare( material ) {
 
 	}
 
-	return { mesh, bones, fur: { density: 300 } };
+	// (and the same animal far off: the sculpt on a grid three times wider, a ninth of the triangles)
+	return { mesh, bones, coarse: S.build( 0.0055 * 3 ), fur: { density: 300 } };
 
 }
 
@@ -416,6 +419,7 @@ export function buildBear( material ) {
 
 	}
 
-	return { mesh, bones, fur: { density: 70, shells: 1.75 } };
+	// (and the same animal far off: the sculpt on a grid three times wider, a ninth of the triangles)
+	return { mesh, bones, coarse: S.build( 0.024 * 3 ), fur: { density: 70, shells: 1.75 } };
 
 }

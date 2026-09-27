@@ -15,7 +15,8 @@ const ss = ( a, b, x ) => {
 
 };
 
-export function swanGeometry() {
+// (coarse: a mesh for a bird far across the water - the same sculpt on a grid three times wider)
+export function swanGeometry( coarse = false ) {
 
 	const S = new Sculpt();
 	S.bone( 'body', [ 0, 0.15, 0 ] );
@@ -79,7 +80,7 @@ export function swanGeometry() {
 	S.cone( [ 0, 0.88, 0.535 ], [ 0, 0.83, 0.655 ], 0.028, 0.014, { bone: 'body', color: bill, k: 0.012, mat: MAT.BILL } );
 	S.ellipsoid( [ 0, 0.905, 0.54 ], [ 0.017, 0.02, 0.024 ], { bone: 'body', color: '#101010', k: 0.012, mat: MAT.BILL } );
 
-	const g = S.build( 0.012 );
+	const g = S.build( coarse ? 0.036 : 0.012 );
 	g.deleteAttribute( 'skinIndex' );
 	g.deleteAttribute( 'skinWeight' );
 	// the flat underside that sits in the water is hidden; trim a little of the height
@@ -93,7 +94,7 @@ export function swanGeometry() {
 // feather dark-centred with a buff fringe, dark eye stripe, orange-and-brown bill.
 // Colour zones come from the region function; the fine plumage (vermiculation,
 // scalloped feathers, iridescence) is drawn per pixel from the pattern weights.
-export function mallardGeometry( drake ) {
+export function mallardGeometry( drake, coarse = false ) {
 
 	const S = new Sculpt();
 	S.bone( 'body', [ 0, 0.08, 0 ] );
@@ -174,7 +175,7 @@ export function mallardGeometry( drake ) {
 
 	}
 
-	const g = S.build( 0.006 );
+	const g = S.build( coarse ? 0.018 : 0.006 );
 	g.deleteAttribute( 'skinIndex' );
 	g.deleteAttribute( 'skinWeight' );
 	return g;

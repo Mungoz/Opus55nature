@@ -21,7 +21,9 @@ export const WORLD = {
 // Render layers: 0 is everything mirrors see; 1 main-view only (grass, detailed terrain);
 // 2 mirror-only (the cheap terrain); water is drawn after the rest of the frame (its
 // refraction is a copy of it), and effects (rain, spray, motes) after the water.
-export const LAYERS = { MAIN: 1, MIRROR: 2, WATER: 3, FX: 4 };
+// MAIN: the detailed ground and what the stream's mirror should show of the banks; MIRROR: a
+// cheap ground for mirrors; DETAIL: fine detail only the eye sees (ground cover, the far grass)
+export const LAYERS = { MAIN: 1, MIRROR: 2, WATER: 3, FX: 4, DETAIL: 5 };
 
 export function regionOrigin( r ) {
 
