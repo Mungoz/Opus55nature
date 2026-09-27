@@ -127,37 +127,70 @@ export class BoatScene {
 		if ( b.rope ) b.rope.visible = false;
 		const berth = P.berth.clone();
 		const jy = P.jettyFrame.yaw;
-		// from 75 m out in the bay (the jetty's +z points out over the lake), curving in to lie
-		// alongside its head; the boat goes bow first, and the rower faces aft
+		// from a little way out in the bay (the jetty's +z points out over the lake), curving in
+		// to lie alongside its head: twenty seconds or so on the water. The boat goes bow first
+		// and the rower faces aft - you look over your shoulder at where you are going, and can
+		// look about as you like
 		const ox = Math.sin( jy ), oz = Math.cos( jy ), sx = oz, sz = - ox;
-		const out = V( berth.x + ox * 75 + sx * 28, 0, berth.z + oz * 75 + sz * 28 );
-		const mid = V( berth.x + ox * 24 + sx * 6, 0, berth.z + oz * 24 + sz * 6 );
-		const near = V( berth.x + ox * 7 + sx * 1, 0, berth.z + oz * 7 + sz * 1 );
+		const out = V( berth.x + ox * 34 + sx * 10, 0, berth.z + oz * 34 + sz * 10 );
+		const mid = V( berth.x + ox * 15 + sx * 3, 0, berth.z + oz * 15 + sz * 3 );
+		const near = V( berth.x + ox * 6 + sx * 1, 0, berth.z + oz * 6 + sz * 1 );
 		const course = new THREE.CatmullRomCurve3( [ out, out.clone().lerp( mid, 0.5 ), mid, near, berth.clone() ] );
 		S.input = false;
 		app.controls.enabled = false;
+		app.controls.lookFree = true;
 		S.you.enable( true );
-		// E1: the grebes ahead dive, the mallards paddle away, the heron at the jetty lifts off
+		// E1, on the way in: a skein of geese goes over low, calling; a fish rises by the boat;
+		// the heron on the jetty's head lifts off croaking and flaps away low over the water; the
+		// grebes ahead dive; the mallards paddle off in a line
 		const heron = app.moreBirds.herons[ 0 ];
 		const t0 = S.time;
+		let geese = false, fish = false;
 		S.every( () => {
 
-			const bp = b.mesh.position;
-			for ( const g of app.moreBirds.grebes ) if ( g.state === 'swim' && g.pos.distanceTo( bp ) < 18 ) g.dive_now = true;
+			const bp = b.mesh.position, d = bp.distanceTo( berth );
+			for ( const g of app.moreBirds.grebes ) if ( g.state === 'swim' && g.pos.distanceTo( bp ) < 20 ) g.dive_now = true;
 			app.waterfowl.fear = { p: bp.clone(), r: 14 };
-			if ( ! heron.cmd && heron.pos.distanceTo( bp ) < 38 ) heron.cmd = { do: 'fly', to: V( heron.pos.x + 70, 0, heron.pos.z - 40 ), level: 0 };
+			if ( ! geese && S.time - t0 > 4.5 ) {
+
+				geese = true;
+				app.geese.pass( app.camera, 38, 45 );
+
+			}
+
+			if ( ! fish && d < 24 ) {
+
+				fish = true;
+				const q = V( - 2.2, 0, 1.5 ).applyMatrix4( b.mesh.matrixWorld );
+				app.water.addRipple( q.x, q.z, 0.6 );
+				app.water.addRipple( q.x, q.z, 0.3, 0.4 );
+				app.audio.splash?.( q.clone().setY( 0 ), 0.2 );
+
+			}
+
+			if ( ! heron.cmd && d < 21 ) heron.cmd = { do: 'fly', to: V( heron.pos.x + 70, 0, heron.pos.z - 40 ), level: 0 };
 			return S.flags.landed || S.time - t0 > 200;
 
 		} );
-		// black, the oars in the dark, the title
+		// the oars in the dark, then the title over the water as you come in
 		ui.fade( 1, 0.01 );
 		const t0c = course.getTangentAt( 0 );
 		P.placeBoat( b, out.x, out.z, Math.atan2( t0c.x, t0c.z ) );
 		this._seat( b );
-		const rowing = this._drive( b, course, ( u ) => u < 0.88 ? 1.7 : Math.max( 0.25, 1.7 * ( 1 - u ) / 0.12 ), ( bb ) => this._stroke( bb ) );
-		await S.wait( 1.5 );
-		await ui.card( 'Larchmere', 'late October', 5 );
-		await ui.fade( 0, 4 );
+		// (turned in your seat, looking over your shoulder toward the jetty)
+		{
+
+			const c = app.controls, e = app.camera.position;
+			c.yaw = c.targetYaw = Math.atan2( - ( berth.x - e.x ), - ( berth.z - e.z ) ) + 0.35;
+			c.pitch = c.targetPitch = - 0.06;
+
+		}
+
+		const rowing = this._drive( b, course, ( u ) => u < 0.86 ? 1.9 : Math.max( 0.25, 1.9 * ( 1 - u ) / 0.14 ), ( bb ) => this._stroke( bb ) );
+		await S.wait( 1.2 );
+		ui.fade( 0, 2.5 );
+		await S.wait( 1.2 );
+		ui.card( 'Larchmere', 'late October', 4.5 );
 		await rowing;
 		// alongside: the boat nudges the jetty
 		S.sound.knock( P.berth.clone().setY( 0.5 ), 0.8 );
@@ -172,6 +205,7 @@ export class BoatScene {
 		if ( b.rope ) b.rope.visible = true;
 		S.you.pose = 'follow';
 		app.controls.enabled = true;
+		app.controls.lookFree = false;
 		S.input = true;
 		S.setProgress( 0, true );
 		// face along the jetty toward the shore
@@ -204,6 +238,7 @@ export class BoatScene {
 		P.placeBoat( b, start.x, start.z, Math.atan2( q.x, q.z ) );
 		b.lid.visible = true;
 		this._seat( b );
+		app.controls.lookFree = true;
 		S.you.enable( true );
 		S.shadowing = null;
 		S.figure.setMode( 'hidden' );

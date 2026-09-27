@@ -595,7 +595,9 @@ export class Story {
 		this.offPath = over;
 		// (heavy rain out in the open slows you too)
 		const inRain = this.app.weather.state.rain > 0.4 && ! this.props.underPorch( cam.x, cam.z );
-		this.app.controls.moveScale = ( 1 - 0.55 * THREE.MathUtils.smoothstep( over, 0, 90 ) ) * ( inRain ? this.moveScaleRain ?? 1 : 1 );
+		// (no slowing when you stray: the land and the fences keep you to the way; the cowbell
+		// calls you back if you are lost)
+		this.app.controls.moveScale = inRain ? this.moveScaleRain ?? 1 : 1;
 		if ( over > 125 && ! this.noclip ) {
 
 			// ease back: you can't go further out

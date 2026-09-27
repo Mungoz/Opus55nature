@@ -338,6 +338,30 @@ export const BEATS = [
 		skip: ( S ) => {},
 	},
 
+	// the footbridge's gate: once you are over and away up the bank, it swings shut behind you
+	// (the stream is not to be crossed back)
+	{
+		id: 'bridge-gate', at: 'bridge', lead: 0,
+		run: async ( S ) => {
+
+			const P = S.props, G = P.bridgeGate;
+			if ( ! G ) return;
+			await S.until( () => S.progress > S.path.ids.bridge + 16 && dist2( G.pos, S.cam.x, S.cam.z ) > 11 );
+			await S.untilOffscreen( G.pos, 1.5 );
+			S.sound.creak( G.pos, 1.1, 0.35, 150, 110 );
+			await P.swingGate( false, G );
+			S.sound.latch( G.pos );
+			S.ui.caption( '[ a gate swings shut, behind you ]', 3.5 );
+
+		},
+		skip: ( S ) => {
+
+			const G = S.props.bridgeGate;
+			if ( G && G.open ) S.props.swingGate( false, G );
+
+		},
+	},
+
 	// F2 and E8: on the footbridge a dipper whirrs off from the stone under it, low up the
 	// pool; following it, you look up the pool's still water - and in it, at the pool's head,
 	// someone is standing in the stream. At the head of the pool the water is empty.
@@ -431,9 +455,22 @@ export const BEATS = [
 			S.storming = true;
 			// out in the rain beyond the yard, on the way you came: at the edge of the light, then
 			// nearer at each flash, the last just past the trough's end
-			const spots = [ [ 5, 31 ], [ - 4.5, 21.5 ], [ 0.6, 14.2 ] ].map( ( [ lx, lz ] ) => f.toWorld( lx, 0, lz ) );
+			// It is there only in the lightning: each flash shows it for as long as the flash lasts,
+			// a little nearer each time, and between flashes there is nothing - nothing to walk up
+			// to, and it is never shown within 14 m of you
+			const spots = [ [ 5, 31 ], [ - 4.5, 22 ], [ 0.6, 16 ] ].map( ( [ lx, lz ] ) => f.toWorld( lx, 0, lz ) );
 			const face = () => Math.atan2( S.cam.x - S.figure.pos.x, S.cam.z - S.figure.pos.z );
-			let flash = 0;
+			let flash = 0, lit = false;
+			const shown = S.every( () => {
+
+				if ( ! S.storming ) { S.figure.setMode( 'hidden' ); return true; }
+				const on = lit && app.weather.flash > 0.12;
+				if ( ! on ) lit = false;
+				S.figure.setMode( on ? 'direct' : 'hidden' );
+				return false;
+
+			} );
+			void shown;
 			const strike = () => {
 
 				// lightning out beyond it from where you stand, far enough that the thunder lags
@@ -449,14 +486,19 @@ export const BEATS = [
 			const over = () => S.time - t0 > 180 || ( S.time - t0 > 65 && S.flags.hutbookRead && S.time - S.flags.hutbookAt > 9 );
 			while ( ! over() ) {
 
-				// move it only while no one is looking
-				if ( flash < 3 && S.unseenFor > 0.4 ) {
+				// the next flash, and in it, the next place (unless you are out there yourself)
+				if ( flash < 3 ) {
 
-					const p = spots[ flash ++ ];
-					S.figure.place( p.x, p.z, 0 );
-					S.figure.yaw = face();
-					S.figure.tilt = 0.55;
-					S.figure.setMode( 'direct' );
+					const p = spots[ flash ];
+					if ( Math.hypot( p.x - S.cam.x, p.z - S.cam.z ) > 14 ) {
+
+						flash ++;
+						S.figure.place( p.x, p.z, 0 );
+						S.figure.yaw = face();
+						S.figure.tilt = 0.55;
+						lit = true;
+
+					}
 
 				}
 
@@ -480,7 +522,8 @@ export const BEATS = [
 
 			}
 
-			// a last strike: in its glare, it is gone (and the trough's boards, if they are not yet)
+			// a last strike: in its glare, nothing (and the trough's boards, if they are not yet)
+			lit = false;
 			strike();
 			S.figure.setMode( 'hidden' );
 			if ( ! S.flags.troughOpen ) { P.setTroughCover( false ); S.flags.troughOpen = true; }
@@ -490,6 +533,21 @@ export const BEATS = [
 			S.clockRate = null;
 			S.skyOverride = { ...STORM, rain: 0, storm: 0, wind: 0.8, clouds: 0.8, overcast: 0.7, lowCloud: 0.004, mist: 0.0018 };
 			S.release( 'storm' );
+			// and from up behind the hut, on the way to the tarn, the cowbell - the way on
+			const bell = async () => {
+
+				for ( let k = 0; k < 6 && S.progress < S.path.ids.troughEnd + 30; k ++ ) {
+
+					await S.wait( k ? 14 : 9 );
+					if ( S.progress >= S.path.ids.troughEnd + 30 ) break;
+					const q = S.path.at( Math.min( S.progress + 45, S.path.ids.tarn ) );
+					S.sound.cowbell( V( q.x, S.app.terrainData.heightAt( q.x, q.z ) + 1, q.z ), 2, 0.8 );
+					if ( k === 0 ) S.ui.caption( '[ a cowbell, up behind the hut ]', 4 );
+
+				}
+
+			};
+			bell();
 			await S.wait( 25 );
 			S.skyOverride = null;
 

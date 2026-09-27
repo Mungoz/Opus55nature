@@ -20,6 +20,8 @@ export class Controls {
 		this.velocity = new THREE.Vector3();
 		this.keys = new Set();
 		this.enabled = true;
+		// (a director that holds the walker still may leave the view free: seated in a boat)
+		this.lookFree = false;
 		this.walk = false;
 		this.speed = 14;
 		this.sensitivity = 1;
@@ -71,9 +73,10 @@ export class Controls {
 		};
 
 		d.addEventListener( 'contextmenu', ( e ) => e.preventDefault() );
+		const canLook = () => this.enabled || this.lookFree;
 		d.addEventListener( 'pointerdown', ( e ) => {
 
-			if ( ! this.enabled || e.pointerType === 'touch' ) return;
+			if ( ! canLook() || e.pointerType === 'touch' ) return;
 			this.dragging = true;
 			this.dragMoved = 0;
 			this._lastX = e.clientX;
@@ -83,7 +86,7 @@ export class Controls {
 		} );
 		d.addEventListener( 'pointermove', ( e ) => {
 
-			if ( ! this.enabled || e.pointerType === 'touch' ) return;
+			if ( ! canLook() || e.pointerType === 'touch' ) return;
 			if ( document.pointerLockElement === d ) {
 
 				look( e.movementX, e.movementY );

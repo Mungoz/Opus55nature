@@ -183,6 +183,29 @@ export class StoryProps {
 
 		}
 
+		// a gate across the deck at the hut's end, standing open as you come (it swings shut
+		// behind you: there is no going back over the stream)
+		{
+
+			const H = PLACES.hut, e0 = f.toWorld( 0, 0, - info.half ), e1 = f.toWorld( 0, 0, info.half );
+			const hs = Math.hypot( e1.x - H.x, e1.z - H.z ) < Math.hypot( e0.x - H.x, e0.z - H.z ) ? 1 : - 1;
+			const lz = hs * ( info.half - 0.85 );
+			const p0 = f.toWorld( - 0.74, 0, lz ), p1 = f.toWorld( 0.74, 0, lz );
+			const { geometry: gf, gate } = buildFence( () => dy, [ [ p0.x, p0.z ], [ p1.x, p1.z ] ], 0, 17 );
+			this.group.add( this._mesh( gf, this.material, 'bridge-gate-posts' ) );
+			const hinge = new THREE.Group();
+			hinge.position.copy( gate.hinge );
+			hinge.add( this._mesh( gate.geometry, this.material, 'bridge-gate' ) );
+			this.group.add( hinge );
+			// (open: swung back toward the hut, lying along the rail)
+			const open = hs;
+			this.bridgeGate = { hinge, yaw: gate.yaw, open: 1, dir: open, pos: new THREE.Vector3( ( p0.x + p1.x ) / 2, dy + 1, ( p0.z + p1.z ) / 2 ), latch: gate.latch, tag: 'bgate' };
+			hinge.rotation.y = gate.yaw + 1.75 * open;
+			C.circle( p0.x, p0.z, 0.1, 'bridge' );
+			C.circle( p1.x, p1.z, 0.1, 'bridge' );
+
+		}
+
 	}
 
 	// ------------------------------------------------------------------ the hut
@@ -374,15 +397,16 @@ export class StoryProps {
 
 	}
 
-	// swing the gate open (away from the walker) or shut; resolves when it has swung
-	swingGate( open ) {
+	// swing a gate (the pasture's, or G) open (away from the walker) or shut; resolves when
+	// it has swung
+	swingGate( open, G = this.gate ) {
 
-		const G = this.gate, from = G.open, to = open ? 1 : 0;
-		if ( open ) this.story.collision.remove( 'gate' );
+		const from = G.open, to = open ? 1 : 0, tag = G.tag ?? 'gate';
+		if ( open ) this.story.collision.remove( tag );
 		else {
 
 			const P = G.hinge.position, L = G.latch;
-			this.story.collision.capsule( P.x, P.z, L.x, L.z, 0.1, 'gate' );
+			this.story.collision.capsule( P.x, P.z, L.x, L.z, 0.1, tag );
 
 		}
 
@@ -395,7 +419,7 @@ export class StoryProps {
 				const u = Math.min( 1, t / ( open ? 1.8 : 1.2 ) );
 				const e = open ? 1 - Math.pow( 1 - u, 2.4 ) : u * u;
 				G.open = from + ( to - from ) * e;
-				G.hinge.rotation.y = G.yaw + G.open * 1.75;
+				G.hinge.rotation.y = G.yaw + G.open * 1.75 * ( G.dir ?? 1 );
 				if ( u >= 1 ) { res(); return true; }
 				return false;
 
@@ -423,6 +447,22 @@ export class StoryProps {
 		const cr = PLACES.cross;
 		this.group.add( this._mesh( buildCross( ground, cr.x, cr.z, cr.yaw ), this.material, 'cross' ) );
 		this.story.collision.circle( cr.x, cr.z, 0.3, 'cross' );
+		// a trail sign where the path leaves the hut's yard and turns up behind it for the tarn
+		// (the way on is not the way you came in): set beside the path, its arm along it
+		{
+
+			const path = this.story.path, d = path.ids.troughEnd + 5;
+			const p = path.at( d ), a = path.at( d + 9 );
+			const nx = p.tz, nz = - p.tx;
+			const sx = p.x + nx * 1.4, sz = p.z + nz * 1.4;
+			const s2 = buildSignpost( ground, sx, sz, [
+				{ text: [ [ 'Seeli', '10 min' ], [ 'Wasserfall', '25 min' ] ], yaw: Math.atan2( a.x - sx, a.z - sz ) },
+			], 21, { register: false } );
+			this.group.add( this._mesh( s2.geometry, this.material, 'trail-sign' ), s2.arms );
+			this.story.collision.circle( sx, sz, 0.12, 'signpost' );
+			this.trailSign = V( sx, ground( sx, sz ) + 2, sz );
+
+		}
 
 	}
 

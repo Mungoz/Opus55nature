@@ -205,7 +205,7 @@ export function paintedMaterial( map, { side = THREE.FrontSide, rough = 0.6 } = 
 }
 
 // arms: [ { text: [ [ place, time ], ... ], yaw (world, the way it points), y } ]
-export function buildSignpost( ground, x, z, arms, seed = 9 ) {
+export function buildSignpost( ground, x, z, arms, seed = 9, { register: withRegister = true } = {} ) {
 
 	const R = rand( seed );
 	const k = new Kit( ground );
@@ -215,10 +215,14 @@ export function buildSignpost( ground, x, z, arms, seed = 9 ) {
 	k.box( x, top + 0.02, z, 0.15, 0.03, 0.15, M.IRON, col( '#4a4540' ) );
 	// the register: a galvanised box, its lid hinged at the back, a ring pull, on a bracket
 	const by = g + 1.2;
-	k.box( x, by, z + 0.1, 0.24, 0.3, 0.12, M.IRON, col( '#8d8c86' ), { axis: [ 0, 1, 0 ] } );
-	k.box( x, by + 0.165, z + 0.1, 0.27, 0.025, 0.15, M.IRON, col( '#7b7a74' ), { rot: [ 0.08, 0, 0 ] } );
-	ring( k, V( x, by + 0.12, z + 0.17 ), V( 0, 0, 1 ), 0.018, 0.004 );
-	for ( const dy of [ - 0.1, 0.1 ] ) bolt( k, V( x, by + dy, z + 0.162 ), V( 0, 0, 1 ), 0.008 );
+	if ( withRegister ) k.box( x, by, z + 0.1, 0.24, 0.3, 0.12, M.IRON, col( '#8d8c86' ), { axis: [ 0, 1, 0 ] } );
+	if ( withRegister ) {
+
+		k.box( x, by + 0.165, z + 0.1, 0.27, 0.025, 0.15, M.IRON, col( '#7b7a74' ), { rot: [ 0.08, 0, 0 ] } );
+		ring( k, V( x, by + 0.12, z + 0.17 ), V( 0, 0, 1 ), 0.018, 0.004 );
+		for ( const dy of [ - 0.1, 0.1 ] ) bolt( k, V( x, by + dy, z + 0.162 ), V( 0, 0, 1 ), 0.008 );
+
+	}
 	const geo = k.build();
 	// the arms: planks painted yellow, pointed at one end, bolted round the post
 	const group = new THREE.Group();
