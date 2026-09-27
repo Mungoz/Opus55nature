@@ -294,7 +294,7 @@ Tasks:
 - [ ] Count how often you look at it, for the ending variant.
 
 ### 9.5 The player's reflection
-- [ ] A simple body, drawn in reflections only, so you see yourself in puddles and in the boat. The ending depends on this.
+- [x] A simple body, drawn in reflections only, so you see yourself in puddles and in the boat (`story/player.js`); it leans out with you over the gunwale.
 
 ### 9.6 The valley reacts
 - [ ] Birdsong suppressed around the figure, with a gap that follows it (`audio.js` places songs at random around you).
@@ -328,9 +328,10 @@ Tasks:
 - [ ] Captions for key sounds (the bell, footsteps behind you).
 
 ### 9.11 Opening and ending
-- [ ] The row-in cutscene, reusing the shot system in `film.js`.
-- [ ] The ending (location open, see 5.1). You row out. As the ripples from the oars settle, your reflection has someone sitting behind you in the boat. You turn round: the boat is empty. Fade to black, a cowbell, then the title.
-- [ ] Ending variant: if you looked too often, your reflection isn't in the boat. It stays on the shore, turns, and walks up into the trees.
+- [x] The row-in cutscene.
+- [x] The ending, from the west strand. You push off and row out; the oars' rings settle and the water goes still. Sitting still in the dark, your eyes adapt: the stars come out in the water. A fish rises beside the boat. Look down over the side and you lean out over the gunwale: in the mirror, your own head, and beside it at your shoulder a second, head and shoulders risen out of the water by the boat, looking up at you, against the reflected Milky Way. Look to the place beside you: nobody; rings closing over the spot. Fade to black, a cowbell, then the title.
+  - Changed from "someone sitting behind you in the bow": from the thwart nothing inside the boat can be seen in the water (the hull is where its mirror image would be); a head beside the gunwale can, as your own can when you lean out.
+- [x] Ending variant: if you looked too often, your reflection isn't in the boat. It stays on the shore, turns, and walks up into the trees.
 
 ## 10. Landscape and props
 

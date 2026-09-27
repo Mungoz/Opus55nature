@@ -71,17 +71,25 @@ export class BoatScene {
 				b.mesh.updateMatrixWorld( true );
 				eye.applyMatrix4( b.mesh.matrixWorld );
 				// the body leans with the stroke
-				const lean = Math.sin( ph * Math.PI * 2 ) * 0.18;
+				const lean = Math.sin( ph * Math.PI * 2 ) * 0.18 * Math.min( 1, v / 0.6 );
 				eye.x += Math.sin( heading + Math.PI ) * - lean;
 				eye.z += Math.cos( heading + Math.PI ) * - lean;
+				// looking down over a side, you lean out over the gunwale to see into the water
+				const ax = Math.cos( heading ), az = - Math.sin( heading ); // the boat's +x, across
+				const across = - Math.sin( c.yaw ) * ax - Math.cos( c.yaw ) * az;
+				const want = THREE.MathUtils.smoothstep( - c.pitch, 0.35, 0.85 ) * THREE.MathUtils.clamp( across * 1.8, - 1, 1 );
+				this.lean = ( this.lean ?? 0 ) + ( want - ( this.lean ?? 0 ) ) * Math.min( 1, dt * 2.2 );
+				eye.x += ax * 0.8 * this.lean;
+				eye.z += az * 0.8 * this.lean;
+				eye.y -= 0.32 * Math.abs( this.lean );
 				app.camera.position.copy( eye );
 				if ( S.you ) {
 
 					S.you.pose = v > 0.2 ? 'row' : 'sit';
 					S.you.rowPhase = ph * Math.PI * 2;
 					const seat = SEAT.clone().applyMatrix4( b.mesh.matrixWorld );
-					S.you.mesh.position.set( seat.x, seat.y - 0.45, seat.z );
-					S.you.mesh.rotation.set( 0, heading + Math.PI, 0 );
+					S.you.mesh.position.set( seat.x + ax * 0.5 * this.lean, seat.y - 0.45, seat.z + az * 0.5 * this.lean );
+					S.you.mesh.rotation.set( 0, heading + Math.PI, 0.38 * this.lean );
 					S.you.headYaw = THREE.MathUtils.clamp( Math.atan2( Math.sin( c.yaw - ( heading ) ), Math.cos( c.yaw - heading ) ), - 1.2, 1.2 );
 
 				}
@@ -211,18 +219,34 @@ export class BoatScene {
 		await ui.fade( 0, 3 );
 		await rowing;
 		// the rings from the oars settle. The water goes still.
-		S.skyOverride = { wind: 0.0, mist: 0.0028 };
+		S.skyOverride = { wind: 0.0, mist: 0.0028, lift: 0.42, keyLow: 0.11 };
 		app.water.uniforms.uCalm.value = 1;
+		// sitting still in the dark, your eyes open to it: the stars come out in the water
+		const tr = S.time;
+		const adapt = S.every( () => {
+
+			const k = THREE.MathUtils.smoothstep( S.time - tr, 0, 9 );
+			if ( ! S.skyOverride ) return true;
+			S.skyOverride.lift = THREE.MathUtils.lerp( 0.42, 1.05, k );
+			S.skyOverride.keyLow = THREE.MathUtils.lerp( 0.11, 0.28, k );
+			return k >= 1;
+
+		} );
+		void adapt;
 		await S.wait( 6 );
-		const bow = () => V( 0, 0.4, BOAT.L * 0.36 ).applyMatrix4( b.mesh.matrixWorld );
 		const F = S.figure;
 		if ( ! variant ) {
 
-			// your reflection, and someone sitting behind you in the bow
-			const p = bow();
-			F.place( p.x, p.z, b.mesh.rotation.y + Math.PI, p.y - 0.62 );
-			F.pose = 'sit';
-			F.tilt = 0.75;
+			// Lean out over the side where the fish rose, and in the still water your own face looks
+			// up at you - and beside it, at your shoulder, another: someone risen out of the water
+			// by the boat, head and shoulders, looking up at you. Only in the water. (Nothing in the
+			// boat can be seen in the water from the thwart - the hull is in the way - but a head
+			// beside the gunwale can, as your own can when you lean out.)
+			const p = V( 1.08, 0, SEAT.z + 0.55 ).applyMatrix4( b.mesh.matrixWorld );
+			const eye = app.camera.position;
+			F.place( p.x, p.z, Math.atan2( eye.x - p.x, eye.z - p.z ), - 1.02 );
+			F.pose = 'stand';
+			F.tilt = 0.35;
 			F.setMode( 'reflect' );
 
 		} else {
@@ -245,21 +269,32 @@ export class BoatScene {
 		const t0 = S.time;
 		if ( ! variant ) {
 
+			// it watches you; it turns its face to you as you lean
+			const watch = S.every( () => {
+
+				if ( F.mode !== 'reflect' ) return true;
+				F.yaw = Math.atan2( app.camera.position.x - F.pos.x, app.camera.position.z - F.pos.z );
+				return false;
+
+			} );
+			void watch;
 			await S.until( () => ( S.sight.reflect > 0 && S.seenFor > 2.2 ) || S.time - t0 > 45 );
 			S.drone( 1, 10 );
-			// turn round: the bow is empty
+			// look up from the water to the place beside you: nobody; the water there closing over
+			await S.until( () => S.unseenFor > 0.3 || S.time - t0 > 60 );
+			F.setMode( 'hidden' );
+			for ( let k = 0; k < 3; k ++ ) app.water.addRipple( F.pos.x, F.pos.z, 0.35, k * 0.7 );
 			const bowDir = () => {
 
-				const d = bow().sub( app.camera.position ).setY( 0 ).normalize();
+				const d = F.pos.clone().sub( app.camera.position ).setY( 0 ).normalize();
 				const f = new THREE.Vector3();
 				app.camera.getWorldDirection( f );
 				return f.setY( 0 ).normalize().dot( d );
 
 			};
 
-			F.setMode( 'hidden' );
 			const t1 = S.time;
-			await S.until( () => bowDir() > 0.55 || S.time - t1 > 14 );
+			await S.until( () => bowDir() > 0.6 || S.time - t1 > 12 );
 			await S.wait( 1.6 );
 
 		} else {

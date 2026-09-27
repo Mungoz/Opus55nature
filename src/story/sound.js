@@ -449,6 +449,33 @@ export class StorySound {
 
 	}
 
+	// a bear rooting about: sniffing in the litter, a low grunt now and then
+	snuffle( p, seconds = 3 ) {
+
+		if ( ! this.on ) return;
+		const dest = this._at( p, 12 ), t0 = this.a.now() + 0.02;
+		for ( let t = 0; t < seconds; t += 0.25 + Math.random() * 0.35 ) {
+
+			// quick sniffs: a breathy hiss in and out
+			this._noise( dest, t0 + t, 0.09, 'bandpass', 1800 + Math.random() * 900, 1.4, 0.18, 0.02 );
+			if ( Math.random() < 0.18 ) this.a._tone( dest, t0 + t + 0.05, 0.35, 95, 70, 0.22, 'sawtooth' );
+
+		}
+
+	}
+
+	// a startled bear's woof: one explosive huff through the nose and mouth, and the clap of its jaws
+	woof( p ) {
+
+		if ( ! this.on ) return;
+		const dest = this._at( p, 16 ), t = this.a.now() + 0.02;
+		const f = this._noise( dest, t, 0.32, 'lowpass', 1400, 0.8, 0.9, 0.006 );
+		f.frequency.exponentialRampToValueAtTime( 240, t + 0.3 );
+		this.a._tone( dest, t, 0.28, 130, 62, 0.45, 'sawtooth' );
+		for ( let i = 0; i < 2; i ++ ) this._noise( dest, t + 0.45 + i * 0.16, 0.025, 'bandpass', 1300, 2.5, 0.5, 0.002 );
+
+	}
+
 	// something heavy going away fast through the wood: snapping sticks, thrashing
 	// undergrowth, the thud of its weight, all receding
 	crash( p, dir, seconds = 3 ) {

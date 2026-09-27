@@ -695,14 +695,21 @@ export const BEATS = [
 			// it's been rooting about here; if it has wandered, it is somewhere near
 			if ( dist2( b.pos, - 206, 572 ) > 30 ) await S.untilOffscreen( b.pos, 3 ).then( () => teleport( b, - 207, 574 ) );
 			b.cmd = { do: 'forage' };
-			await S.until( () => dist2( b.pos, S.cam.x, S.cam.z ) < 40 );
+			// first you hear it: something big rooting about off the path
+			await S.until( () => dist2( b.pos, S.cam.x, S.cam.z ) < 48 );
+			S.sound.snuffle( b.pos.clone().setY( 0.6 ), 3.5 );
+			S.ui.caption( '[ snuffling, off the path ]', 3.5 );
+			await S.until( () => dist2( b.pos, S.cam.x, S.cam.z ) < 38 || S.seenFor > 0.8 );
+			// it stands to scent the air - not toward you: back up the path, behind you
 			const up = S.behind( 20 );
 			b.cmd = { do: 'rear', watch: V( up.x, 0, up.z ) };
 			await S.wait( 1.5 );
 			await S.until( () => S.seenFor > 3.5 || dist2( b.pos, S.cam.x, S.cam.z ) < 20 );
 			await S.wait( 1.5 );
 			b.cmd = { do: 'forage' };
-			await S.wait( 0.9 );
+			await S.wait( 0.5 );
+			S.sound.woof( b.pos.clone().setY( 1 ) );
+			await S.wait( 0.4 );
 			const to = V( - 150, 0, 540 );
 			b.cmd = { do: 'run', to, speed: 4.2 };
 			S.sound.crash( b.pos.clone().setY( 0.8 ), to.clone().sub( b.pos ).normalize(), 3.5 );
