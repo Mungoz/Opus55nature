@@ -4,6 +4,8 @@ Plan for turning Larchmere into a 15-minute eerie walking game. It records what 
 
 Status as of 2026-09-26 (evening): the route, the ending and the open questions are decided (sections 5 and 15), animal encounters are added (5.3), and implementation in `src/` has started, in the order of section 13. Mockups live in `mockups/`.
 
+**Part two (27 Sep, after the second playtest): the expansion — section 16.** A first play took 5 minutes; the second half becomes a forest of places and simple puzzles, and the ending is rebuilt.
+
 Two things shape everything else:
 - **The map will change a lot** (section 6). Expect a much more guided path with blocking terrain, a tighter play area, and far less detail in the distance, not just props added to today's valley. Every coordinate in this plan is provisional until the new layout is blocked out.
 - **The game must last about 15 minutes** (section 7). That is a target proven by playtests, not estimated from walking distances.
@@ -489,3 +491,93 @@ The original questions, for the record:
 4. Mobile support for the horror build.
 5. Trunk collision in the nature build as well.
 6. How far to reshape the valley: keep it recognisably the valley from the nature edition, or rebuild the basin freely around the route.
+
+
+---
+
+## 16. Part two: the expansion (after the second playtest, 27 Sep)
+
+### 16.1 What the playtest said
+
+A first play took about **5 minutes**, not 15. The feedback, in the player's words where they matter:
+- "needs way more to happen between hut and lake"; "you need to extend the feature set by like 5x"; "5x more points of interest"; "interesting new waypoints, things happening"; "map changes may be necessary" — "you can change fundamental things.. change the map.. dont be restricted".
+- "puzzles - but really really simple ones like the key"; "i like the idea of more interactive elements like the bit where u have to find a key at the hut".
+- "needs more notes too".
+- "foresty/wooded area?"
+- "the ending is really bad btw, reflecting doesnt work"; "massively improved ending".
+- Already fixed: the storm too short, the deer giving the figure away too early, the bear on its hind legs, the footsteps, the cowbell, the hut's inside, the trough's boards.
+
+### 16.2 The new second half
+
+From the tarn the route no longer runs 350 m straight up the foot of the west wall. It turns into **the Black Wood**: a dense spruce forest, new, filling the valley floor west of the stream between the plunge pool and the west strand (about x −230…−90, z 430…700). The trail winds through it for about 900 m, from place to place, and comes out on the strand. There, a boathouse, the boardwalk and the boat, and a new ending.
+
+Route, in order (coordinates provisional until blocked out on the map):
+
+| # | Place | What is there | You do | Read | The figure / animals |
+|---|---|---|---|---|---|
+| A1 | Tarn shore | J.'s rod propped on a rock, his tin cup | — | — | F5, the heron (exists) |
+| A2 | Plunge pool | a memorial plaque on the rock by the pool | read it | the plaque | choughs (E10) |
+| B1 | Forest edge | a wayside shrine (Marterl): painted box on a post, candles in jars, J.'s photo pinned, dried flowers | read the card | "Bring him home. — M." | — |
+| B2 | Forest edge | a MISSING poster on a trunk, rain-soaked | read it | the poster | — |
+| B3 | Woodcutters' clearing | log stacks, a sawhorse, an axe in a stump, a lean-to, a notice board; a stack of planks | take a plank | forestry notice | a woodpecker drumming, stopping |
+| B4 | The gully | a 4 m deep ravine across the way, a footbridge with its middle planks gone | lay the plank | — | — |
+| B5 | The black pond | a small forest pond, utterly still, spruce all round | — | — | in its water, someone among the trunks on the far bank (only there) |
+| B6 | Hunting stand | a raised hide at a forest meadow | climb it; look through the binoculars; take the shed key from its nail | the hunter's log | hinds in the meadow (E11 moves here) |
+| B7 | Forester's lodge | a house (open) and its shed (locked): a desk, a stove, a wall map of the valley with the route pencilled, a field radio | read; wind the radio; unlock the shed, take the oars | the forester's diary; the map | the radio: static, and a voice |
+| B8 | Charcoal clearing | a smoking kiln under turf, a burner's hut | — | — | the bear (E13 moves here) |
+| B9 | The abandoned camp | a collapsed tent, a rucksack, a stove, a camera on a rock | look at the camera's last photo | the hiker's notebook | the photo: the black pond, and someone in its water |
+| C1 | The strand | starlings (E14), the echo (exists) | — | — | — |
+| C2 | The boathouse | a boathouse over the shallows; the boat inside has no oars | put the oars in | a note on the door | — |
+| C3 | Boardwalk | exists (F7, the wading follower) | — | — | — |
+| C4 | The boat | → the ending | push off | — | — |
+
+### 16.3 Puzzles (each one or two obvious steps, a hint if you stall)
+
+1. **The key** (exists): the hut book → the key on the table → the top gate.
+2. **The plank**: the gully's footbridge is missing its middle planks → a stack of planks at the woodcutters' clearing, 60 m back → carry one (a flag, shown in the corner) → "lay the plank".
+3. **The shed key**: the forester's shed is padlocked → its key hangs on a nail at the top of the hunting stand → climb.
+4. **The oars**: your boat has none (J. took the others) → they are in the forester's shed → carry them to the boat.
+5. Optional: the radio (wind it), the binoculars (look), the camera (the last photo).
+
+Hints (the nudge line, 16 s to 40 s after stalling): "The footbridge is missing planks. There were planks at the clearing." and the like.
+
+### 16.4 Notes (new)
+
+The plaque (A2), the shrine card (B1), the MISSING poster (B2), the forestry notice (B3), the hunter's log (B6), the forester's diary and the wall map (B7), the hiker's notebook (B9), the boathouse note (C2); J.'s last note, in the boat (the ending). With the three existing (the boat log, the register, the hut book), that makes about 13.
+
+### 16.5 The new ending
+
+The old one (a lean over the side, a figure in the water beside the boat) didn't read: from a boat the water is seen steeply, where it reflects little, and at night it mirrors a dark sky.
+
+New: the oars in, you push off onto the black lake toward the jetty's lantern, the one light across the water. Halfway, the rowing stops and the lake goes glass-still. The jetty lantern and the stars lie in the water. Look over the side: in the water, the boat, and you in it — and behind you, in the stern, someone sitting. Turn round: no one. Look down again: now only it is there, in your seat. Then **the surface takes you**: the view turns over into the reflection. You are on the other side of the water, looking up through it, and above you the boat rows on toward the lantern with it at the oars. This is the row-in you began the game with. Fade; the title.
+
+(Technically: the lake's mirror image, rendered for the camera, shown full-screen and turned over, the camera sinking.)
+
+### 16.6 How it is built
+
+- **The Black Wood.** `layout.WOODS` zones with a density. An extra placement pass in `Forest.place()` (`world/trees.js`), with its own RNG so no existing tree moves, on a ~3.5 m grid, mostly spruce with a little larch. The trail keeps clear of it (`keepOut`). The ground in the zones becomes forest floor through a boost to biome G in `biomeFrag` (`gen/terrainGen.js`): needle litter, ferns, logs, stumps. Raise the fern, log and stump caps. Watch the triangle count and the frame time.
+- **Terrain.** The gully is a negative "bank" (`applyBanks` skips non-positive crests today). The black pond is a fifth pond (`uPonds[4]` → 6).
+- **Props.** New builders, one file each (`props/shrine.js`, `props/stand.js`, `props/lodge.js`, `props/clearing.js`, `props/camp.js`, `props/boathouse.js`, `props/gullybridge.js`), in the `Kit` style of `hut.js`, each from reference photos (`mockups/refs/_find.mjs`).
+- **Interactions.** Carried things are story flags (the plank, the key, the oars), each with a small icon line on screen while carried. Climbing is a scripted camera move up the ladder, and back.
+- **Beats.** New beats per place in `beats.js`; notes in `notes.js`; hints in `story.js`.
+
+### 16.7 Order
+
+1. The route through the forest area, blocked out (waypoints), and the forest density pass: walk it.
+2. The gully and the pond (terrain).
+3. The places and their props, in route order, with their beats and notes; the puzzles.
+4. The boathouse and the new ending.
+5. Playtest timing: aim for 15 minutes.
+
+### 16.8 Status (27 Sep, night)
+
+Built and walked end to end by the bot (hut to boat), 60 fps in the wood on the RTX 3060 Ti:
+- [x] **The Black Wood**: three bands of dense spruce with some larch (`layout.WOODS`, an extra placement pass with dice of its own so nothing else moves), forest floor through them, clearings cut where the places stand; inside it the near trees are drawn to 64 m and their far images beyond. The route winds through it place to place: 1392 m in all (was about 1150).
+- [x] **The gully**: a 6.5 m ravine (a bank cut down), walled at its rims but for the footbridge.
+- [x] **Places**: the plaque at the plunge pool, the MISSING poster at the wood's edge, the wayside shrine (candles, J.'s photograph, M.'s card), the woodcutters' clearing (log piles, the notice, the planks, a woodpecker that stops), the footbridge with its middle planks gone, the black pond (no pads; someone in its water, its head turning after you), the hunting stand over the glade (climb it; binoculars), the forester's lodge (lamp lit, door open: the diary, the map of the valley drawn from the ground with the path pencilled on it, the field telephone and its voice) and its padlocked shed, the abandoned camp (the notebook; the camera's last photograph, rendered from the pond's shore), the charcoal burners' kiln and hut. Built by five parallel builders from reference photos (`mockups/refs/{shrine,stand,lodge,clearing,gullybridge,camp,kiln}`).
+- [x] **Puzzles**: the key (hut) → the top gate; a plank (clearing) → the footbridge; the shed key (up the stand) → the shed → the oars → the boat. Each nudges if you try it without what it needs.
+- [x] **Notes**: the plaque, the shrine card, the poster, the forestry notice, the hunter's log (two pages), the forester's diary (two pages), the map, the photograph, the hiker's notebook (two pages), the note in the boat, J.'s last page: 14 things to read in all.
+- [x] **The figure**: no longer at the ford (the deer stare at an empty edge); in the wood behind you (the hinds' stare, then it backs away into the trees); at the glade's far edge, held in the binoculars, it backs off and is gone; in the black pond; on the lake at the end.
+- [x] **The ending**: out on the still lake, someone standing on the water far off, only in the water, nearer each time you look away; beside the boat the view tips into the water and goes under; from the shore, the boat rowing away with it at the oars. The title.
+- [ ] Playtest timing (the target is 15 minutes).
+- [ ] The kiln's smoke (its vents are marked, `kiln.info.vents`).
